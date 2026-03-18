@@ -42,32 +42,14 @@ export async function POST(request: NextRequest) {
         session_id: sessionId,
       })
       
-      // Update answer stats using upsert
-      const { data: existingStat } = await supabase
-        .from('answer_stats')
-        .select('count')
-        .eq('puzzle_id', puzzleId)
-        .eq('cell_index', cellIndex)
-        .eq('game_id', gameId)
-        .single()
-      
-      if (existingStat) {
-        await supabase
-          .from('answer_stats')
-          .update({ count: existingStat.count + 1 })
-          .eq('puzzle_id', puzzleId)
-          .eq('cell_index', cellIndex)
-          .eq('game_id', gameId)
-      } else {
-        await supabase.from('answer_stats').insert({
-          puzzle_id: puzzleId,
-          cell_index: cellIndex,
-          game_id: gameId,
-          game_name: gameName,
-          game_image: gameImage,
-          count: 1,
-        })
-      }
+      // Atomically increment answer stats with a single upsert
+      await supabase.rpc('increment_answer_stat', {
+        p_puzzle_id: puzzleId,
+        p_cell_index: cellIndex,
+        p_game_id: gameId,
+        p_game_name: gameName,
+        p_game_image: gameImage,
+      })
     }
     
     return NextResponse.json({

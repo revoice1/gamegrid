@@ -146,6 +146,10 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const mode = searchParams.get('mode') || 'daily'
 
+  // createClient() calls cookies() from next/headers which MUST run inside the
+  // request scope — before we return the Response or detach any async work.
+  const supabase = await createClient()
+
   const encoder = new TextEncoder()
   const stream = new TransformStream<string, Uint8Array>({
     transform(chunk, controller) {
@@ -156,10 +160,9 @@ export async function GET(request: NextRequest) {
 
   const send = (data: object) => writer.write(sseEvent(data)).catch(() => {})
 
-  // Run the actual work in a detached async task so we can return the Response immediately
+  // supabase client is already created above — safe to use inside the detached task.
   ;(async () => {
     try {
-      const supabase = await createClient()
 
       if (mode === 'daily') {
         const today = getTodayDate()
@@ -256,13 +259,12 @@ export async function GET(request: NextRequest) {
           ? { date: getTodayDate(), is_daily: true, row_categories: categories.rows, col_categories: categories.cols, cell_metadata: categories.cellMetadata }
           : { date: null, is_daily: false, row_categories: categories.rows, col_categories: categories.cols }
 
-      const supabase2 = await createClient()
-      let { data: newPuzzle, error } = await supabase2.from('puzzles').insert(insertPayload).select().single()
+      let { data: newPuzzle, error } = await supabase.from('puzzles').insert(insertPayload).select().single()
 
       if (error) {
         if (error.code === '23505' && mode === 'daily') {
           // Race condition — use what was already inserted
-          const existing = await getExistingDailyPuzzle(supabase2, getTodayDate())
+          const existing = await getExistingDailyPuzzle(supabase, getTodayDate())
           if (existing) {
             const cellMetadata: PuzzleCellMetadata[] = existing.cell_metadata ?? categories.cellMetadata
             await send({ type: 'progress', pct: 100, message: 'Board ready.' })

@@ -3,14 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { generatePuzzleCategories } from '@/lib/rawg'
 import type { Category } from '@/lib/types'
 
-// Cache the daily puzzle at the edge — it's the same for everyone all day
-export const revalidate = 3600
-
-// Strip internal RAWG IDs that could be used to pre-query the API
-function sanitizeCategories(categories: Category[]): Omit<Category, 'developerId' | 'publisherId'>[] {
-  return categories.map(({ developerId: _d, publisherId: _p, ...safe }) => safe)
-}
-
 // Get today's date string
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]
@@ -41,11 +33,7 @@ export async function GET(request: NextRequest) {
         .single()
       
       if (existingPuzzle) {
-        return NextResponse.json({
-          ...existingPuzzle,
-          row_categories: sanitizeCategories(existingPuzzle.row_categories),
-          col_categories: sanitizeCategories(existingPuzzle.col_categories),
-        })
+        return NextResponse.json(existingPuzzle)
       }
       
       // Generate new daily puzzle
@@ -63,11 +51,7 @@ export async function GET(request: NextRequest) {
         .single()
       
       if (error) throw error
-      return NextResponse.json({
-        ...newPuzzle,
-        row_categories: sanitizeCategories(newPuzzle.row_categories),
-        col_categories: sanitizeCategories(newPuzzle.col_categories),
-      })
+      return NextResponse.json(newPuzzle)
     } else {
       // Practice mode - generate a new puzzle each time
       const categories = await generateValidPuzzle()
@@ -84,11 +68,7 @@ export async function GET(request: NextRequest) {
         .single()
       
       if (error) throw error
-      return NextResponse.json({
-        ...newPuzzle,
-        row_categories: sanitizeCategories(newPuzzle.row_categories),
-        col_categories: sanitizeCategories(newPuzzle.col_categories),
-      })
+      return NextResponse.json(newPuzzle)
     }
   } catch (error) {
     console.error('[v0] Error in puzzle API:', error)

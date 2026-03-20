@@ -48,8 +48,6 @@ async function getExistingDailyPuzzle(supabase: Awaited<ReturnType<typeof create
   return data
 }
 
-
-
 async function computePuzzleCellMetadata(
   rows: Category[],
   cols: Category[],
@@ -83,35 +81,49 @@ function sseEvent(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`
 }
 
-// Progress budget:
-//   0–5%  : fetching category families
-//   5–75% : generation attempts (subdivided per cell within each attempt)
-//   75–95%: final cell metadata computation
-//   95–100%: DB write
 function generationProgress(
   event: Parameters<PuzzleProgressCallback>[0],
   maxAttempts: number
 ): { pct: number; message: string } {
+  const generationStartPct = 10
+  const generationSpan = 18
+  const validationSpan = 50
+  const metadataStartPct = 78
+  const metadataEndPct = 94
+
   switch (event.stage) {
     case 'families':
-      return { pct: 2, message: 'Loading category data...' }
+      return { pct: 4, message: 'Loading category data...' }
     case 'attempt': {
-      const pct = 5 + ((event.attempt ?? 1) - 1) / maxAttempts * 70
+      const pct = generationStartPct + ((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1) * generationSpan
       return { pct: Math.round(pct), message: `Attempt ${event.attempt}/${maxAttempts}: picking categories...` }
     }
     case 'cell': {
-      const attemptStart = 5 + ((event.attempt ?? 1) - 1) / maxAttempts * 70
-      const attemptSlice = 70 / maxAttempts
+      const attemptStart =
+        generationStartPct + ((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1) * generationSpan
       const cellFrac = ((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)
-      const pct = attemptStart + cellFrac * attemptSlice
+      const pct = attemptStart + cellFrac * validationSpan
       return {
         pct: Math.round(pct),
         message: `Attempt ${event.attempt}/${maxAttempts}: checking intersection ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...`,
       }
     }
     case 'metadata': {
-      const pct = 75 + ((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9) * 20
-      return { pct: Math.round(pct), message: `Validating cell ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...` }
+      const pct =
+        metadataStartPct +
+        (((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)) * (metadataEndPct - metadataStartPct)
+      return {
+        pct: Math.round(pct),
+        message: event.message ?? `Counting answers for cell ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...`,
+      }
+    }
+    case 'rejected': {
+      const pct =
+        generationStartPct + ((event.attempt ?? 1) / Math.max(maxAttempts, 1)) * generationSpan + validationSpan
+      return {
+        pct: Math.round(Math.max(generationStartPct, pct)),
+        message: event.message ?? `Attempt ${event.attempt}/${maxAttempts} rejected`,
+      }
     }
     default:
       return { pct: 0, message: '' }
@@ -121,9 +133,6 @@ function generationProgress(
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const mode = searchParams.get('mode') || 'daily'
-
-  // createClient() calls cookies() from next/headers — must happen inside the
-  // request handler before returning the Response or detaching async work.
   const supabase = await createClient()
 
   const encoder = new TextEncoder()
@@ -145,7 +154,6 @@ export async function GET(request: NextRequest) {
           let cellMetadata: PuzzleCellMetadata[] = existingPuzzle.cell_metadata
 
           if (!cellMetadata) {
-            // Pre-migration row — compute exact counts once and backfill so this never runs again.
             await send({ type: 'progress', pct: 10, message: "Loading today's board..." })
             cellMetadata = await computePuzzleCellMetadata(
               existingPuzzle.row_categories,
@@ -157,11 +165,10 @@ export async function GET(request: NextRequest) {
                 message: `Validating cell ${cellIndex + 1}/${total}...`,
               })
             )
-            // Fire-and-forget the backfill — don't block the response on it
             supabase.from('puzzles').update({ cell_metadata: cellMetadata }).eq('id', existingPuzzle.id).then()
           }
 
-          await send({ type: 'progress', pct: 100, message: "Board ready." })
+          await send({ type: 'progress', pct: 100, message: 'Board ready.' })
           await send({
             type: 'puzzle',
             puzzle: {
@@ -175,8 +182,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // No existing puzzle (first daily load of the day, or practice) — generate
-      await send({ type: 'progress', pct: 0, message: 'Starting puzzle generation...' })
+      await send({ type: 'progress', pct: 2, message: 'Starting puzzle generation...' })
 
       const plans = getGenerationPlans()
       type GeneratedCategories = {
@@ -193,26 +199,28 @@ export async function GET(request: NextRequest) {
         try {
           const onProgress: PuzzleProgressCallback = (event) => {
             const { pct, message } = generationProgress(event, plan.maxAttempts)
-            send({ type: 'progress', pct, message })
+            send({
+              type: 'progress',
+              pct,
+              message,
+              stage: event.stage,
+              attempt: event.attempt,
+              rows: event.rows,
+              cols: event.cols,
+              cellIndex: event.cellIndex,
+              rowCategory: event.rowCategory,
+              colCategory: event.colCategory,
+              validOptionCount: event.validOptionCount,
+              passed: event.passed,
+            })
           }
 
-          const { rows, cols } = await generatePuzzleCategories({
+          const { rows, cols, cellMetadata } = await generatePuzzleCategories({
             minValidOptionsPerCell: plan.minValidOptionsPerCell,
             maxAttempts: plan.maxAttempts,
             sampleSize: VALIDATION_SAMPLE_SIZE,
             onProgress,
           })
-
-          // Get exact counts via the IGDB /count endpoint — one call per cell, no pagination.
-          await send({ type: 'progress', pct: 75, message: 'Getting exact cell counts...' })
-          const cellMetadata = await computePuzzleCellMetadata(
-            rows, cols, plan.minValidOptionsPerCell,
-            (cellIndex, total) => send({
-              type: 'progress',
-              pct: 75 + Math.round((cellIndex + 1) / total * 20),
-              message: `Counting answers for cell ${cellIndex + 1}/${total}...`,
-            })
-          )
 
           categories = {
             rows,
@@ -226,13 +234,13 @@ export async function GET(request: NextRequest) {
           break
         } catch (err) {
           lastError = err instanceof Error ? err : new Error('Unknown error')
-          await send({ type: 'progress', pct: 10, message: 'Attempt failed, retrying with relaxed rules...' })
+          await send({ type: 'progress', pct: 12, message: 'Attempt failed, retrying with relaxed rules...' })
         }
       }
 
       if (!categories) throw lastError ?? new Error('Failed to generate puzzle')
 
-      await send({ type: 'progress', pct: 95, message: 'Saving puzzle...' })
+      await send({ type: 'progress', pct: 96, message: 'Saving puzzle...' })
 
       const insertPayload = mode === 'daily'
         ? { date: getTodayDate(), is_daily: true, row_categories: categories.rows, col_categories: categories.cols, cell_metadata: categories.cellMetadata }
@@ -242,7 +250,6 @@ export async function GET(request: NextRequest) {
 
       if (error) {
         if (error.code === '23505' && mode === 'daily') {
-          // Race condition — another request already inserted today's puzzle
           const existing = await getExistingDailyPuzzle(supabase, getTodayDate())
           if (existing) {
             const cellMetadata: PuzzleCellMetadata[] = existing.cell_metadata ?? categories.cellMetadata

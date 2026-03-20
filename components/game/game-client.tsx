@@ -14,6 +14,55 @@ import { useToast } from '@/hooks/use-toast'
 
 const MAX_GUESSES = 9
 
+interface PuzzleStreamMessage {
+  type: 'progress' | 'puzzle' | 'error'
+  pct?: number
+  message?: string
+  puzzle?: Puzzle
+  stage?: 'families' | 'attempt' | 'cell' | 'metadata' | 'rejected' | 'done'
+  attempt?: number
+  rows?: string[]
+  cols?: string[]
+  cellIndex?: number
+  rowCategory?: string
+  colCategory?: string
+  validOptionCount?: number
+  passed?: boolean
+}
+
+interface LoadingIntersection {
+  label: string
+  status: 'pending' | 'passed' | 'failed'
+  validOptionCount?: number
+}
+
+interface LoadingAttempt {
+  attempt: number
+  rows: string[]
+  cols: string[]
+  intersections: LoadingIntersection[]
+  rejectedMessage?: string
+}
+
+function buildAttemptIntersections(rows: string[], cols: string[]): LoadingIntersection[] {
+  return rows.flatMap(row => cols.map(col => ({
+    label: `${row} x ${col}`,
+    status: 'pending' as const,
+  })))
+}
+
+function getIntersectionLabelClass(label: string): string {
+  if (label.length > 42) {
+    return 'text-[10px]'
+  }
+
+  if (label.length > 30) {
+    return 'text-[11px]'
+  }
+
+  return 'text-xs'
+}
+
 function getTimeUntilNextUtcMidnight(now = new Date()) {
   const nextReset = new Date(now)
   nextReset.setUTCHours(24, 0, 0, 0)
@@ -45,6 +94,7 @@ export function GameClient() {
   const [sessionId, setSessionId] = useState('')
   const [loadingProgress, setLoadingProgress] = useState(8)
   const [loadingStage, setLoadingStage] = useState('Warming up the puzzle generator...')
+  const [loadingAttempts, setLoadingAttempts] = useState<LoadingAttempt[]>([])
   const [dailyResetLabel, setDailyResetLabel] = useState(() => getTimeUntilNextUtcMidnight().label)
   const { toast } = useToast()
 
@@ -97,28 +147,108 @@ export function GameClient() {
 
     setLoadingProgress(8)
     setLoadingStage(gameMode === 'daily' ? "Loading today's board..." : 'Warming up the puzzle generator...')
-
-    let progressTimer: ReturnType<typeof setInterval> | null = null
-
-    if (gameMode === 'practice') {
-      progressTimer = setInterval(() => {
-        setLoadingProgress(current => {
-          const next = Math.min(current + (current < 45 ? 11 : current < 72 ? 7 : 4), 92)
-          if (next < 35) setLoadingStage('Picking categories...')
-          else if (next < 68) setLoadingStage('Testing intersections...')
-          else setLoadingStage('Finalizing the board...')
-          return next
-        })
-      }, 700)
-    }
+    setLoadingAttempts([])
 
     try {
-      const response = await fetch(`/api/puzzle?mode=${gameMode}`)
-      const puzzleData = await response.json()
+      let puzzleData: Puzzle | null = null
 
-      if (puzzleData.error) {
-        console.error('Puzzle error:', puzzleData.error)
-        return
+      if (gameMode === 'practice') {
+        const response = await fetch(`/api/puzzle-stream?mode=${gameMode}`)
+        if (!response.ok || !response.body) {
+          throw new Error('Failed to open puzzle stream')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const events = buffer.split('\n\n')
+          buffer = events.pop() ?? ''
+
+          for (const eventChunk of events) {
+            const dataLine = eventChunk
+              .split('\n')
+              .find(line => line.startsWith('data: '))
+
+            if (!dataLine) {
+              continue
+            }
+
+            const event = JSON.parse(dataLine.slice(6)) as PuzzleStreamMessage
+
+            if (event.type === 'progress') {
+              if (typeof event.pct === 'number') {
+                setLoadingProgress(current => Math.max(current, event.pct!))
+              }
+              if (event.message) {
+                setLoadingStage(event.message)
+              }
+              if (event.stage === 'attempt' && event.attempt && event.rows && event.cols) {
+                setLoadingAttempts(current => {
+                  const nextAttempt: LoadingAttempt = {
+                    attempt: event.attempt!,
+                    rows: event.rows!,
+                    cols: event.cols!,
+                    intersections: buildAttemptIntersections(event.rows!, event.cols!),
+                  }
+                  const filtered = current.filter(entry => entry.attempt !== event.attempt)
+                  return [...filtered, nextAttempt].slice(-4)
+                })
+              }
+              if (event.stage === 'cell' && typeof event.attempt === 'number' && typeof event.cellIndex === 'number') {
+                setLoadingAttempts(current =>
+                  current.map(entry => {
+                    if (entry.attempt !== event.attempt) {
+                      return entry
+                    }
+
+                    const intersections = entry.intersections.map((intersection, index) =>
+                      index === event.cellIndex
+                        ? {
+                            ...intersection,
+                            status: (event.passed ? 'passed' : 'failed') as LoadingIntersection['status'],
+                            validOptionCount: event.validOptionCount,
+                          }
+                        : intersection
+                    )
+
+                    return { ...entry, intersections }
+                  })
+                )
+              }
+              if (event.stage === 'rejected' && typeof event.attempt === 'number') {
+                setLoadingAttempts(current =>
+                  current.map(entry =>
+                    entry.attempt === event.attempt
+                      ? { ...entry, rejectedMessage: event.message ?? 'Rejected' }
+                      : entry
+                  )
+                )
+              }
+            } else if (event.type === 'puzzle' && event.puzzle) {
+              puzzleData = event.puzzle
+            } else if (event.type === 'error') {
+              throw new Error(event.message ?? 'Failed to generate puzzle')
+            }
+          }
+        }
+
+        if (!puzzleData) {
+          throw new Error('Puzzle stream completed without a puzzle')
+        }
+      } else {
+        const response = await fetch(`/api/puzzle?mode=${gameMode}`)
+        const data = await response.json()
+        if (data.error) {
+          console.error('Puzzle error:', data.error)
+          return
+        }
+        puzzleData = data as Puzzle
       }
 
       setLoadingProgress(100)
@@ -144,7 +274,6 @@ export function GameClient() {
     } catch (error) {
       console.error('Failed to load puzzle:', error)
     } finally {
-      if (progressTimer) clearInterval(progressTimer)
       setIsLoading(false)
     }
   }, [])
@@ -390,13 +519,17 @@ export function GameClient() {
     : null
 
   if (isLoading) {
+    const activeAttempt = loadingAttempts[loadingAttempts.length - 1] ?? null
+    const pastAttempts = loadingAttempts.slice(0, -1).reverse()
+
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 p-6 shadow-xl backdrop-blur-sm">
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-5xl md:flex md:items-start md:justify-center md:gap-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 p-6 shadow-xl backdrop-blur-sm">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-primary">
             {mode === 'daily' ? 'Daily Puzzle' : 'Building Grid'}
           </p>
-          <p className="mt-3 text-center text-lg font-semibold text-foreground">{loadingStage}</p>
+          <p className="mt-3 whitespace-pre-line text-center text-lg font-semibold text-foreground">{loadingStage}</p>
           <p className="mt-2 text-center text-sm text-muted-foreground">
             {mode === 'daily'
               ? loadingProgress < 10
@@ -413,6 +546,70 @@ export function GameClient() {
                 {loadingProgress}% complete
               </p>
             </div>
+          )}
+        </div>
+          {mode === 'practice' && (
+            <aside className="mt-4 w-full rounded-2xl border border-border bg-card/70 p-4 shadow-xl backdrop-blur-sm md:mt-0 md:max-w-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Attempt Notes</p>
+              {!activeAttempt && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Waiting for the generator to pick a board...
+                </p>
+              )}
+              {activeAttempt && (
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-xl border border-border/80 bg-secondary/30 p-3">
+                    <p className="text-sm font-semibold text-foreground">Attempt {activeAttempt.attempt}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Rows: {activeAttempt.rows.join(', ')}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Cols: {activeAttempt.cols.join(', ')}
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {activeAttempt.intersections.map((intersection) => (
+                      <div
+                        key={`${activeAttempt.attempt}-${intersection.label}`}
+                        className="flex items-center justify-between rounded-lg border border-border/70 bg-background/40 px-3 py-2 text-xs"
+                      >
+                        <span className={`pr-3 text-foreground/90 whitespace-nowrap ${getIntersectionLabelClass(intersection.label)}`}>
+                          {intersection.label}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {intersection.status === 'passed' && 'OK'}
+                          {intersection.status === 'failed' && `X${typeof intersection.validOptionCount === 'number' ? ` ${intersection.validOptionCount}` : ''}`}
+                          {intersection.status === 'pending' && '...'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {activeAttempt.rejectedMessage && (
+                    <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                      {activeAttempt.rejectedMessage}
+                    </p>
+                  )}
+                  {pastAttempts.length > 0 && (
+                    <div className="border-t border-border/70 pt-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Recent Tries
+                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        {pastAttempts.map((attempt) => (
+                          <div
+                            key={`history-${attempt.attempt}`}
+                            className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-xs text-muted-foreground"
+                          >
+                            <p className="font-medium text-foreground/80">Attempt {attempt.attempt}</p>
+                            <p className="mt-1 truncate">{attempt.rejectedMessage ?? 'Moved on to a new board.'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </aside>
           )}
         </div>
       </div>
@@ -480,6 +677,7 @@ export function GameClient() {
 
       <GameSearch
         isOpen={selectedCell !== null}
+        puzzleId={puzzle.id}
         rowCategory={selectedRowCategory}
         colCategory={selectedColCategory}
         onSelect={handleGameSelect}

@@ -85,16 +85,22 @@ function generationProgress(
   event: Parameters<PuzzleProgressCallback>[0],
   maxAttempts: number
 ): { pct: number; message: string } {
+  const generationStartPct = 8
+  const generationEndPct = 78
+  const generationSpan = generationEndPct - generationStartPct
+  const metadataStartPct = 80
+  const metadataEndPct = 94
+
   switch (event.stage) {
     case 'families':
-      return { pct: 2, message: 'Loading category data...' }
+      return { pct: 4, message: 'Loading category data...' }
     case 'attempt': {
-      const pct = 5 + ((event.attempt ?? 1) - 1) / maxAttempts * 70
+      const pct = generationStartPct + ((event.attempt ?? 1) - 1) / maxAttempts * generationSpan
       return { pct: Math.round(pct), message: `Attempt ${event.attempt}/${maxAttempts}: picking categories...` }
     }
     case 'cell': {
-      const attemptStart = 5 + ((event.attempt ?? 1) - 1) / maxAttempts * 70
-      const attemptSlice = 70 / maxAttempts
+      const attemptStart = generationStartPct + ((event.attempt ?? 1) - 1) / maxAttempts * generationSpan
+      const attemptSlice = generationSpan / maxAttempts
       const cellFrac = ((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)
       const pct = attemptStart + cellFrac * attemptSlice
       return {
@@ -103,13 +109,18 @@ function generationProgress(
       }
     }
     case 'metadata': {
-      const pct = 75 + ((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9) * 20
-      return { pct: Math.round(pct), message: `Validating cell ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...` }
+      const pct =
+        metadataStartPct +
+        (((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)) * (metadataEndPct - metadataStartPct)
+      return {
+        pct: Math.round(pct),
+        message: event.message ?? `Counting answers for cell ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...`,
+      }
     }
     case 'rejected': {
-      const pct = 5 + ((event.attempt ?? 1) - 1) / maxAttempts * 70
+      const pct = generationStartPct + ((event.attempt ?? 1) / maxAttempts) * generationSpan
       return {
-        pct: Math.round(Math.max(8, pct)),
+        pct: Math.round(Math.max(generationStartPct, pct)),
         message: event.message ?? `Attempt ${event.attempt}/${maxAttempts} rejected`,
       }
     }
@@ -170,7 +181,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      await send({ type: 'progress', pct: 0, message: 'Starting puzzle generation...' })
+      await send({ type: 'progress', pct: 2, message: 'Starting puzzle generation...' })
 
       const plans = getGenerationPlans()
       type GeneratedCategories = {
@@ -222,13 +233,13 @@ export async function GET(request: NextRequest) {
           break
         } catch (err) {
           lastError = err instanceof Error ? err : new Error('Unknown error')
-          await send({ type: 'progress', pct: 10, message: 'Attempt failed, retrying with relaxed rules...' })
+          await send({ type: 'progress', pct: 12, message: 'Attempt failed, retrying with relaxed rules...' })
         }
       }
 
       if (!categories) throw lastError ?? new Error('Failed to generate puzzle')
 
-      await send({ type: 'progress', pct: 95, message: 'Saving puzzle...' })
+      await send({ type: 'progress', pct: 96, message: 'Saving puzzle...' })
 
       const insertPayload = mode === 'daily'
         ? { date: getTodayDate(), is_daily: true, row_categories: categories.rows, col_categories: categories.cols, cell_metadata: categories.cellMetadata }

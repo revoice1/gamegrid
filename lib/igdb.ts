@@ -1467,12 +1467,29 @@ export async function generatePuzzleCategories(
     if (validation.valid) {
       const exactCellResults = await Promise.all(
         rows.flatMap((rowCategory, rowIndex) =>
-          cols.map(async (colCategory, colIndex) => ({
-            cellIndex: rowIndex * 3 + colIndex,
-            rowCategory,
-            colCategory,
-            validOptionCount: await getValidGameCountForCell(rowCategory, colCategory),
-          }))
+          cols.map(async (colCategory, colIndex) => {
+            const cellIndex = rowIndex * 3 + colIndex
+            const validOptionCount = await getValidGameCountForCell(rowCategory, colCategory)
+            onProgress?.({
+              stage: 'metadata',
+              attempt,
+              maxAttempts,
+              cellIndex,
+              totalCells: rows.length * cols.length,
+              rowCategory: rowCategory.name,
+              colCategory: colCategory.name,
+              validOptionCount,
+              passed: validOptionCount >= minValidOptionsPerCell,
+              message: `Attempt ${attempt}: counting answers for ${rowCategory.name} x ${colCategory.name}...`,
+            })
+
+            return {
+              cellIndex,
+              rowCategory,
+              colCategory,
+              validOptionCount,
+            }
+          })
         )
       )
       const exactValidation: PuzzleValidationResult = {

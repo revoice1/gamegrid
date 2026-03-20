@@ -85,24 +85,24 @@ function generationProgress(
   event: Parameters<PuzzleProgressCallback>[0],
   maxAttempts: number
 ): { pct: number; message: string } {
-  const generationStartPct = 8
-  const generationEndPct = 78
-  const generationSpan = generationEndPct - generationStartPct
-  const metadataStartPct = 80
+  const generationStartPct = 10
+  const generationSpan = 18
+  const validationSpan = 50
+  const metadataStartPct = 78
   const metadataEndPct = 94
 
   switch (event.stage) {
     case 'families':
       return { pct: 4, message: 'Loading category data...' }
     case 'attempt': {
-      const pct = generationStartPct + ((event.attempt ?? 1) - 1) / maxAttempts * generationSpan
+      const pct = generationStartPct + ((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1) * generationSpan
       return { pct: Math.round(pct), message: `Attempt ${event.attempt}/${maxAttempts}: picking categories...` }
     }
     case 'cell': {
-      const attemptStart = generationStartPct + ((event.attempt ?? 1) - 1) / maxAttempts * generationSpan
-      const attemptSlice = generationSpan / maxAttempts
+      const attemptStart =
+        generationStartPct + ((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1) * generationSpan
       const cellFrac = ((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)
-      const pct = attemptStart + cellFrac * attemptSlice
+      const pct = attemptStart + cellFrac * validationSpan
       return {
         pct: Math.round(pct),
         message: `Attempt ${event.attempt}/${maxAttempts}: checking intersection ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...`,
@@ -118,7 +118,8 @@ function generationProgress(
       }
     }
     case 'rejected': {
-      const pct = generationStartPct + ((event.attempt ?? 1) / maxAttempts) * generationSpan
+      const pct =
+        generationStartPct + ((event.attempt ?? 1) / Math.max(maxAttempts, 1)) * generationSpan + validationSpan
       return {
         pct: Math.round(Math.max(generationStartPct, pct)),
         message: event.message ?? `Attempt ${event.attempt}/${maxAttempts} rejected`,

@@ -171,7 +171,7 @@ export function GameClient() {
 
             if (event.type === 'progress') {
               if (typeof event.pct === 'number') {
-                setLoadingProgress(event.pct)
+                setLoadingProgress(current => Math.max(current, event.pct!))
               }
               if (event.message) {
                 setLoadingStage(event.message)

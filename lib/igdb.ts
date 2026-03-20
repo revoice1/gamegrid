@@ -114,6 +114,12 @@ export type PuzzleProgressCallback = (event: {
   cellIndex?: number    // 0-8 within current attempt
   totalCells?: number
   message?: string
+  rows?: string[]
+  cols?: string[]
+  rowCategory?: string
+  colCategory?: string
+  validOptionCount?: number
+  passed?: boolean
 }) => void
 
 interface PuzzleGenerationOptions {
@@ -1343,7 +1349,7 @@ export async function validatePuzzleCategories(
   rows: Category[],
   cols: Category[],
   options: PuzzleGenerationOptions = {},
-  onCellValidated?: (cellIndex: number, totalCells: number) => void
+  onCellValidated?: (event: CellValidationResult & { totalCells: number; passed: boolean }) => void
 ): Promise<PuzzleValidationResult> {
   const minValidOptionsPerCell = options.minValidOptionsPerCell ?? DEFAULT_MIN_VALID_OPTIONS
   const sampleSize = options.sampleSize ?? DEFAULT_CELL_SAMPLE_SIZE
@@ -1355,24 +1361,30 @@ export async function validatePuzzleCategories(
       const cellIndex = rowIndex * 3 + colIndex
       const pairRejectionReason = getPairRejectionReason(rowCategory, colCategory)
       if (pairRejectionReason) {
-        cellResults.push({
+        const result = {
           cellIndex,
           rowCategory,
           colCategory,
           validOptionCount: 0,
-        })
-        onCellValidated?.(cellIndex, totalCells)
+        }
+        cellResults.push(result)
+        onCellValidated?.({ ...result, totalCells, passed: false })
         continue
       }
 
       const validGames = await getValidGamesForCell(rowCategory, colCategory, sampleSize)
-      cellResults.push({
+      const result = {
         cellIndex,
         rowCategory,
         colCategory,
         validOptionCount: new Set(validGames.map(game => game.id)).size,
+      }
+      cellResults.push(result)
+      onCellValidated?.({
+        ...result,
+        totalCells,
+        passed: result.validOptionCount >= minValidOptionsPerCell,
       })
-      onCellValidated?.(cellIndex, totalCells)
     }
   }
 
@@ -1419,11 +1431,30 @@ export async function generatePuzzleCategories(
     if (!rows) {
       continue
     }
+    onProgress?.({
+      stage: 'attempt',
+      attempt,
+      maxAttempts,
+      rows: rows.map(category => category.name),
+      cols: cols.map(category => category.name),
+      message: `Attempt ${attempt}/${maxAttempts}: testing ${rows[0].name} x ${cols[0].name}...`,
+    })
     const validation = await validatePuzzleCategories(rows, cols, {
       minValidOptionsPerCell,
       sampleSize,
-    }, (cellIndex, totalCells) => {
-      onProgress?.({ stage: 'cell', attempt, maxAttempts, cellIndex, totalCells, message: `Attempt ${attempt}: checking intersection ${cellIndex + 1}/${totalCells}...` })
+    }, (event) => {
+      onProgress?.({
+        stage: 'cell',
+        attempt,
+        maxAttempts,
+        cellIndex: event.cellIndex,
+        totalCells: event.totalCells,
+        rowCategory: event.rowCategory.name,
+        colCategory: event.colCategory.name,
+        validOptionCount: event.validOptionCount,
+        passed: event.passed,
+        message: `Attempt ${attempt}: checking intersection ${event.cellIndex + 1}/${event.totalCells}...`,
+      })
     })
 
     if (

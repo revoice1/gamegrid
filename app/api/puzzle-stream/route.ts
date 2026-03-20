@@ -187,7 +187,20 @@ export async function GET(request: NextRequest) {
         try {
           const onProgress: PuzzleProgressCallback = (event) => {
             const { pct, message } = generationProgress(event, plan.maxAttempts)
-            send({ type: 'progress', pct, message })
+            send({
+              type: 'progress',
+              pct,
+              message,
+              stage: event.stage,
+              attempt: event.attempt,
+              rows: event.rows,
+              cols: event.cols,
+              cellIndex: event.cellIndex,
+              rowCategory: event.rowCategory,
+              colCategory: event.colCategory,
+              validOptionCount: event.validOptionCount,
+              passed: event.passed,
+            })
           }
 
           const { rows, cols, cellMetadata } = await generatePuzzleCategories({

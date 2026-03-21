@@ -6,9 +6,15 @@ on:
       - main
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      CI: true
 
     steps:
       - name: Checkout
@@ -26,5 +32,33 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Test suite
-        run: npm test
+      - name: Typecheck
+        id: typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        id: unit
+        run: npm run test:unit
+
+      - name: End-to-end tests
+        id: e2e
+        run: npm run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Typecheck: ${{ steps.typecheck.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit tests: ${{ steps.unit.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- E2E tests: ${{ steps.e2e.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Playwright artifacts uploaded when available" >> $GITHUB_STEP_SUMMARY

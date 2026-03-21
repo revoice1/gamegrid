@@ -32,16 +32,30 @@ export function CategoryHeaderSimple({ category, orientation }: CategoryHeaderPr
   return (
     <div
       className={cn(
-        'flex rounded-xl border border-border/30 bg-secondary/50 p-3',
+        'min-w-0 overflow-hidden rounded-xl border border-border/30 bg-secondary/50 p-3',
         orientation === 'col'
-          ? 'flex-col items-center justify-center gap-1 text-center'
-          : 'flex-col items-start justify-center gap-1.5 text-left'
+          ? 'flex-col items-center justify-center gap-1 text-center max-sm:gap-0.5 max-sm:px-2 max-sm:py-2'
+          : 'flex-col items-start justify-center gap-1.5 text-left max-sm:gap-1 max-sm:px-2 max-sm:py-2'
       )}
     >
-      <span className="text-sm font-bold leading-snug text-foreground text-balance">
+      <span
+        className={cn(
+          'block w-full font-bold text-sm leading-snug text-foreground text-balance',
+          orientation === 'col'
+            ? 'max-sm:text-[11px] max-sm:leading-tight max-sm:[overflow-wrap:anywhere] max-sm:[text-wrap:pretty]'
+            : 'max-sm:text-[11px] max-sm:leading-tight max-sm:[overflow-wrap:anywhere] max-sm:[text-wrap:pretty]'
+        )}
+      >
         {category.name}
       </span>
-      <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/90">
+      <span
+        className={cn(
+          'block w-full text-[10px] uppercase tracking-[0.16em] text-muted-foreground/90',
+          orientation === 'col'
+            ? 'max-sm:text-[9px] max-sm:tracking-[0.08em]'
+            : 'max-sm:text-[9px] max-sm:tracking-[0.06em]'
+        )}
+      >
         {category.type}
       </span>
     </div>

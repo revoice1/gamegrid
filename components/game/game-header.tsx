@@ -4,14 +4,39 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 
+function AchievementEggIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3.5c-3.5 0-6.5 3.95-6.5 8.55C5.5 16.5 8.2 20 12 20s6.5-3.5 6.5-7.95C18.5 7.45 15.5 3.5 12 3.5Z"
+        fill="hsl(var(--background))"
+        stroke="currentColor"
+        strokeWidth="1.9"
+      />
+      <path
+        d="M12.15 6.2c-.65 1.55-.45 3.2.6 4.9 1.05 1.7 1.15 3.4.25 5.1"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        opacity="0.7"
+      />
+      <ellipse cx="9.1" cy="9.55" rx="1.85" ry="2.3" fill="currentColor" />
+      <ellipse cx="14.75" cy="13.05" rx="1.5" ry="1.95" fill="currentColor" />
+      <ellipse cx="10.9" cy="15.75" rx="1.25" ry="1.65" fill="currentColor" />
+    </svg>
+  )
+}
+
 interface GameHeaderProps {
   mode: 'daily' | 'practice'
   guessesRemaining: number
   score: number
   dailyResetLabel?: string | null
   isHowToPlayOpen?: boolean
+  isAchievementsOpen?: boolean
   onModeChange: (mode: 'daily' | 'practice') => void
   onHowToPlay: () => void
+  onAchievements: () => void
   onNewPracticeGame?: () => void
 }
 
@@ -21,8 +46,10 @@ export function GameHeader({
   score, 
   dailyResetLabel,
   isHowToPlayOpen = false,
+  isAchievementsOpen = false,
   onModeChange,
   onHowToPlay,
+  onAchievements,
   onNewPracticeGame,
 }: GameHeaderProps) {
   return (
@@ -108,6 +135,21 @@ export function GameHeader({
                   New Game
                 </Button>
               )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onAchievements}
+                aria-label="Achievements"
+                title="Achievements"
+                className={cn(
+                  'h-9 w-9 border transition-colors',
+                  isAchievementsOpen
+                    ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
+                    : 'border-border bg-secondary/30 text-foreground hover:bg-secondary/60'
+                )}
+              >
+                <AchievementEggIcon className="h-[18px] w-[18px]" />
+              </Button>
               <Button 
                 variant="ghost" 
                 size="sm"

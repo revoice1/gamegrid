@@ -64,34 +64,30 @@ function buildShareText(
   isDaily: boolean,
   puzzleDate?: string | null
 ): string {
-  const score = guesses.filter(guess => guess?.isCorrect).length
+  const score = guesses.filter((guess) => guess?.isCorrect).length
   const label = isDaily
     ? `GameGrid Daily${puzzleDate ? ` ${puzzleDate}` : ''}`
     : 'GameGrid Practice'
-  const rows = [0, 1, 2].map(rowIndex =>
+  const rows = [0, 1, 2].map((rowIndex) =>
     guesses
       .slice(rowIndex * 3, rowIndex * 3 + 3)
       .map(getShareEmoji)
       .join('')
   )
 
-  return [
-    `${label} | ${score}/9`,
-    ...rows,
-    'https://www.gamegrid.games/',
-  ].join('\n')
+  return [`${label} | ${score}/9`, ...rows, 'https://www.gamegrid.games/'].join('\n')
 }
 
-export function ResultsModal({ 
-  isOpen, 
-  onClose, 
-  guesses, 
-  puzzleId, 
+export function ResultsModal({
+  isOpen,
+  onClose,
+  guesses,
+  puzzleId,
   puzzleDate,
   rowCategories,
   colCategories,
-  isDaily, 
-  onPlayAgain 
+  isDaily,
+  onPlayAgain,
 }: ResultsModalProps) {
   const [stats, setStats] = useState<CellStatsData | null>(null)
   const [totalCompletions, setTotalCompletions] = useState(0)
@@ -99,7 +95,7 @@ export function ResultsModal({
   const [activeTab, setActiveTab] = useState<'your-results' | 'playerbase'>('your-results')
   const { toast } = useToast()
 
-  const correctGuesses = guesses.filter(g => g?.isCorrect).length
+  const correctGuesses = guesses.filter((g) => g?.isCorrect).length
   const score = correctGuesses
 
   useEffect(() => {
@@ -114,8 +110,8 @@ export function ResultsModal({
     if (isOpen && puzzleId) {
       setIsLoading(true)
       fetch(`/api/stats?puzzleId=${puzzleId}`)
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           setStats(data.cellStats || {})
           setTotalCompletions(data.totalCompletions || 0)
         })
@@ -128,23 +124,21 @@ export function ResultsModal({
   const getCellRarity = (cellIndex: number): number | null => {
     const guess = guesses[cellIndex]
     if (!guess?.isCorrect || !stats) return null
-    
+
     const cellStats = stats[cellIndex]?.correct || []
     const totalForCell = cellStats.reduce((sum, s) => sum + s.count, 0)
     if (totalForCell === 0) return null
-    
-    const userStat = cellStats.find(s => s.game_id === guess.gameId)
+
+    const userStat = cellStats.find((s) => s.game_id === guess.gameId)
     if (!userStat) return 100 // First person to pick this!
-    
+
     return (userStat.count / totalForCell) * 100
   }
 
   // Calculate overall rarity score (average of all correct guesses' rarity)
   const calculateOverallRarity = (): number => {
-    const rarities = guesses
-      .map((_, i) => getCellRarity(i))
-      .filter((r): r is number => r !== null)
-    
+    const rarities = guesses.map((_, i) => getCellRarity(i)).filter((r): r is number => r !== null)
+
     if (rarities.length === 0) return 0
     return rarities.reduce((sum, r) => sum + (100 - r), 0) / rarities.length
   }
@@ -190,8 +184,8 @@ export function ResultsModal({
               onClick={() => setActiveTab('your-results')}
               className={cn(
                 'flex-1 py-2 text-sm font-medium transition-colors',
-                activeTab === 'your-results' 
-                  ? 'border-b-2 border-primary text-primary' 
+                activeTab === 'your-results'
+                  ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -201,8 +195,8 @@ export function ResultsModal({
               onClick={() => setActiveTab('playerbase')}
               className={cn(
                 'flex-1 py-2 text-sm font-medium transition-colors',
-                activeTab === 'playerbase' 
-                  ? 'border-b-2 border-primary text-primary' 
+                activeTab === 'playerbase'
+                  ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -217,10 +211,17 @@ export function ResultsModal({
               {/* Score */}
               <div className="text-center">
                 <div className="text-6xl font-bold text-primary mb-2">
-                  {score}<span className="text-2xl text-muted-foreground">/9</span>
+                  {score}
+                  <span className="text-2xl text-muted-foreground">/9</span>
                 </div>
                 <p className="text-muted-foreground">
-                  {score === 9 ? 'Perfect!' : score >= 7 ? 'Great job!' : score >= 5 ? 'Nice work!' : 'Keep practicing!'}
+                  {score === 9
+                    ? 'Perfect!'
+                    : score >= 7
+                      ? 'Great job!'
+                      : score >= 5
+                        ? 'Nice work!'
+                        : 'Keep practicing!'}
                 </p>
               </div>
 
@@ -234,9 +235,7 @@ export function ResultsModal({
                   <p className={cn('text-sm font-medium', getRarityClass(100 - overallRarity))}>
                     {getRarityLabel(100 - overallRarity)} Picks
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Higher = more unique answers
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Higher = more unique answers</p>
                 </div>
               )}
 
@@ -245,7 +244,7 @@ export function ResultsModal({
                 {guesses.map((guess, index) => {
                   const rarity = getCellRarity(index)
                   const percentage = rarity !== null ? rarity : null
-                  
+
                   return (
                     <div
                       key={index}
@@ -275,7 +274,12 @@ export function ResultsModal({
                           )}
                           {guess.isCorrect && percentage !== null && (
                             <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5">
-                              <p className={cn('text-[10px] font-medium text-center', getRarityClass(percentage))}>
+                              <p
+                                className={cn(
+                                  'text-[10px] font-medium text-center',
+                                  getRarityClass(percentage)
+                                )}
+                              >
                                 {percentage < 1 ? '<1' : percentage.toFixed(0)}%
                               </p>
                             </div>
@@ -295,7 +299,8 @@ export function ResultsModal({
               {/* Stats footer */}
               {isDaily && (
                 <div className="text-center text-xs text-muted-foreground">
-                  {totalCompletions} {totalCompletions === 1 ? 'player has' : 'players have'} completed this puzzle
+                  {totalCompletions} {totalCompletions === 1 ? 'player has' : 'players have'}{' '}
+                  completed this puzzle
                 </div>
               )}
             </div>
@@ -309,8 +314,14 @@ export function ResultsModal({
                   <div className="space-y-4">
                     {Array.from({ length: 9 }, (_, cellIndex) => {
                       const cellBucket = stats?.[cellIndex] ?? { correct: [], incorrect: [] }
-                      const totalCorrect = cellBucket.correct.reduce((sum, stat) => sum + stat.count, 0)
-                      const totalIncorrect = cellBucket.incorrect.reduce((sum, stat) => sum + stat.count, 0)
+                      const totalCorrect = cellBucket.correct.reduce(
+                        (sum, stat) => sum + stat.count,
+                        0
+                      )
+                      const totalIncorrect = cellBucket.incorrect.reduce(
+                        (sum, stat) => sum + stat.count,
+                        0
+                      )
 
                       return (
                         <div
@@ -326,13 +337,16 @@ export function ResultsModal({
                               <div className="space-y-2">
                                 {cellBucket.correct.length > 0 ? (
                                   cellBucket.correct.slice(0, 5).map((stat, index) => {
-                                    const percentage = totalCorrect > 0 ? (stat.count / totalCorrect) * 100 : 0
+                                    const percentage =
+                                      totalCorrect > 0 ? (stat.count / totalCorrect) * 100 : 0
                                     return (
                                       <div
                                         key={`correct-${cellIndex}-${stat.game_id}`}
                                         className="flex items-center gap-2 rounded-lg bg-background/60 p-2"
                                       >
-                                        <span className="w-5 text-xs text-muted-foreground">#{index + 1}</span>
+                                        <span className="w-5 text-xs text-muted-foreground">
+                                          #{index + 1}
+                                        </span>
                                         {stat.game_image ? (
                                           <Image
                                             src={stat.game_image}
@@ -342,19 +356,24 @@ export function ResultsModal({
                                             className="rounded object-cover"
                                           />
                                         ) : (
-                                          <div className="flex h-7 w-7 items-center justify-center rounded bg-secondary text-xs">?</div>
+                                          <div className="flex h-7 w-7 items-center justify-center rounded bg-secondary text-xs">
+                                            ?
+                                          </div>
                                         )}
                                         <div className="min-w-0 flex-1">
                                           <p className="truncate text-sm">{stat.game_name}</p>
                                           <p className="text-xs text-muted-foreground">
-                                            {percentage < 1 ? '<1' : percentage.toFixed(0)}% of correct picks
+                                            {percentage < 1 ? '<1' : percentage.toFixed(0)}% of
+                                            correct picks
                                           </p>
                                         </div>
                                       </div>
                                     )
                                   })
                                 ) : (
-                                  <p className="text-sm text-muted-foreground">No correct answers yet</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    No correct answers yet
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -366,13 +385,16 @@ export function ResultsModal({
                               <div className="space-y-2">
                                 {cellBucket.incorrect.length > 0 ? (
                                   cellBucket.incorrect.slice(0, 5).map((stat, index) => {
-                                    const percentage = totalIncorrect > 0 ? (stat.count / totalIncorrect) * 100 : 0
+                                    const percentage =
+                                      totalIncorrect > 0 ? (stat.count / totalIncorrect) * 100 : 0
                                     return (
                                       <div
                                         key={`incorrect-${cellIndex}-${stat.game_id}`}
                                         className="flex items-center gap-2 rounded-lg bg-background/60 p-2"
                                       >
-                                        <span className="w-5 text-xs text-muted-foreground">#{index + 1}</span>
+                                        <span className="w-5 text-xs text-muted-foreground">
+                                          #{index + 1}
+                                        </span>
                                         {stat.game_image ? (
                                           <Image
                                             src={stat.game_image}
@@ -382,19 +404,24 @@ export function ResultsModal({
                                             className="rounded object-cover"
                                           />
                                         ) : (
-                                          <div className="flex h-7 w-7 items-center justify-center rounded bg-secondary text-xs">?</div>
+                                          <div className="flex h-7 w-7 items-center justify-center rounded bg-secondary text-xs">
+                                            ?
+                                          </div>
                                         )}
                                         <div className="min-w-0 flex-1">
                                           <p className="truncate text-sm">{stat.game_name}</p>
                                           <p className="text-xs text-muted-foreground">
-                                            {percentage < 1 ? '<1' : percentage.toFixed(0)}% of misses
+                                            {percentage < 1 ? '<1' : percentage.toFixed(0)}% of
+                                            misses
                                           </p>
                                         </div>
                                       </div>
                                     )
                                   })
                                 ) : (
-                                  <p className="text-sm text-muted-foreground">No common misses yet</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    No common misses yet
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -406,13 +433,16 @@ export function ResultsModal({
 
                   {totalCompletions === 0 && (
                     <div>
-                      <p className="text-sm text-muted-foreground text-center py-4">No answers yet</p>
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No answers yet
+                      </p>
                     </div>
                   )}
 
                   {/* Total players */}
                   <div className="text-center text-xs text-muted-foreground pt-2 border-t border-border">
-                    Stats from {totalCompletions} completed {totalCompletions === 1 ? 'game' : 'games'}
+                    Stats from {totalCompletions} completed{' '}
+                    {totalCompletions === 1 ? 'game' : 'games'}
                   </div>
                 </>
               )}
@@ -423,11 +453,7 @@ export function ResultsModal({
         {/* Actions - fixed at bottom */}
         <div className="flex gap-3 pt-4 border-t border-border flex-shrink-0">
           {isDaily && (
-            <Button
-              variant="outline"
-              onClick={handleCopyResults}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={handleCopyResults} className="flex-1">
               Copy Results
             </Button>
           )}
@@ -436,11 +462,7 @@ export function ResultsModal({
               New Game
             </Button>
           )}
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="flex-1"
-          >
+          <Button variant="outline" onClick={onClose} className="flex-1">
             Close
           </Button>
         </div>

@@ -4,8 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'GameGrid',
     short_name: 'GameGrid',
-    description:
-      'A daily video game grid puzzle where each answer must match both category clues.',
+    description: 'A daily video game grid puzzle where each answer must match both category clues.',
     id: '/',
     scope: '/',
     start_url: '/',

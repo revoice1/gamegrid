@@ -30,7 +30,7 @@ export interface Game {
 }
 
 // Category types for the grid
-export type CategoryType = 
+export type CategoryType =
   | 'platform'
   | 'genre'
   | 'developer'

@@ -4,30 +4,32 @@ import { validateIGDBGameForCell } from '@/lib/igdb'
 import type { Category } from '@/lib/types'
 
 function serializeGameDetails(game: Awaited<ReturnType<typeof validateIGDBGameForCell>>['game']) {
-  return game ? {
-    id: game.id,
-    name: game.name,
-    slug: game.slug,
-    url: game.gameUrl,
-    background_image: game.background_image,
-    released: game.released,
-    metacritic: game.metacritic,
-    stealRating: game.stealRating ?? null,
-    genres: game.genres?.map(genre => genre.name) ?? [],
-    platforms: game.platforms?.map(platform => platform.platform.name) ?? [],
-    developers: game.developers?.map(developer => developer.name) ?? [],
-    publishers: game.publishers?.map(publisher => publisher.name) ?? [],
-    tags: game.tags?.map(tag => tag.name) ?? [],
-    gameModes: game.igdb?.game_modes ?? [],
-    themes: game.igdb?.themes ?? [],
-    perspectives: game.igdb?.player_perspectives ?? [],
-    companies: game.igdb?.companies ?? [],
-  } : null
+  return game
+    ? {
+        id: game.id,
+        name: game.name,
+        slug: game.slug,
+        url: game.gameUrl,
+        background_image: game.background_image,
+        released: game.released,
+        metacritic: game.metacritic,
+        stealRating: game.stealRating ?? null,
+        genres: game.genres?.map((genre) => genre.name) ?? [],
+        platforms: game.platforms?.map((platform) => platform.platform.name) ?? [],
+        developers: game.developers?.map((developer) => developer.name) ?? [],
+        publishers: game.publishers?.map((publisher) => publisher.name) ?? [],
+        tags: game.tags?.map((tag) => tag.name) ?? [],
+        gameModes: game.igdb?.game_modes ?? [],
+        themes: game.igdb?.themes ?? [],
+        perspectives: game.igdb?.player_perspectives ?? [],
+        companies: game.igdb?.companies ?? [],
+      }
+    : null
 }
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  
+
   try {
     const body = await request.json()
     const {
@@ -55,7 +57,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate the guess
-    const { valid, game, matchesRow, matchesCol } = await validateIGDBGameForCell(gameId, rowCategory, colCategory)
+    const { valid, game, matchesRow, matchesCol } = await validateIGDBGameForCell(
+      gameId,
+      rowCategory,
+      colCategory
+    )
 
     if (lookupOnly) {
       return NextResponse.json({
@@ -95,18 +101,20 @@ export async function POST(request: NextRequest) {
         colCategory,
         matchesRow,
         matchesCol,
-        genres: game.genres?.map(genre => `${genre.id}:${genre.name}`) ?? [],
-        platforms: game.platforms?.map(platform => `${platform.platform.id}:${platform.platform.name}`) ?? [],
-        developers: game.developers?.map(developer => `${developer.id}:${developer.name}`) ?? [],
-        publishers: game.publishers?.map(publisher => `${publisher.id}:${publisher.name}`) ?? [],
-        keywords: game.tags?.map(tag => `${tag.id}:${tag.name}`) ?? [],
+        genres: game.genres?.map((genre) => `${genre.id}:${genre.name}`) ?? [],
+        platforms:
+          game.platforms?.map((platform) => `${platform.platform.id}:${platform.platform.name}`) ??
+          [],
+        developers: game.developers?.map((developer) => `${developer.id}:${developer.name}`) ?? [],
+        publishers: game.publishers?.map((publisher) => `${publisher.id}:${publisher.name}`) ?? [],
+        keywords: game.tags?.map((tag) => `${tag.id}:${tag.name}`) ?? [],
         igdbGameModes: game.igdb?.game_modes ?? [],
         igdbThemes: game.igdb?.themes ?? [],
         igdbPerspectives: game.igdb?.player_perspectives ?? [],
         igdbCompanies: game.igdb?.companies ?? [],
       })
     }
-    
+
     if (isDaily) {
       const { error: guessInsertError } = await supabase.from('guesses').insert({
         puzzle_id: puzzleId,
@@ -119,7 +127,10 @@ export async function POST(request: NextRequest) {
       })
 
       if (guessInsertError) {
-        console.warn('[v0] Guess insert with correctness failed, falling back:', guessInsertError.message)
+        console.warn(
+          '[v0] Guess insert with correctness failed, falling back:',
+          guessInsertError.message
+        )
 
         if (valid) {
           const { error: legacyGuessInsertError } = await supabase.from('guesses').insert({
@@ -147,9 +158,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Guess error:', error)
-    return NextResponse.json(
-      { error: 'Failed to process guess', valid: false },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to process guess', valid: false }, { status: 500 })
   }
 }

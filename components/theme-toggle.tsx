@@ -147,7 +147,9 @@ export function ThemeToggle() {
             </div>
             <button
               type="button"
-              aria-label={confirmBeforeSelect ? 'Turn off search confirmation' : 'Turn on search confirmation'}
+              aria-label={
+                confirmBeforeSelect ? 'Turn off search confirmation' : 'Turn on search confirmation'
+              }
               aria-pressed={confirmBeforeSelect}
               onClick={() => preferencesMounted && setConfirmBeforeSelect(!confirmBeforeSelect)}
               className={cn(
@@ -160,12 +162,40 @@ export function ThemeToggle() {
               <span
                 className={cn(
                   'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
-                  confirmBeforeSelect
-                    ? 'left-[18px] bg-primary'
-                    : 'left-0.5 bg-muted-foreground'
+                  confirmBeforeSelect ? 'left-[18px] bg-primary' : 'left-0.5 bg-muted-foreground'
                 )}
               />
             </button>
+          </div>
+          <div className="mt-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-2.5">
+            <p className="text-sm font-medium text-foreground">Feedback</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Found a bug or have an idea? Open an issue on GitHub.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a
+                href="https://github.com/revoice1/gamegrid/issues/new?template=bug_report.yml"
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  'inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors',
+                  'hover:bg-secondary/50 hover:text-foreground'
+                )}
+              >
+                Report Bug
+              </a>
+              <a
+                href="https://github.com/revoice1/gamegrid/issues/new?template=feature_request.yml"
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  'inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors',
+                  'hover:bg-secondary/50 hover:text-foreground'
+                )}
+              >
+                Request Feature
+              </a>
+            </div>
           </div>
         </div>
       )}

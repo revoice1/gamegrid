@@ -18,13 +18,7 @@ interface GuessDetailsModalProps {
   colCategory: Category | null
 }
 
-function MetadataList({
-  label,
-  values,
-}: {
-  label: string
-  values: string[] | undefined
-}) {
+function MetadataList({ label, values }: { label: string; values: string[] | undefined }) {
   if (!values || values.length === 0) {
     return null
   }
@@ -62,7 +56,9 @@ export function GuessDetailsModal({
         <DialogHeader>
           <DialogTitle>{guess.gameName}</DialogTitle>
           <DialogDescription>
-            {guess.isCorrect ? 'This pick counted for the cell.' : 'This pick was rejected for the cell.'}
+            {guess.isCorrect
+              ? 'This pick counted for the cell.'
+              : 'This pick was rejected for the cell.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -89,7 +85,9 @@ export function GuessDetailsModal({
                   {formatCategoryType(rowCategory.type)}
                 </p>
               )}
-              <p className={`mt-2 text-sm font-medium ${guess.matchedRow ? 'text-primary' : 'text-destructive'}`}>
+              <p
+                className={`mt-2 text-sm font-medium ${guess.matchedRow ? 'text-primary' : 'text-destructive'}`}
+              >
                 {guess.matchedRow ? 'Matched' : 'Did not match'}
               </p>
             </div>
@@ -102,7 +100,9 @@ export function GuessDetailsModal({
                   {formatCategoryType(colCategory.type)}
                 </p>
               )}
-              <p className={`mt-2 text-sm font-medium ${guess.matchedCol ? 'text-primary' : 'text-destructive'}`}>
+              <p
+                className={`mt-2 text-sm font-medium ${guess.matchedCol ? 'text-primary' : 'text-destructive'}`}
+              >
                 {guess.matchedCol ? 'Matched' : 'Did not match'}
               </p>
             </div>
@@ -114,9 +114,13 @@ export function GuessDetailsModal({
               <p className="mt-1 text-sm text-foreground">{guess.released || 'Unknown'}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Metacritic</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Metacritic
+              </p>
               <p className="mt-1 text-sm text-foreground">
-                {guess.metacritic !== null && guess.metacritic !== undefined ? guess.metacritic : 'N/A'}
+                {guess.metacritic !== null && guess.metacritic !== undefined
+                  ? guess.metacritic
+                  : 'N/A'}
               </p>
             </div>
           </div>

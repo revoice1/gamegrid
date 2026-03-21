@@ -1,0 +1,62 @@
+name: Feature request
+description: Suggest an improvement, new mode, polish pass, or workflow idea.
+title: '[Feature]: '
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Clear use cases help us prioritize good additions.
+  - type: input
+    id: summary
+    attributes:
+      label: Feature summary
+      placeholder: Add online rooms for versus mode
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      placeholder: Local versus is fun, but remote friends cannot play together
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      placeholder: Let one player host a match and share a short join code
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: A shareable async challenge link could also work
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Gameplay
+        - Daily
+        - Practice
+        - Versus
+        - Search
+        - Animations / UI polish
+        - Accessibility
+        - Testing / CI
+        - Infrastructure
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      description: Mockups, examples, references, or implementation notes.
+    validations:
+      required: false

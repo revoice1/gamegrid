@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      'next/image': path.resolve(__dirname, './tests/mocks/next-image.tsx'),
     },
   },
   test: {

@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a broken feature, crash, regression, or confusing behavior.
+title: '[Bug]: '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough detail for us to reproduce it.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: The search modal closes immediately after selecting a result
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps that trigger the issue.
+      placeholder: |
+        1. Open Practice
+        2. Click a cell
+        3. Search for a game
+        4. Select a result
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The result should be staged for confirmation instead of closing the modal
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: The modal closes and nothing is selected
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Game mode
+      options:
+        - Daily
+        - Practice
+        - Versus
+        - Other / not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device type
+      options:
+        - Desktop
+        - Laptop
+        - Tablet
+        - Phone
+        - Other / not sure
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser and environment
+      description: Browser, OS, theme, confirm mode, reduced motion, or anything else relevant.
+      placeholder: Chrome 135 on Windows 11, dark mode, confirm picks on
+    validations:
+      required: false
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or console output
+      description: Paste errors, stack traces, or attach screenshots if helpful.
+    validations:
+      required: false

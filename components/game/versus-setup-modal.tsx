@@ -1,13 +1,22 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import type { CategoryType } from '@/lib/types'
 
-type VersusFamilyKey = Extract<CategoryType, 'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective'>
+type VersusFamilyKey = Extract<
+  CategoryType,
+  'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective'
+>
 
 export interface VersusCategoryFamilyOption {
   key: VersusFamilyKey
@@ -22,7 +31,7 @@ export interface VersusCategoryFamilyOption {
 
 export type VersusCategoryFilters = Partial<Record<VersusFamilyKey, string[]>>
 export type VersusStealRule = 'lower' | 'higher'
-export type VersusTurnTimerOption = 'none' | 60 | 120 | 300
+export type VersusTurnTimerOption = 'none' | 20 | 60 | 120 | 300
 
 interface VersusSetupModalProps {
   isOpen: boolean
@@ -41,6 +50,7 @@ interface VersusSetupModalProps {
 
 const TIMER_OPTIONS: Array<{ value: VersusTurnTimerOption; label: string }> = [
   { value: 'none', label: 'No timer' },
+  { value: 20, label: '20 sec' },
   { value: 60, label: '1 min' },
   { value: 120, label: '2 min' },
   { value: 300, label: '5 min' },
@@ -70,7 +80,9 @@ export function VersusSetupModal({
   const [draftStealRule, setDraftStealRule] = useState<VersusStealRule>(stealRule)
   const [draftTimerOption, setDraftTimerOption] = useState<VersusTurnTimerOption>(timerOption)
   const [isLoading, setIsLoading] = useState(false)
-  const [expandedFamilies, setExpandedFamilies] = useState<Partial<Record<VersusFamilyKey, boolean>>>({})
+  const [expandedFamilies, setExpandedFamilies] = useState<
+    Partial<Record<VersusFamilyKey, boolean>>
+  >({})
   const lastSyncedConfigRef = useRef<string>('')
   const filtersKey = JSON.stringify(filters)
 
@@ -144,7 +156,8 @@ export function VersusSetupModal({
       }
 
       if (nextValues.length === family.categories.length) {
-        const { [familyKey]: _removed, ...rest } = current
+        const { [familyKey]: removed, ...rest } = current
+        void removed
         return rest
       }
 
@@ -157,7 +170,8 @@ export function VersusSetupModal({
 
   const clearFamily = (familyKey: VersusFamilyKey) => {
     setDraftFilters((current) => {
-      const { [familyKey]: _removed, ...rest } = current
+      const { [familyKey]: removed, ...rest } = current
+      void removed
       return rest
     })
   }
@@ -211,7 +225,9 @@ export function VersusSetupModal({
         <DialogHeader>
           <DialogTitle>{isVersusMode ? 'Versus Setup' : 'Practice Setup'}</DialogTitle>
           <DialogDescription>
-            Build your own category pool. You need at least 6 enabled categories across at least 4 families to try generation. Some narrow combinations may take more attempts to validate, or may not be able to generate a board at all.
+            Build your own category pool. You need at least 6 enabled categories across at least 4
+            families to try generation. Some narrow combinations may take more attempts to validate,
+            or may not be able to generate a board at all.
           </DialogDescription>
         </DialogHeader>
 
@@ -227,11 +243,14 @@ export function VersusSetupModal({
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Steal Rule</h3>
                 <p className="text-xs text-muted-foreground">
-                  Toggle whether a steal has to beat the defending square with a lower or higher rating.
+                  Toggle whether a steal has to beat the defending square with a lower or higher
+                  rating.
                 </p>
               </div>
               <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/50 px-3 py-2">
-                <span className={`text-xs font-medium ${draftStealRule === 'lower' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <span
+                  className={`text-xs font-medium ${draftStealRule === 'lower' ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
                   Lower wins
                 </span>
                 <Switch
@@ -239,7 +258,9 @@ export function VersusSetupModal({
                   onCheckedChange={(checked) => setDraftStealRule(checked ? 'higher' : 'lower')}
                   aria-label="Toggle steal rule"
                 />
-                <span className={`text-xs font-medium ${draftStealRule === 'higher' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <span
+                  className={`text-xs font-medium ${draftStealRule === 'higher' ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
                   Higher wins
                 </span>
               </div>
@@ -263,7 +284,11 @@ export function VersusSetupModal({
                   variant="outline"
                   size="sm"
                   onClick={() => setDraftTimerOption(option.value)}
-                  className={draftTimerOption === option.value ? 'border-primary bg-primary/10 text-primary' : undefined}
+                  className={
+                    draftTimerOption === option.value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : undefined
+                  }
                 >
                   {option.label}
                 </Button>
@@ -273,7 +298,9 @@ export function VersusSetupModal({
         )}
 
         {isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loading category pools...</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Loading category pools...
+          </div>
         ) : (
           <div className="space-y-5">
             {families.map((family) => {
@@ -282,7 +309,10 @@ export function VersusSetupModal({
               const isExpanded = expandedFamilies[family.key] === true
 
               return (
-                <section key={family.key} className="rounded-2xl border border-border bg-secondary/20 p-4">
+                <section
+                  key={family.key}
+                  className="rounded-2xl border border-border bg-secondary/20 p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <button
                       type="button"
@@ -290,9 +320,13 @@ export function VersusSetupModal({
                       className="flex flex-1 items-center justify-between gap-3 text-left"
                     >
                       <div>
-                        <h3 className="text-sm font-semibold text-foreground">{FAMILY_LABELS[family.key]}</h3>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {FAMILY_LABELS[family.key]}
+                        </h3>
                         <p className="text-xs text-muted-foreground">
-                          {isCustom ? `${selected.size} of ${family.categories.length} enabled` : `All ${family.categories.length} enabled`}
+                          {isCustom
+                            ? `${selected.size} of ${family.categories.length} enabled`
+                            : `All ${family.categories.length} enabled`}
                         </p>
                       </div>
                       <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -320,7 +354,9 @@ export function VersusSetupModal({
                         >
                           <Checkbox
                             checked={selected.has(category.id)}
-                            onCheckedChange={(checked) => toggleCategory(family.key, category.id, checked === true)}
+                            onCheckedChange={(checked) =>
+                              toggleCategory(family.key, category.id, checked === true)
+                            }
                           />
                           <span className="text-foreground">{category.name}</span>
                         </div>
@@ -336,19 +372,20 @@ export function VersusSetupModal({
         <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">
-              Current pool: {totalSelectedCategories} enabled categories across {enabledFamilyCount} families. Narrower pools can take longer to generate.
+              Current pool: {totalSelectedCategories} enabled categories across {enabledFamilyCount}{' '}
+              families. Narrower pools can take longer to generate.
             </p>
             {applyDisabledReason && (
-              <p className="text-xs font-medium text-amber-300">
-                {applyDisabledReason}
-              </p>
+              <p className="text-xs font-medium text-amber-300">{applyDisabledReason}</p>
             )}
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={resetToDefault}>
               Reset to Default
             </Button>
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button
               onClick={() => onApply(buildAppliedFilters(), draftStealRule, draftTimerOption)}
               disabled={!canApply}

@@ -41,7 +41,8 @@ function StandardHowToPlay({
           <div>
             <p className="font-medium">Fill the Grid</p>
             <p className="text-sm text-muted-foreground">
-              Select a cell and search for a video game that matches BOTH the row and column categories.
+              Select a cell and search for a video game that matches BOTH the row and column
+              categories.
             </p>
           </div>
         </div>
@@ -53,7 +54,8 @@ function StandardHowToPlay({
           <div>
             <p className="font-medium">Categories</p>
             <p className="text-sm text-muted-foreground">
-              Categories can include platforms, genres, decades, game modes, themes, and perspectives. Every answer has to satisfy both clues at once.
+              Categories can include platforms, genres, decades, game modes, themes, and
+              perspectives. Every answer has to satisfy both clues at once.
             </p>
           </div>
         </div>
@@ -64,9 +66,7 @@ function StandardHowToPlay({
           </div>
           <div>
             <p className="font-medium">Answer Pools</p>
-            <p className="text-sm text-muted-foreground">
-              {answerPoolCopy}
-            </p>
+            <p className="text-sm text-muted-foreground">{answerPoolCopy}</p>
           </div>
         </div>
 
@@ -77,7 +77,8 @@ function StandardHowToPlay({
           <div>
             <p className="font-medium">Difficulty Hints</p>
             <p className="text-sm text-muted-foreground">
-              Empty cells show a vibe check on how tight the intersection is. Brutal means the pool is thin, while Cozy or Feast means you have room to freestyle.
+              Empty cells show a vibe check on how tight the intersection is. Brutal means the pool
+              is thin, while Cozy or Feast means you have room to freestyle.
             </p>
           </div>
         </div>
@@ -89,7 +90,8 @@ function StandardHowToPlay({
           <div>
             <p className="font-medium">Limited Guesses</p>
             <p className="text-sm text-muted-foreground">
-              You have 9 guesses total, and every miss still burns one. Reusing the same game in multiple cells is not allowed.
+              You have 9 guesses total, and every miss still burns one. Reusing the same game in
+              multiple cells is not allowed.
             </p>
           </div>
         </div>
@@ -100,9 +102,7 @@ function StandardHowToPlay({
           </div>
           <div>
             <p className="font-medium">Daily Reset</p>
-            <p className="text-sm text-muted-foreground">
-              {resetCopy}
-            </p>
+            <p className="text-sm text-muted-foreground">{resetCopy}</p>
           </div>
         </div>
 
@@ -113,7 +113,9 @@ function StandardHowToPlay({
           <div>
             <p className="font-medium">Release Tags</p>
             <p className="text-sm text-muted-foreground">
-              Search results may show a type tag like Original, Re-release, Remake, Remaster, or Port. These are just quick IGDB-based clues about which version you are looking at, not a hint about whether an answer is valid.
+              Search results may show a type tag like Original, Re-release, Remake, Remaster, or
+              Port. These are just quick IGDB-based clues about which version you are looking at,
+              not a hint about whether an answer is valid.
             </p>
           </div>
         </div>
@@ -145,7 +147,8 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Take Turns Claiming Squares</p>
             <p className="text-sm text-muted-foreground">
-              Player 1 claims squares as X and Player 2 claims squares as O. A guess only sticks if the game matches both category clues for that cell.
+              X claims squares as X and O claims squares as O. A guess only sticks if the game
+              matches both category clues for that cell.
             </p>
           </div>
         </div>
@@ -157,7 +160,8 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Steals Are Limited</p>
             <p className="text-sm text-muted-foreground">
-              You can always target a blank square. You can only target an occupied square if it was the square your opponent claimed on their last turn.
+              You can always target a blank square. You can only target an occupied square if it was
+              the square your opponent claimed on their last turn.
             </p>
           </div>
         </div>
@@ -169,7 +173,8 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Locks and Stealable Cells</p>
             <p className="text-sm text-muted-foreground">
-              Locked cells show a lock badge because they are no longer stealable. The only open steal target is the opponent’s freshest claim.
+              Locked cells show a lock badge because they are no longer stealable. The only open
+              steal target is the opponent’s freshest claim.
             </p>
           </div>
         </div>
@@ -181,7 +186,8 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Steal Rating Rules</p>
             <p className="text-sm text-muted-foreground">
-              Steals compare each game’s hidden rating. Depending on the custom rule, either the lower-rated or higher-rated game wins the square.
+              Steals compare each game’s hidden rating. Depending on the custom rule, either the
+              lower-rated or higher-rated game wins the square.
             </p>
           </div>
         </div>
@@ -193,7 +199,8 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Final Square Tiebreak</p>
             <p className="text-sm text-muted-foreground">
-              If Player 1 wins by taking the final blank square, Player 2 gets one last steal chance on that square to even out the first-move advantage.
+              If X wins by taking the final blank square, O gets one last steal chance on that
+              square to even out the first-move advantage.
             </p>
           </div>
         </div>
@@ -205,7 +212,8 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Optional Turn Timer</p>
             <p className="text-sm text-muted-foreground">
-              If your custom match uses a timer, it shows in the versus HUD. When the clock hits zero, the turn expires and play passes immediately.
+              If your custom match uses a timer, it shows in the versus HUD. When the clock hits
+              zero, the turn expires and play passes immediately.
             </p>
           </div>
         </div>
@@ -257,6 +265,24 @@ export function HowToPlayModal({
           <p className="mb-3 text-center text-xs text-muted-foreground">
             Game data powered by IGDB
           </p>
+          <div className="mb-4 flex flex-wrap justify-center gap-2">
+            <a
+              href="https://github.com/revoice1/gamegrid/issues/new?template=bug_report.yml"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded-full border border-border bg-secondary/30 px-3 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+            >
+              Report a bug
+            </a>
+            <a
+              href="https://github.com/revoice1/gamegrid/issues/new?template=feature_request.yml"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded-full border border-border bg-secondary/30 px-3 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+            >
+              Request a feature
+            </a>
+          </div>
           <Button onClick={onClose} className="w-full">
             Got it!
           </Button>

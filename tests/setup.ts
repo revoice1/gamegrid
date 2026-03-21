@@ -4,8 +4,7 @@ import { vi } from 'vitest'
 
 vi.mock('next/image', () => ({
   default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => {
-    // eslint-disable-next-line jsx-a11y/alt-text
-    return React.createElement('img', props)
+    return React.createElement('img', { ...props, alt: props.alt ?? '' })
   },
 }))
 

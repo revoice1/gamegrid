@@ -34,7 +34,7 @@
   --chart-4: oklch(0.75 0.18 80);
   --chart-5: oklch(0.55 0.22 25);
   --radius: 0.5rem;
-  
+
   /* Custom game colors */
   --cell-empty: oklch(0.96 0.006 250);
   --cell-hover: oklch(0.92 0.015 245);
@@ -143,11 +143,21 @@
 }
 
 /* Rarity colors for stats */
-.rarity-common { color: var(--rarity-common); }
-.rarity-uncommon { color: var(--rarity-uncommon); }
-.rarity-rare { color: var(--rarity-rare); }
-.rarity-epic { color: var(--rarity-epic); }
-.rarity-legendary { color: var(--rarity-legendary); }
+.rarity-common {
+  color: var(--rarity-common);
+}
+.rarity-uncommon {
+  color: var(--rarity-uncommon);
+}
+.rarity-rare {
+  color: var(--rarity-rare);
+}
+.rarity-epic {
+  color: var(--rarity-epic);
+}
+.rarity-legendary {
+  color: var(--rarity-legendary);
+}
 
 /* Search highlight */
 .search-result:hover {

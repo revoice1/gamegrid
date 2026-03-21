@@ -31,8 +31,14 @@ function getGenerationPlans() {
   }))
 }
 
-function sanitizeCategories(categories: Category[]): Omit<Category, 'developerId' | 'publisherId'>[] {
-  return categories.map(({ developerId: _d, publisherId: _p, ...safe }) => safe)
+function sanitizeCategories(
+  categories: Category[]
+): Omit<Category, 'developerId' | 'publisherId'>[] {
+  return categories.map(({ developerId, publisherId, ...safe }) => {
+    void developerId
+    void publisherId
+    return safe
+  })
 }
 
 function getTodayDate(): string {
@@ -43,7 +49,10 @@ function createEphemeralPuzzleId(): string {
   return `practice-${crypto.randomUUID()}`
 }
 
-async function getExistingDailyPuzzle(supabase: Awaited<ReturnType<typeof createClient>>, today: string) {
+async function getExistingDailyPuzzle(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  today: string
+) {
   const { data } = await supabase
     .from('puzzles')
     .select('*')
@@ -71,13 +80,13 @@ async function computePuzzleCellMetadata(
     )
   )
   const validation = {
-    valid: exactCellResults.every(c => c.validOptionCount >= minValidOptionsPerCell),
+    valid: exactCellResults.every((c) => c.validOptionCount >= minValidOptionsPerCell),
     minValidOptionCount: exactCellResults.reduce(
       (low, c) => Math.min(low, c.validOptionCount),
       Number.POSITIVE_INFINITY
     ),
     cellResults: exactCellResults,
-    failedCells: exactCellResults.filter(c => c.validOptionCount < minValidOptionsPerCell),
+    failedCells: exactCellResults.filter((c) => c.validOptionCount < minValidOptionsPerCell),
   }
   return buildPuzzleCellMetadata(validation, minValidOptionsPerCell, VALIDATION_SAMPLE_SIZE, false)
 }
@@ -100,12 +109,18 @@ function generationProgress(
     case 'families':
       return { pct: 4, message: 'Loading category data...' }
     case 'attempt': {
-      const pct = generationStartPct + ((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1) * generationSpan
-      return { pct: Math.round(pct), message: `Attempt ${event.attempt}/${maxAttempts}: picking categories...` }
+      const pct =
+        generationStartPct +
+        (((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1)) * generationSpan
+      return {
+        pct: Math.round(pct),
+        message: `Attempt ${event.attempt}/${maxAttempts}: picking categories...`,
+      }
     }
     case 'cell': {
       const attemptStart =
-        generationStartPct + ((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1) * generationSpan
+        generationStartPct +
+        (((event.attempt ?? 1) - 1) / Math.max(maxAttempts, 1)) * generationSpan
       const cellFrac = ((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)
       const pct = attemptStart + cellFrac * validationSpan
       return {
@@ -116,15 +131,20 @@ function generationProgress(
     case 'metadata': {
       const pct =
         metadataStartPct +
-        (((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)) * (metadataEndPct - metadataStartPct)
+        (((event.cellIndex ?? 0) + 1) / (event.totalCells ?? 9)) *
+          (metadataEndPct - metadataStartPct)
       return {
         pct: Math.round(pct),
-        message: event.message ?? `Counting answers for cell ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...`,
+        message:
+          event.message ??
+          `Counting answers for cell ${(event.cellIndex ?? 0) + 1}/${event.totalCells ?? 9}...`,
       }
     }
     case 'rejected': {
       const pct =
-        generationStartPct + ((event.attempt ?? 1) / Math.max(maxAttempts, 1)) * generationSpan + validationSpan
+        generationStartPct +
+        ((event.attempt ?? 1) / Math.max(maxAttempts, 1)) * generationSpan +
+        validationSpan
       return {
         pct: Math.round(Math.max(generationStartPct, pct)),
         message: event.message ?? `Attempt ${event.attempt}/${maxAttempts} rejected`,
@@ -141,7 +161,7 @@ export async function GET(request: NextRequest) {
   const rawFilters = searchParams.get('filters')
   const supabase = await createClient()
   const allowedCategoryIds = rawFilters
-    ? JSON.parse(rawFilters) as PuzzleCategoryFilters
+    ? (JSON.parse(rawFilters) as PuzzleCategoryFilters)
     : undefined
 
   const encoder = new TextEncoder()
@@ -168,13 +188,18 @@ export async function GET(request: NextRequest) {
               existingPuzzle.row_categories,
               existingPuzzle.col_categories,
               MIN_VALID_OPTIONS_PER_CELL,
-              (cellIndex, total) => send({
-                type: 'progress',
-                pct: 10 + Math.round((cellIndex + 1) / total * 85),
-                message: `Validating cell ${cellIndex + 1}/${total}...`,
-              })
+              (cellIndex, total) =>
+                send({
+                  type: 'progress',
+                  pct: 10 + Math.round(((cellIndex + 1) / total) * 85),
+                  message: `Validating cell ${cellIndex + 1}/${total}...`,
+                })
             )
-            supabase.from('puzzles').update({ cell_metadata: cellMetadata }).eq('id', existingPuzzle.id).then()
+            supabase
+              .from('puzzles')
+              .update({ cell_metadata: cellMetadata })
+              .eq('id', existingPuzzle.id)
+              .then()
           }
 
           await send({ type: 'progress', pct: 100, message: 'Board ready.' })
@@ -235,10 +260,10 @@ export async function GET(request: NextRequest) {
           categories = {
             rows,
             cols,
-            validationStatus: plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL
-                ? 'relaxed'
-                : 'validated',
-            validationMessage: plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL
+            validationStatus:
+              plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL ? 'relaxed' : 'validated',
+            validationMessage:
+              plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL
                 ? `Generated with relaxed validation (${plan.minValidOptionsPerCell}+ valid options per cell instead of ${MIN_VALID_OPTIONS_PER_CELL}+).`
                 : null,
             cellMetadata,
@@ -246,7 +271,11 @@ export async function GET(request: NextRequest) {
           break
         } catch (err) {
           lastError = err instanceof Error ? err : new Error('Unknown error')
-          await send({ type: 'progress', pct: 12, message: 'Attempt failed, retrying with relaxed rules...' })
+          await send({
+            type: 'progress',
+            pct: 12,
+            message: 'Attempt failed, retrying with relaxed rules...',
+          })
         }
       }
 
@@ -273,19 +302,24 @@ export async function GET(request: NextRequest) {
 
       await send({ type: 'progress', pct: 96, message: 'Saving puzzle...' })
 
-      const { data: newPuzzle, error } = await supabase.from('puzzles').insert({
-        date: getTodayDate(),
-        is_daily: true,
-        row_categories: categories.rows,
-        col_categories: categories.cols,
-        cell_metadata: categories.cellMetadata,
-      }).select().single()
+      const { data: newPuzzle, error } = await supabase
+        .from('puzzles')
+        .insert({
+          date: getTodayDate(),
+          is_daily: true,
+          row_categories: categories.rows,
+          col_categories: categories.cols,
+          cell_metadata: categories.cellMetadata,
+        })
+        .select()
+        .single()
 
       if (error) {
         if (error.code === '23505') {
           const existing = await getExistingDailyPuzzle(supabase, getTodayDate())
           if (existing) {
-            const cellMetadata: PuzzleCellMetadata[] = existing.cell_metadata ?? categories.cellMetadata
+            const cellMetadata: PuzzleCellMetadata[] =
+              existing.cell_metadata ?? categories.cellMetadata
             await send({ type: 'progress', pct: 100, message: 'Board ready.' })
             await send({
               type: 'puzzle',

@@ -14,7 +14,7 @@ import {
   type VersusStealRule,
   type VersusTurnTimerOption,
 } from './versus-setup-modal'
-import { getSessionId, saveGameState, loadGameState, clearGameState, type CellGuessRecord } from '@/lib/session'
+import { getSessionId, saveGameState, loadGameState, clearGameState } from '@/lib/session'
 import { useSearchConfirmPreference } from '@/lib/ui-preferences'
 import { unlockAchievement } from '@/lib/achievements'
 import { EASTER_EGGS, type EasterEggConfig, type EasterEggPieceKind } from '@/lib/easter-eggs'
@@ -100,7 +100,7 @@ interface PendingFinalSteal {
 declare global {
   interface Window {
     __gameGridDev?: {
-      triggerEasterEgg: (gameName: string) => boolean
+      triggerEasterEgg: (gameId: number) => boolean
       triggerPerfectCelebration: () => void
       triggerStealShowdown: (options?: {
         successful?: boolean
@@ -117,7 +117,7 @@ function getNextPlayer(player: TicTacToePlayer): TicTacToePlayer {
 }
 
 function getPlayerLabel(player: TicTacToePlayer): string {
-  return player === 'x' ? 'Player 1' : 'Player 2'
+  return player === 'x' ? 'X' : 'O'
 }
 
 function detectAnimationQuality(): AnimationQuality {
@@ -125,7 +125,8 @@ function detectAnimationQuality(): AnimationQuality {
     return 'high'
   }
 
-  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const prefersReducedMotion =
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
   if (prefersReducedMotion) {
     return 'low'
@@ -238,47 +239,53 @@ function StealShowdownOverlay({
   const attackerScoreLabel = `${attackerScore}`
   const defenderScoreLabel = `${defenderScore}`
   const [showVerdict, setShowVerdict] = useState(false)
-  const [revealedAttackerDigits, setRevealedAttackerDigits] = useState<boolean[]>(
-    () => Array.from({ length: attackerScoreLabel.length }, () => false)
+  const [revealedAttackerDigits, setRevealedAttackerDigits] = useState<boolean[]>(() =>
+    Array.from({ length: attackerScoreLabel.length }, () => false)
   )
-  const [spinningAttackerDigits, setSpinningAttackerDigits] = useState<string[]>(
-    () => Array.from({ length: attackerScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`)
+  const [spinningAttackerDigits, setSpinningAttackerDigits] = useState<string[]>(() =>
+    Array.from({ length: attackerScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`)
   )
-  const [revealedDefenderDigits, setRevealedDefenderDigits] = useState<boolean[]>(
-    () => Array.from({ length: defenderScoreLabel.length }, () => false)
+  const [revealedDefenderDigits, setRevealedDefenderDigits] = useState<boolean[]>(() =>
+    Array.from({ length: defenderScoreLabel.length }, () => false)
   )
-  const [spinningDefenderDigits, setSpinningDefenderDigits] = useState<string[]>(
-    () => Array.from({ length: defenderScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`)
+  const [spinningDefenderDigits, setSpinningDefenderDigits] = useState<string[]>(() =>
+    Array.from({ length: defenderScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`)
   )
 
   useEffect(() => {
     setShowVerdict(false)
     setRevealedAttackerDigits(Array.from({ length: attackerScoreLabel.length }, () => false))
-    setSpinningAttackerDigits(Array.from({ length: attackerScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`))
+    setSpinningAttackerDigits(
+      Array.from({ length: attackerScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`)
+    )
     setRevealedDefenderDigits(Array.from({ length: defenderScoreLabel.length }, () => false))
-    setSpinningDefenderDigits(Array.from({ length: defenderScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`))
+    setSpinningDefenderDigits(
+      Array.from({ length: defenderScoreLabel.length }, () => `${Math.floor(Math.random() * 10)}`)
+    )
 
-    const attackerRevealTimers = attackerScoreLabel
-      .split('')
-      .map((_, reverseIndex) => {
-        const index = attackerScoreLabel.length - 1 - reverseIndex
-        return setTimeout(() => {
-          setRevealedAttackerDigits(current => current.map((value, digitIndex) => (
-            digitIndex === index ? true : value
-          )))
-        }, 1120 + reverseIndex * 260)
-      })
+    const attackerRevealTimers = attackerScoreLabel.split('').map((_, reverseIndex) => {
+      const index = attackerScoreLabel.length - 1 - reverseIndex
+      return setTimeout(
+        () => {
+          setRevealedAttackerDigits((current) =>
+            current.map((value, digitIndex) => (digitIndex === index ? true : value))
+          )
+        },
+        1120 + reverseIndex * 260
+      )
+    })
 
-    const defenderRevealTimers = defenderScoreLabel
-      .split('')
-      .map((_, reverseIndex) => {
-        const index = defenderScoreLabel.length - 1 - reverseIndex
-        return setTimeout(() => {
-          setRevealedDefenderDigits(current => current.map((value, digitIndex) => (
-            digitIndex === index ? true : value
-          )))
-        }, 480 + reverseIndex * 240)
-      })
+    const defenderRevealTimers = defenderScoreLabel.split('').map((_, reverseIndex) => {
+      const index = defenderScoreLabel.length - 1 - reverseIndex
+      return setTimeout(
+        () => {
+          setRevealedDefenderDigits((current) =>
+            current.map((value, digitIndex) => (digitIndex === index ? true : value))
+          )
+        },
+        480 + reverseIndex * 240
+      )
+    })
 
     return () => {
       attackerRevealTimers.forEach(clearTimeout)
@@ -297,9 +304,11 @@ function StealShowdownOverlay({
   useEffect(() => {
     const attackerSpinIntervalMs = lowEffects ? 120 : 70
     const attackerInterval = setInterval(() => {
-      setSpinningAttackerDigits(current => current.map((digit, index) => (
-        revealedAttackerDigits[index] ? digit : `${Math.floor(Math.random() * 10)}`
-      )))
+      setSpinningAttackerDigits((current) =>
+        current.map((digit, index) =>
+          revealedAttackerDigits[index] ? digit : `${Math.floor(Math.random() * 10)}`
+        )
+      )
     }, attackerSpinIntervalMs)
 
     return () => clearInterval(attackerInterval)
@@ -308,9 +317,11 @@ function StealShowdownOverlay({
   useEffect(() => {
     const defenderSpinIntervalMs = lowEffects ? 120 : 70
     const defenderInterval = setInterval(() => {
-      setSpinningDefenderDigits(current => current.map((digit, index) => (
-        revealedDefenderDigits[index] ? digit : `${Math.floor(Math.random() * 10)}`
-      )))
+      setSpinningDefenderDigits((current) =>
+        current.map((digit, index) =>
+          revealedDefenderDigits[index] ? digit : `${Math.floor(Math.random() * 10)}`
+        )
+      )
     }, defenderSpinIntervalMs)
 
     return () => clearInterval(defenderInterval)
@@ -318,76 +329,102 @@ function StealShowdownOverlay({
 
   return (
     <div data-testid="steal-showdown-overlay" className="fixed inset-0 z-[80]">
-      <div className={cn(
-        'absolute inset-0 transition-all duration-300',
-        !lowEffects && 'backdrop-blur-[3px]',
-        successful
-          ? 'bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.14),transparent_32%),radial-gradient(circle_at_center,rgba(0,0,0,0.88),rgba(0,0,0,0.72))]'
-          : 'bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.18),transparent_30%),radial-gradient(circle_at_center,rgba(0,0,0,0.9),rgba(0,0,0,0.76))]'
-      )} />
+      <div
+        className={cn(
+          'absolute inset-0 transition-all duration-300',
+          !lowEffects && 'backdrop-blur-[3px]',
+          successful
+            ? 'bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.14),transparent_32%),radial-gradient(circle_at_center,rgba(0,0,0,0.88),rgba(0,0,0,0.72))]'
+            : 'bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.18),transparent_30%),radial-gradient(circle_at_center,rgba(0,0,0,0.9),rgba(0,0,0,0.76))]'
+        )}
+      />
       <div className="pointer-events-none absolute inset-0 grid place-items-center p-4">
-      <div className={cn(
-        'showdown-shell w-full max-w-lg rounded-[2rem] border border-border/80 bg-card/95 p-6',
-        lowEffects ? 'shadow-2xl' : 'shadow-[0_28px_90px_rgba(0,0,0,0.6)]'
-      )}>
-        <p className="text-center text-xs font-semibold uppercase tracking-[0.24em] text-primary">
-          Steal Attempt
-        </p>
-        <p className="mt-1 text-center text-xs text-muted-foreground">
-          {rule === 'lower' ? 'Lower rating steals the square' : 'Higher rating steals the square'}
-        </p>
-        <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          <div className="showdown-panel showdown-panel-left rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <p className="truncate text-xs uppercase tracking-[0.18em] text-muted-foreground">Defender</p>
-            <p className="mt-1 truncate text-sm font-semibold text-foreground">{defenderName}</p>
-            <div className="mt-3 flex justify-center gap-1.5">
-              {defenderScoreLabel.split('').map((digit, index) => (
-                <span
-                  key={`${burstId}-defender-${index}`}
-                  className={cn(
-                    'inline-flex h-14 w-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-background/75 text-4xl font-black text-emerald-300',
-                    !lowEffects && 'shadow-[0_0_18px_rgba(110,231,183,0.14)]'
-                  )}
-                >
-                  {revealedDefenderDigits[index] ? digit : spinningDefenderDigits[index]}
-                </span>
-              ))}
+        <div
+          className={cn(
+            'showdown-shell w-full max-w-3xl rounded-[2rem] border border-border/80 bg-card/95 p-6 sm:p-7',
+            lowEffects ? 'shadow-2xl' : 'shadow-[0_28px_90px_rgba(0,0,0,0.6)]'
+          )}
+        >
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.24em] text-primary">
+            Steal Attempt
+          </p>
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            {rule === 'lower'
+              ? 'Lower rating steals the square'
+              : 'Higher rating steals the square'}
+          </p>
+          <div className="mt-5 grid grid-cols-1 items-center gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-5">
+            <div className="showdown-panel showdown-panel-left min-w-0 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <p className="truncate text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Defender
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-foreground">{defenderName}</p>
+              <div className="mt-3 flex justify-center gap-1.5">
+                {defenderScoreLabel.split('').map((digit, index) => (
+                  <span
+                    key={`${burstId}-defender-${index}`}
+                    className={cn(
+                      'inline-flex h-14 w-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-background/75 text-4xl font-black tabular-nums text-emerald-300',
+                      !lowEffects && 'shadow-[0_0_18px_rgba(110,231,183,0.14)]'
+                    )}
+                  >
+                    {revealedDefenderDigits[index] ? digit : spinningDefenderDigits[index]}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="showdown-vs text-center sm:px-1">
+              <p
+                className={cn(
+                  'text-xl font-black uppercase tracking-[0.28em] text-foreground/80',
+                  !lowEffects && 'drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]'
+                )}
+              >
+                VS
+              </p>
+            </div>
+            <div className="showdown-panel showdown-panel-right min-w-0 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <p className="truncate text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Challenger
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-foreground">{attackerName}</p>
+              <div className="mt-3 flex justify-center gap-1.5">
+                {attackerScoreLabel.split('').map((digit, index) => (
+                  <span
+                    key={`${burstId}-attacker-${index}`}
+                    className={cn(
+                      'inline-flex h-14 w-10 items-center justify-center rounded-xl border border-sky-400/30 bg-background/75 text-4xl font-black tabular-nums text-sky-300',
+                      !lowEffects && 'shadow-[0_0_18px_rgba(56,189,248,0.14)]'
+                    )}
+                  >
+                    {revealedAttackerDigits[index] ? digit : spinningAttackerDigits[index]}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="showdown-vs text-center">
-            <p className={cn('text-xl font-black uppercase tracking-[0.28em] text-foreground/80', !lowEffects && 'drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]')}>VS</p>
-          </div>
-          <div className="showdown-panel showdown-panel-right rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <p className="truncate text-xs uppercase tracking-[0.18em] text-muted-foreground">Challenger</p>
-            <p className="mt-1 truncate text-sm font-semibold text-foreground">{attackerName}</p>
-            <div className="mt-3 flex justify-center gap-1.5">
-              {attackerScoreLabel.split('').map((digit, index) => (
-                <span
-                  key={`${burstId}-attacker-${index}`}
-                  className={cn(
-                    'inline-flex h-14 w-10 items-center justify-center rounded-xl border border-sky-400/30 bg-background/75 text-4xl font-black text-sky-300',
-                    !lowEffects && 'shadow-[0_0_18px_rgba(56,189,248,0.14)]'
-                  )}
-                >
-                  {revealedAttackerDigits[index] ? digit : spinningAttackerDigits[index]}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className={cn('mt-5 transition-all duration-300', showVerdict ? 'opacity-100 translate-y-0' : 'translate-y-3 opacity-0')}>
           <div
             className={cn(
-              'rounded-2xl border px-4 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
-              successful
-                ? (lowEffects ? 'border-primary/40 bg-primary/15 text-primary' : 'border-primary/40 bg-primary/15 text-primary shadow-[0_0_28px_rgba(34,197,94,0.16)]')
-                : (lowEffects ? 'border-destructive/40 bg-destructive/15 text-destructive' : 'border-destructive/40 bg-destructive/15 text-destructive shadow-[0_0_28px_rgba(239,68,68,0.18)]')
+              'mt-5 transition-all duration-300',
+              showVerdict ? 'opacity-100 translate-y-0' : 'translate-y-3 opacity-0'
             )}
           >
-            {successful ? 'Steal Successful' : 'Steal Denied'}
+            <div
+              className={cn(
+                'rounded-2xl border px-4 py-3 text-center text-sm font-semibold uppercase tracking-[0.18em] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+                successful
+                  ? lowEffects
+                    ? 'border-primary/40 bg-primary/15 text-primary'
+                    : 'border-primary/40 bg-primary/15 text-primary shadow-[0_0_28px_rgba(34,197,94,0.16)]'
+                  : lowEffects
+                    ? 'border-destructive/40 bg-destructive/15 text-destructive'
+                    : 'border-destructive/40 bg-destructive/15 text-destructive shadow-[0_0_28px_rgba(239,68,68,0.18)]'
+              )}
+            >
+              {successful ? 'Steal Successful' : 'Steal Denied'}
+            </div>
           </div>
         </div>
-      </div>
       </div>
       <style jsx>{`
         .showdown-shell {
@@ -449,7 +486,6 @@ function StealShowdownOverlay({
             opacity: 1;
           }
         }
-
       `}</style>
     </div>
   )
@@ -457,7 +493,11 @@ function StealShowdownOverlay({
 
 function StealMissSplash({ burstId }: ActiveStealMissSplash) {
   return (
-    <div key={burstId} data-testid="steal-miss-splash" className="pointer-events-none fixed inset-0 z-[90] grid place-items-center p-4">
+    <div
+      key={burstId}
+      data-testid="steal-miss-splash"
+      className="pointer-events-none fixed inset-0 z-[90] grid place-items-center p-4"
+    >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.12),transparent_28%),rgba(0,0,0,0.18)]" />
       <div className="steal-miss-splash select-none px-6 text-center font-black uppercase italic tracking-[0.08em] text-[#ff6262] drop-shadow-[0_10px_28px_rgba(0,0,0,0.78)]">
         Wasted
@@ -550,7 +590,7 @@ function getEasterEggLifetimeMs(
 }
 
 function requireEasterEgg(achievementId: string): EasterEggConfig {
-  const easterEgg = EASTER_EGGS.find(entry => entry.achievementId === achievementId)
+  const easterEgg = EASTER_EGGS.find((entry) => entry.achievementId === achievementId)
 
   if (!easterEgg) {
     throw new Error(`Missing easter egg config for ${achievementId}`)
@@ -599,9 +639,7 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
               height: `calc(${particle.size} * 1.05)`,
             }}
           >
-            <div
-              className="absolute left-1/2 top-[10%] h-[68%] w-[68%] -translate-x-1/2 rounded-full border border-[#D86F2C] bg-[#F59A44] shadow-[0_8px_22px_rgba(245,154,68,0.3)]"
-            />
+            <div className="absolute left-1/2 top-[10%] h-[68%] w-[68%] -translate-x-1/2 rounded-full border border-[#D86F2C] bg-[#F59A44] shadow-[0_8px_22px_rgba(245,154,68,0.3)]" />
             <div className="absolute left-[18%] top-[2%] h-[34%] w-[24%] -rotate-[18deg] rounded-t-[85%] rounded-b-[20%] border border-[#D86F2C] bg-[#F59A44]" />
             <div className="absolute right-[18%] top-[2%] h-[34%] w-[24%] rotate-[18deg] rounded-t-[85%] rounded-b-[20%] border border-[#D86F2C] bg-[#F59A44]" />
             <div className="absolute left-[31%] top-[17%] h-[11%] w-[11%] rounded-full bg-[#FFF3DE]" />
@@ -934,7 +972,10 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
         >
           <div
             className="absolute inset-[8%] bg-[#FDE047] shadow-[0_0_18px_rgba(253,224,71,0.45)]"
-            style={{ clipPath: 'polygon(50% 0%, 64% 34%, 100% 50%, 64% 66%, 50% 100%, 36% 66%, 0% 50%, 36% 34%)' }}
+            style={{
+              clipPath:
+                'polygon(50% 0%, 64% 34%, 100% 50%, 64% 66%, 50% 100%, 36% 66%, 0% 50%, 36% 34%)',
+            }}
           />
           <div className="absolute inset-[30%] rounded-full bg-[#FFF7ED]" />
         </div>
@@ -1006,7 +1047,10 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
         >
           <div
             className="absolute inset-[10%] bg-[#EF4444] shadow-[0_0_16px_rgba(239,68,68,0.34)]"
-            style={{ clipPath: 'polygon(50% 0%, 62% 28%, 100% 14%, 72% 50%, 100% 86%, 62% 72%, 50% 100%, 38% 72%, 0% 86%, 28% 50%, 0% 14%, 38% 28%)' }}
+            style={{
+              clipPath:
+                'polygon(50% 0%, 62% 28%, 100% 14%, 72% 50%, 100% 86%, 62% 72%, 50% 100%, 38% 72%, 0% 86%, 28% 50%, 0% 14%, 38% 28%)',
+            }}
           />
           <div className="absolute inset-[34%] rounded-full bg-[#F8FAFC]" />
         </div>
@@ -1044,7 +1088,10 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
         >
           <div
             className="absolute inset-[8%] bg-[#F59E0B] shadow-[0_0_18px_rgba(245,158,11,0.4)]"
-            style={{ clipPath: 'polygon(50% 0%, 70% 24%, 100% 18%, 80% 50%, 100% 82%, 70% 76%, 50% 100%, 30% 76%, 0% 82%, 20% 50%, 0% 18%, 30% 24%)' }}
+            style={{
+              clipPath:
+                'polygon(50% 0%, 70% 24%, 100% 18%, 80% 50%, 100% 82%, 70% 76%, 50% 100%, 30% 76%, 0% 82%, 20% 50%, 0% 18%, 30% 24%)',
+            }}
           />
           <div className="absolute inset-[30%] rounded-full bg-[#7C2D12]" />
         </div>
@@ -1065,7 +1112,9 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
           >
             <div
               className="absolute inset-[10%] border border-[#111827] bg-[#F8FAFC] shadow-[0_8px_20px_rgba(248,250,252,0.28)]"
-              style={{ clipPath: 'polygon(0% 0%, 76% 62%, 46% 66%, 60% 100%, 44% 100%, 30% 70%, 0% 100%)' }}
+              style={{
+                clipPath: 'polygon(0% 0%, 76% 62%, 46% 66%, 60% 100%, 44% 100%, 30% 70%, 0% 100%)',
+              }}
             />
           </div>
         )
@@ -1102,19 +1151,27 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
             <div className="absolute left-1/2 top-[52%] h-[10%] w-[34%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1E293B]" />
             <div
               className="absolute left-[6%] top-[10%] h-[56%] w-[36%] origin-bottom rotate-[18deg] bg-[#67E8F9] shadow-[0_0_22px_rgba(103,232,249,0.6)]"
-              style={{ clipPath: 'polygon(100% 100%, 72% 72%, 54% 34%, 32% 0%, 18% 4%, 30% 42%, 54% 82%)' }}
+              style={{
+                clipPath: 'polygon(100% 100%, 72% 72%, 54% 34%, 32% 0%, 18% 4%, 30% 42%, 54% 82%)',
+              }}
             />
             <div
               className="absolute right-[6%] top-[10%] h-[56%] w-[36%] origin-bottom -rotate-[18deg] bg-[#67E8F9] shadow-[0_0_22px_rgba(103,232,249,0.6)]"
-              style={{ clipPath: 'polygon(0% 100%, 28% 72%, 46% 34%, 68% 0%, 82% 4%, 70% 42%, 46% 82%)' }}
+              style={{
+                clipPath: 'polygon(0% 100%, 28% 72%, 46% 34%, 68% 0%, 82% 4%, 70% 42%, 46% 82%)',
+              }}
             />
             <div
               className="absolute left-[14%] top-[14%] h-[42%] w-[20%] origin-bottom rotate-[18deg] bg-[#E0F7FF]"
-              style={{ clipPath: 'polygon(100% 100%, 74% 74%, 58% 36%, 38% 2%, 28% 8%, 40% 44%, 58% 84%)' }}
+              style={{
+                clipPath: 'polygon(100% 100%, 74% 74%, 58% 36%, 38% 2%, 28% 8%, 40% 44%, 58% 84%)',
+              }}
             />
             <div
               className="absolute right-[14%] top-[14%] h-[42%] w-[20%] origin-bottom -rotate-[18deg] bg-[#E0F7FF]"
-              style={{ clipPath: 'polygon(0% 100%, 26% 74%, 42% 36%, 62% 2%, 72% 8%, 60% 44%, 42% 84%)' }}
+              style={{
+                clipPath: 'polygon(0% 100%, 26% 74%, 42% 36%, 62% 2%, 72% 8%, 60% 44%, 42% 84%)',
+              }}
             />
           </div>
         )
@@ -1189,7 +1246,10 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
             <div className="absolute inset-x-[12%] top-[24%] bottom-[18%] rounded-[12%] bg-[linear-gradient(180deg,#7C3AED_0%,#2563EB_48%,#F59E0B_100%)]" />
             <div
               className="absolute left-1/2 top-[42%] h-[28%] w-[34%] -translate-x-1/2 -translate-y-1/2 bg-[#F8FAFC]/90 shadow-[0_0_12px_rgba(248,250,252,0.35)]"
-              style={{ clipPath: 'polygon(50% 0%, 64% 36%, 100% 36%, 70% 58%, 80% 94%, 50% 72%, 20% 94%, 30% 58%, 0% 36%, 36% 36%)' }}
+              style={{
+                clipPath:
+                  'polygon(50% 0%, 64% 36%, 100% 36%, 70% 58%, 80% 94%, 50% 72%, 20% 94%, 30% 58%, 0% 36%, 36% 36%)',
+              }}
             />
             <div className="absolute inset-x-[18%] bottom-[8%] h-[6%] rounded-full bg-[#D1D5DB]/65" />
           </div>
@@ -1206,11 +1266,17 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
         >
           <div
             className="absolute inset-[12%] bg-[#8B5CF6] shadow-[0_0_18px_rgba(139,92,246,0.42)]"
-            style={{ clipPath: 'polygon(50% 0%, 62% 18%, 82% 18%, 72% 38%, 88% 50%, 72% 62%, 82% 82%, 62% 82%, 50% 100%, 38% 82%, 18% 82%, 28% 62%, 12% 50%, 28% 38%, 18% 18%, 38% 18%)' }}
+            style={{
+              clipPath:
+                'polygon(50% 0%, 62% 18%, 82% 18%, 72% 38%, 88% 50%, 72% 62%, 82% 82%, 62% 82%, 50% 100%, 38% 82%, 18% 82%, 28% 62%, 12% 50%, 28% 38%, 18% 18%, 38% 18%)',
+            }}
           />
           <div
             className="absolute inset-[30%] bg-[#C4B5FD]"
-            style={{ clipPath: 'polygon(50% 0%, 62% 18%, 82% 18%, 72% 38%, 88% 50%, 72% 62%, 82% 82%, 62% 82%, 50% 100%, 38% 82%, 18% 82%, 28% 62%, 12% 50%, 28% 38%, 18% 18%, 38% 18%)' }}
+            style={{
+              clipPath:
+                'polygon(50% 0%, 62% 18%, 82% 18%, 72% 38%, 88% 50%, 72% 62%, 82% 82%, 62% 82%, 50% 100%, 38% 82%, 18% 82%, 28% 62%, 12% 50%, 28% 38%, 18% 18%, 38% 18%)',
+            }}
           />
         </div>
       )
@@ -1218,17 +1284,18 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
   },
 ]
 
-function getEasterEggDefinition(gameName: string): EasterEggDefinition | null {
-  const normalizedName = gameName.trim().toLowerCase()
-
-  return EASTER_EGG_DEFINITIONS.find(definition =>
-    definition.triggerNames.includes(normalizedName)
-  ) ?? null
+function getEasterEggDefinition(gameId: number): EasterEggDefinition | null {
+  return (
+    EASTER_EGG_DEFINITIONS.find((definition) => definition.triggerGameIds.includes(gameId)) ?? null
+  )
 }
 
 function EasterEggCelebration({ burstId, renderPiece, particles }: ActiveEasterEgg) {
   return (
-    <div data-testid="easter-egg-celebration" className="pointer-events-none fixed inset-0 z-[80] overflow-hidden">
+    <div
+      data-testid="easter-egg-celebration"
+      className="pointer-events-none fixed inset-0 z-[80] overflow-hidden"
+    >
       <style>{`
         @keyframes easter-egg-fall {
           0% {
@@ -1271,7 +1338,10 @@ function EasterEggCelebration({ burstId, renderPiece, particles }: ActiveEasterE
 
 function PerfectGridCelebration({ burstId, particles }: ActivePerfectCelebration) {
   return (
-    <div data-testid="perfect-grid-celebration" className="pointer-events-none fixed inset-0 z-[90] overflow-hidden">
+    <div
+      data-testid="perfect-grid-celebration"
+      className="pointer-events-none fixed inset-0 z-[90] overflow-hidden"
+    >
       <style>{`
         @keyframes perfect-grid-fall {
           0% {
@@ -1351,12 +1421,8 @@ function PerfectGridCelebration({ burstId, particles }: ActivePerfectCelebration
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#F7D772]">
             Perfect Grid
           </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">
-            9/9
-          </p>
-          <p className="mt-1 text-sm text-foreground/75">
-            Clean sweep.
-          </p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">9/9</p>
+          <p className="mt-1 text-sm text-foreground/75">Clean sweep.</p>
         </div>
       </div>
     </div>
@@ -1394,10 +1460,12 @@ interface LoadingAttempt {
 }
 
 function buildAttemptIntersections(rows: string[], cols: string[]): LoadingIntersection[] {
-  return rows.flatMap(row => cols.map(col => ({
-    label: `${row} x ${col}`,
-    status: 'pending' as const,
-  })))
+  return rows.flatMap((row) =>
+    cols.map((col) => ({
+      label: `${row} x ${col}`,
+      status: 'pending' as const,
+    }))
+  )
 }
 
 function getIntersectionLabelClass(label: string): string {
@@ -1459,9 +1527,12 @@ export function GameClient() {
   const [loadingAttempts, setLoadingAttempts] = useState<LoadingAttempt[]>([])
   const [dailyResetLabel, setDailyResetLabel] = useState(() => getTimeUntilNextUtcMidnight().label)
   const [activeEasterEgg, setActiveEasterEgg] = useState<ActiveEasterEgg | null>(null)
-  const [activePerfectCelebration, setActivePerfectCelebration] = useState<ActivePerfectCelebration | null>(null)
+  const [activePerfectCelebration, setActivePerfectCelebration] =
+    useState<ActivePerfectCelebration | null>(null)
   const [activeStealShowdown, setActiveStealShowdown] = useState<ActiveStealShowdown | null>(null)
-  const [activeStealMissSplash, setActiveStealMissSplash] = useState<ActiveStealMissSplash | null>(null)
+  const [activeStealMissSplash, setActiveStealMissSplash] = useState<ActiveStealMissSplash | null>(
+    null
+  )
   const [practiceCategoryFilters, setPracticeCategoryFilters] = useState<VersusCategoryFilters>({})
   const [versusCategoryFilters, setVersusCategoryFilters] = useState<VersusCategoryFilters>({})
   const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('lower')
@@ -1474,7 +1545,7 @@ export function GameClient() {
   const { enabled: confirmBeforeSelect } = useSearchConfirmPreference()
   const { toast } = useToast()
 
-  const score = guesses.filter(g => g?.isCorrect).length
+  const score = guesses.filter((g) => g?.isCorrect).length
   const isVersusMode = mode === 'versus'
   const hasActivePracticeCustomSetup = hasNonEmptyFilters(practiceCategoryFilters)
   const hasActiveVersusCustomSetup = hasNonEmptyFilters(versusCategoryFilters)
@@ -1485,32 +1556,35 @@ export function GameClient() {
         ? hasActiveVersusCustomSetup
         : false
   // Game is over when out of guesses OR all cells filled (not necessarily all correct)
-  const gridFull = guesses.every(g => g !== null)
+  const gridFull = guesses.every((g) => g !== null)
   const isComplete = isVersusMode ? winner !== null : guessesRemaining === 0 || gridFull
 
-  const triggerEasterEggCelebration = useCallback((gameName: string) => {
-    const easterEggDefinition = getEasterEggDefinition(gameName)
+  const triggerEasterEggCelebration = useCallback(
+    (gameId: number) => {
+      const easterEggDefinition = getEasterEggDefinition(gameId)
 
-    if (!easterEggDefinition) {
-      return false
-    }
+      if (!easterEggDefinition) {
+        return false
+      }
 
-    const burstId = Date.now()
-    const particles = createFallingParticles(
-      scaleParticleDensity(easterEggDefinition.density, animationQuality),
-      easterEggDefinition.pieceKinds,
-      burstId
-    )
+      const burstId = Date.now()
+      const particles = createFallingParticles(
+        scaleParticleDensity(easterEggDefinition.density, animationQuality),
+        easterEggDefinition.pieceKinds,
+        burstId
+      )
 
-    setActiveEasterEgg({
-      burstId,
-      durationMs: getEasterEggLifetimeMs(easterEggDefinition, particles),
-      renderPiece: easterEggDefinition.renderPiece,
-      particles,
-    })
+      setActiveEasterEgg({
+        burstId,
+        durationMs: getEasterEggLifetimeMs(easterEggDefinition, particles),
+        renderPiece: easterEggDefinition.renderPiece,
+        particles,
+      })
 
-    return true
-  }, [animationQuality])
+      return true
+    },
+    [animationQuality]
+  )
 
   const triggerPerfectCelebration = useCallback(() => {
     const burstId = Date.now()
@@ -1522,7 +1596,7 @@ export function GameClient() {
       duration: `${2600 + index * 180}ms`,
       drift: `${index === 1 ? 0 : index === 0 ? -12 : 12}px`,
       rotate: `${index === 1 ? -6 : index === 0 ? -14 : 10}deg`,
-      variant: index === 1 ? 'g-white' as const : 'g-green' as const,
+      variant: index === 1 ? ('g-white' as const) : ('g-green' as const),
     }))
 
     setActivePerfectCelebration({
@@ -1532,23 +1606,22 @@ export function GameClient() {
     })
   }, [])
 
-  const triggerStealShowdownPreview = useCallback((options?: {
-    successful?: boolean
-    attackerScore?: number
-    defenderScore?: number
-  }) => {
-    setActiveStealShowdown({
-      burstId: Date.now(),
-      durationMs: STEAL_SHOWDOWN_DURATION_MS,
-      defenderName: 'Defender',
-      defenderScore: options?.defenderScore ?? 82,
-      attackerName: 'Challenger',
-      attackerScore: options?.attackerScore ?? 76,
-      rule: versusStealRule,
-      successful: options?.successful ?? true,
-      lowEffects: animationQuality === 'low',
-    })
-  }, [animationQuality, versusStealRule])
+  const triggerStealShowdownPreview = useCallback(
+    (options?: { successful?: boolean; attackerScore?: number; defenderScore?: number }) => {
+      setActiveStealShowdown({
+        burstId: Date.now(),
+        durationMs: STEAL_SHOWDOWN_DURATION_MS,
+        defenderName: 'Defender',
+        defenderScore: options?.defenderScore ?? 82,
+        attackerName: 'Challenger',
+        attackerScore: options?.attackerScore ?? 76,
+        rule: versusStealRule,
+        successful: options?.successful ?? true,
+        lowEffects: animationQuality === 'low',
+      })
+    },
+    [animationQuality, versusStealRule]
+  )
 
   const triggerStealMissPreview = useCallback(() => {
     setActiveStealMissSplash({
@@ -1557,18 +1630,21 @@ export function GameClient() {
     })
   }, [])
 
-  const unlockAchievementWithToast = useCallback((achievementId: string) => {
-    const result = unlockAchievement(achievementId)
+  const unlockAchievementWithToast = useCallback(
+    (achievementId: string, options?: { imageUrl?: string | null }) => {
+      const result = unlockAchievement(achievementId, options)
 
-    if (!result.unlocked || !result.achievement) {
-      return
-    }
+      if (!result.unlocked || !result.achievement) {
+        return
+      }
 
-    toast({
-      title: `Achievement Unlocked: ${result.achievement.title}`,
-      description: result.achievement.description,
-    })
-  }, [toast])
+      toast({
+        title: `Achievement Unlocked: ${result.achievement.title}`,
+        description: result.achievement.description,
+      })
+    },
+    [toast]
+  )
 
   // Initialize session
   useEffect(() => {
@@ -1671,242 +1747,250 @@ export function GameClient() {
   }, [currentPlayer, isVersusMode, toast, turnTimeLeft, winner])
 
   // Load puzzle
-  const loadPuzzle = useCallback(async (
-    gameMode: GameMode,
-    customFilters?: VersusCategoryFilters
-  ) => {
-    const shouldPersist = true
-    const streamMode = gameMode === 'daily' ? 'daily' : 'practice'
-    const savedState = loadGameState(gameMode)
-    const effectiveFilters =
-      gameMode === 'versus'
-        ? (customFilters ?? versusCategoryFilters)
-        : gameMode === 'practice'
-          ? (customFilters ?? practiceCategoryFilters)
-          : undefined
+  const loadPuzzle = useCallback(
+    async (gameMode: GameMode, customFilters?: VersusCategoryFilters) => {
+      const shouldPersist = true
+      const streamMode = gameMode === 'daily' ? 'daily' : 'practice'
+      const savedState = loadGameState(gameMode)
+      const effectiveFilters =
+        gameMode === 'versus'
+          ? (customFilters ?? versusCategoryFilters)
+          : gameMode === 'practice'
+            ? (customFilters ?? practiceCategoryFilters)
+            : undefined
 
-    if (savedState?.puzzle) {
-      setLoadedPuzzleMode(gameMode)
-      setPuzzle(savedState.puzzle)
-      setGuesses(savedState.guesses as (CellGuess | null)[])
-      setGuessesRemaining(savedState.guessesRemaining)
-      setCurrentPlayer(savedState.currentPlayer ?? 'x')
-      setStealableCell(savedState.stealableCell ?? null)
-      setWinner(savedState.winner ?? null)
-      setPendingFinalSteal(savedState.pendingFinalSteal ?? null)
-      setVersusCategoryFilters((savedState.versusCategoryFilters as VersusCategoryFilters) ?? {})
-      setVersusStealRule(savedState.versusStealRule ?? 'lower')
-      setVersusTimerOption(savedState.versusTimerOption ?? 'none')
-      setTurnTimeLeft(savedState.turnTimeLeft ?? null)
-      setLockImpactCell(null)
-      setSelectedCell(null)
-      setShowResults(savedState.isComplete)
-      setDetailCell(null)
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-    setGuesses(Array(9).fill(null))
-    setGuessesRemaining(gameMode === 'versus' ? MAX_GUESSES : MAX_GUESSES)
-    setCurrentPlayer('x')
-    setStealableCell(null)
-    setWinner(null)
-    setPendingFinalSteal(null)
-    setLockImpactCell(null)
-    setSelectedCell(null)
-    setShowResults(false)
-    setDetailCell(null)
-
-    setLoadingProgress(8)
-    setLoadingStage(gameMode === 'daily' ? "Loading today's board..." : 'Warming up the puzzle generator...')
-    setLoadingAttempts([])
-
-    try {
-      let puzzleData: Puzzle | null = null
-
-      const params = new URLSearchParams({ mode: streamMode })
-      if (gameMode === 'versus' || gameMode === 'practice') {
-        if (effectiveFilters && Object.keys(effectiveFilters).length > 0) {
-          params.set('filters', JSON.stringify(effectiveFilters))
-        }
-      }
-
-      const response = await fetch(`/api/puzzle-stream?${params.toString()}`)
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to open puzzle stream')
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const events = buffer.split('\n\n')
-        buffer = events.pop() ?? ''
-
-        for (const eventChunk of events) {
-          const dataLine = eventChunk
-            .split('\n')
-            .find(line => line.startsWith('data: '))
-
-          if (!dataLine) {
-            continue
-          }
-
-          const event = JSON.parse(dataLine.slice(6)) as PuzzleStreamMessage
-
-          if (event.type === 'progress') {
-            if (typeof event.pct === 'number') {
-              setLoadingProgress(current => Math.max(current, event.pct!))
-            }
-            if (event.message) {
-              setLoadingStage(event.message)
-            }
-            if (event.stage === 'attempt' && event.attempt && event.rows && event.cols) {
-              setLoadingAttempts(current => {
-                const nextAttempt: LoadingAttempt = {
-                  attempt: event.attempt!,
-                  rows: event.rows!,
-                  cols: event.cols!,
-                  intersections: buildAttemptIntersections(event.rows!, event.cols!),
-                }
-                const filtered = current.filter(entry => entry.attempt !== event.attempt)
-                return [...filtered, nextAttempt].slice(-4)
-              })
-            }
-            if (event.stage === 'cell' && typeof event.attempt === 'number' && typeof event.cellIndex === 'number') {
-              setLoadingAttempts(current =>
-                current.map(entry => {
-                  if (entry.attempt !== event.attempt) {
-                    return entry
-                  }
-
-                  const intersections = entry.intersections.map((intersection, index) =>
-                    index === event.cellIndex
-                      ? {
-                          ...intersection,
-                          status: (event.passed ? 'passed' : 'failed') as LoadingIntersection['status'],
-                          validOptionCount: event.validOptionCount,
-                        }
-                      : intersection
-                  )
-
-                  return { ...entry, intersections }
-                })
-              )
-            }
-            if (event.stage === 'rejected' && typeof event.attempt === 'number') {
-              setLoadingAttempts(current =>
-                current.map(entry =>
-                  entry.attempt === event.attempt
-                    ? { ...entry, rejectedMessage: event.message ?? 'Rejected' }
-                    : entry
-                )
-              )
-            }
-          } else if (event.type === 'puzzle' && event.puzzle) {
-            puzzleData = event.puzzle
-          } else if (event.type === 'error') {
-            throw new Error(event.message ?? 'Failed to generate puzzle')
-          }
-        }
-      }
-
-      if (!puzzleData) {
-        throw new Error('Puzzle stream completed without a puzzle')
-      }
-
-      setLoadingProgress(100)
-      setLoadingStage('Board ready.')
-      setLoadedPuzzleMode(gameMode)
-      setPuzzle(puzzleData)
-
-      if (shouldPersist) {
-        saveGameState({
-          puzzleId: puzzleData.id,
-          puzzle: puzzleData,
-          guesses: Array(9).fill(null),
-          guessesRemaining: MAX_GUESSES,
-          isComplete: false,
-          ...(gameMode === 'versus'
-            ? {
-                currentPlayer: 'x' as const,
-                stealableCell: null,
-                winner: null,
-                pendingFinalSteal: null,
-                versusCategoryFilters: effectiveFilters ?? {},
-                versusStealRule,
-                versusTimerOption,
-                turnTimeLeft: versusTimerOption === 'none' ? null : versusTimerOption,
-              }
-            : {}),
-        }, gameMode)
-      }
-
-      if (savedState && savedState.puzzleId === puzzleData.id) {
+      if (savedState?.puzzle) {
+        setLoadedPuzzleMode(gameMode)
+        setPuzzle(savedState.puzzle)
         setGuesses(savedState.guesses as (CellGuess | null)[])
         setGuessesRemaining(savedState.guessesRemaining)
-        if (savedState.isComplete) setShowResults(true)
+        setCurrentPlayer(savedState.currentPlayer ?? 'x')
+        setStealableCell(savedState.stealableCell ?? null)
+        setWinner(savedState.winner ?? null)
+        setPendingFinalSteal(savedState.pendingFinalSteal ?? null)
+        setVersusCategoryFilters((savedState.versusCategoryFilters as VersusCategoryFilters) ?? {})
+        setVersusStealRule(savedState.versusStealRule ?? 'lower')
+        setVersusTimerOption(savedState.versusTimerOption ?? 'none')
+        setTurnTimeLeft(savedState.turnTimeLeft ?? null)
+        setLockImpactCell(null)
+        setSelectedCell(null)
+        setShowResults(savedState.isComplete)
+        setDetailCell(null)
+        setIsLoading(false)
+        return
       }
-    } catch (error) {
-      console.error('Failed to load puzzle:', error)
-      const hadCustomFilters = Boolean(effectiveFilters && Object.keys(effectiveFilters).length > 0)
-      const generationErrorMessage =
-        error instanceof Error && error.message
-          ? error.message
-          : 'No valid board could be generated from that combination. Try widening a category family or enabling more options.'
 
-      if (gameMode === 'practice' && hadCustomFilters) {
-        setPracticeSetupError(generationErrorMessage)
-        setShowPracticeStartOptions(false)
-        setShowPracticeSetup(true)
-      } else if (gameMode === 'versus' && hadCustomFilters) {
-        setVersusSetupError(generationErrorMessage)
-        setShowVersusStartOptions(false)
-        setShowVersusSetup(true)
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Puzzle generation failed',
-          description: 'Please try again.',
-        })
+      setIsLoading(true)
+      setGuesses(Array(9).fill(null))
+      setGuessesRemaining(gameMode === 'versus' ? MAX_GUESSES : MAX_GUESSES)
+      setCurrentPlayer('x')
+      setStealableCell(null)
+      setWinner(null)
+      setPendingFinalSteal(null)
+      setLockImpactCell(null)
+      setSelectedCell(null)
+      setShowResults(false)
+      setDetailCell(null)
+
+      setLoadingProgress(8)
+      setLoadingStage(
+        gameMode === 'daily' ? "Loading today's board..." : 'Warming up the puzzle generator...'
+      )
+      setLoadingAttempts([])
+
+      try {
+        let puzzleData: Puzzle | null = null
+
+        const params = new URLSearchParams({ mode: streamMode })
+        if (gameMode === 'versus' || gameMode === 'practice') {
+          if (effectiveFilters && Object.keys(effectiveFilters).length > 0) {
+            params.set('filters', JSON.stringify(effectiveFilters))
+          }
+        }
+
+        const response = await fetch(`/api/puzzle-stream?${params.toString()}`)
+        if (!response.ok || !response.body) {
+          throw new Error('Failed to open puzzle stream')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const events = buffer.split('\n\n')
+          buffer = events.pop() ?? ''
+
+          for (const eventChunk of events) {
+            const dataLine = eventChunk.split('\n').find((line) => line.startsWith('data: '))
+
+            if (!dataLine) {
+              continue
+            }
+
+            const event = JSON.parse(dataLine.slice(6)) as PuzzleStreamMessage
+
+            if (event.type === 'progress') {
+              if (typeof event.pct === 'number') {
+                setLoadingProgress((current) => Math.max(current, event.pct!))
+              }
+              if (event.message) {
+                setLoadingStage(event.message)
+              }
+              if (event.stage === 'attempt' && event.attempt && event.rows && event.cols) {
+                setLoadingAttempts((current) => {
+                  const nextAttempt: LoadingAttempt = {
+                    attempt: event.attempt!,
+                    rows: event.rows!,
+                    cols: event.cols!,
+                    intersections: buildAttemptIntersections(event.rows!, event.cols!),
+                  }
+                  const filtered = current.filter((entry) => entry.attempt !== event.attempt)
+                  return [...filtered, nextAttempt].slice(-4)
+                })
+              }
+              if (
+                event.stage === 'cell' &&
+                typeof event.attempt === 'number' &&
+                typeof event.cellIndex === 'number'
+              ) {
+                setLoadingAttempts((current) =>
+                  current.map((entry) => {
+                    if (entry.attempt !== event.attempt) {
+                      return entry
+                    }
+
+                    const intersections = entry.intersections.map((intersection, index) =>
+                      index === event.cellIndex
+                        ? {
+                            ...intersection,
+                            status: (event.passed
+                              ? 'passed'
+                              : 'failed') as LoadingIntersection['status'],
+                            validOptionCount: event.validOptionCount,
+                          }
+                        : intersection
+                    )
+
+                    return { ...entry, intersections }
+                  })
+                )
+              }
+              if (event.stage === 'rejected' && typeof event.attempt === 'number') {
+                setLoadingAttempts((current) =>
+                  current.map((entry) =>
+                    entry.attempt === event.attempt
+                      ? { ...entry, rejectedMessage: event.message ?? 'Rejected' }
+                      : entry
+                  )
+                )
+              }
+            } else if (event.type === 'puzzle' && event.puzzle) {
+              puzzleData = event.puzzle
+            } else if (event.type === 'error') {
+              throw new Error(event.message ?? 'Failed to generate puzzle')
+            }
+          }
+        }
+
+        if (!puzzleData) {
+          throw new Error('Puzzle stream completed without a puzzle')
+        }
+
+        setLoadingProgress(100)
+        setLoadingStage('Board ready.')
+        setLoadedPuzzleMode(gameMode)
+        setPuzzle(puzzleData)
+
+        if (shouldPersist) {
+          saveGameState(
+            {
+              puzzleId: puzzleData.id,
+              puzzle: puzzleData,
+              guesses: Array(9).fill(null),
+              guessesRemaining: MAX_GUESSES,
+              isComplete: false,
+              ...(gameMode === 'versus'
+                ? {
+                    currentPlayer: 'x' as const,
+                    stealableCell: null,
+                    winner: null,
+                    pendingFinalSteal: null,
+                    versusCategoryFilters: effectiveFilters ?? {},
+                    versusStealRule,
+                    versusTimerOption,
+                    turnTimeLeft: versusTimerOption === 'none' ? null : versusTimerOption,
+                  }
+                : {}),
+            },
+            gameMode
+          )
+        }
+
+        if (savedState && savedState.puzzleId === puzzleData.id) {
+          setGuesses(savedState.guesses as (CellGuess | null)[])
+          setGuessesRemaining(savedState.guessesRemaining)
+          if (savedState.isComplete) setShowResults(true)
+        }
+      } catch (error) {
+        console.error('Failed to load puzzle:', error)
+        const hadCustomFilters = Boolean(
+          effectiveFilters && Object.keys(effectiveFilters).length > 0
+        )
+        const generationErrorMessage =
+          error instanceof Error && error.message
+            ? error.message
+            : 'No valid board could be generated from that combination. Try widening a category family or enabling more options.'
+
+        if (gameMode === 'practice' && hadCustomFilters) {
+          setPracticeSetupError(generationErrorMessage)
+          setShowPracticeStartOptions(false)
+          setShowPracticeSetup(true)
+        } else if (gameMode === 'versus' && hadCustomFilters) {
+          setVersusSetupError(generationErrorMessage)
+          setShowVersusStartOptions(false)
+          setShowVersusSetup(true)
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Puzzle generation failed',
+            description: 'Please try again.',
+          })
+        }
+      } finally {
+        setIsLoading(false)
       }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [
-    practiceCategoryFilters,
-    toast,
-    versusCategoryFilters,
-    versusStealRule,
-    versusTimerOption,
-  ])
+    },
+    [practiceCategoryFilters, toast, versusCategoryFilters, versusStealRule, versusTimerOption]
+  )
 
   useEffect(() => {
     if (mode !== 'versus' || !puzzle || loadedPuzzleMode !== 'versus') {
       return
     }
 
-    saveGameState({
-      puzzleId: puzzle.id,
-      puzzle,
-      guesses,
-      guessesRemaining,
-      isComplete,
-      currentPlayer,
-      stealableCell,
-      winner,
-      pendingFinalSteal,
-      versusCategoryFilters,
-      versusStealRule,
-      versusTimerOption,
-      turnTimeLeft,
-    }, 'versus')
+    saveGameState(
+      {
+        puzzleId: puzzle.id,
+        puzzle,
+        guesses,
+        guessesRemaining,
+        isComplete,
+        currentPlayer,
+        stealableCell,
+        winner,
+        pendingFinalSteal,
+        versusCategoryFilters,
+        versusStealRule,
+        versusTimerOption,
+        turnTimeLeft,
+      },
+      'versus'
+    )
   }, [
     currentPlayer,
     guesses,
@@ -2032,9 +2116,11 @@ export function GameClient() {
 
   const handleApplyPracticeFilters = (
     filters: VersusCategoryFilters,
-    _stealRule: VersusStealRule,
-    _timerOption: VersusTurnTimerOption
+    stealRule: VersusStealRule,
+    timerOption: VersusTurnTimerOption
   ) => {
+    void stealRule
+    void timerOption
     setPracticeCategoryFilters(filters)
     setPracticeSetupError(null)
     setShowPracticeSetup(false)
@@ -2056,83 +2142,87 @@ export function GameClient() {
     setShowVersusSetup(false)
     setShowVersusStartOptions(false)
     skipNextVersusAutoLoadRef.current = true
+    clearGameState('versus')
     loadPuzzle('versus', filters)
   }
 
-  const hydrateGuessDetails = useCallback(async (cellIndex: number) => {
-    if (!puzzle) return
+  const hydrateGuessDetails = useCallback(
+    async (cellIndex: number) => {
+      if (!puzzle) return
 
-    const guess = guesses[cellIndex]
-    if (!guess) return
+      const guess = guesses[cellIndex]
+      if (!guess) return
 
-    const alreadyHydrated =
-      guess.released !== undefined ||
-      guess.metacritic !== undefined ||
-      guess.genres !== undefined ||
-      guess.platforms !== undefined ||
-      guess.developers !== undefined ||
-      guess.publishers !== undefined ||
-      guess.tags !== undefined ||
-      guess.gameModes !== undefined ||
-      guess.themes !== undefined ||
-      guess.perspectives !== undefined ||
-      guess.companies !== undefined
+      const alreadyHydrated =
+        guess.released !== undefined ||
+        guess.metacritic !== undefined ||
+        guess.genres !== undefined ||
+        guess.platforms !== undefined ||
+        guess.developers !== undefined ||
+        guess.publishers !== undefined ||
+        guess.tags !== undefined ||
+        guess.gameModes !== undefined ||
+        guess.themes !== undefined ||
+        guess.perspectives !== undefined ||
+        guess.companies !== undefined
 
-    if (alreadyHydrated) {
-      return
-    }
-
-    const rowCategory = puzzle.row_categories[Math.floor(cellIndex / 3)]
-    const colCategory = puzzle.col_categories[cellIndex % 3]
-
-    try {
-      const response = await fetch('/api/guess', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gameId: guess.gameId,
-          rowCategory,
-          colCategory,
-          lookupOnly: true,
-        }),
-      })
-
-      const result = await response.json()
-      if (!result.game) {
+      if (alreadyHydrated) {
         return
       }
 
-      setGuesses(current =>
-        current.map((existingGuess, index) => {
-          if (index !== cellIndex || !existingGuess) {
-            return existingGuess
-          }
+      const rowCategory = puzzle.row_categories[Math.floor(cellIndex / 3)]
+      const colCategory = puzzle.col_categories[cellIndex % 3]
 
-          return {
-            ...existingGuess,
-            gameSlug: result.game.slug ?? existingGuess.gameSlug ?? null,
-            gameUrl: result.game.url ?? existingGuess.gameUrl ?? null,
-            released: result.game.released ?? null,
-            metacritic: result.game.metacritic ?? null,
-            stealRating: result.game.stealRating ?? existingGuess.stealRating ?? null,
-            genres: result.game.genres ?? [],
-            platforms: result.game.platforms ?? [],
-            developers: result.game.developers ?? [],
-            publishers: result.game.publishers ?? [],
-            tags: result.game.tags ?? [],
-            gameModes: result.game.gameModes ?? [],
-            themes: result.game.themes ?? [],
-            perspectives: result.game.perspectives ?? [],
-            companies: result.game.companies ?? [],
-            matchedRow: result.matchesRow,
-            matchedCol: result.matchesCol,
-          }
+      try {
+        const response = await fetch('/api/guess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gameId: guess.gameId,
+            rowCategory,
+            colCategory,
+            lookupOnly: true,
+          }),
         })
-      )
-    } catch (error) {
-      console.error('Failed to hydrate guess details:', error)
-    }
-  }, [guesses, puzzle])
+
+        const result = await response.json()
+        if (!result.game) {
+          return
+        }
+
+        setGuesses((current) =>
+          current.map((existingGuess, index) => {
+            if (index !== cellIndex || !existingGuess) {
+              return existingGuess
+            }
+
+            return {
+              ...existingGuess,
+              gameSlug: result.game.slug ?? existingGuess.gameSlug ?? null,
+              gameUrl: result.game.url ?? existingGuess.gameUrl ?? null,
+              released: result.game.released ?? null,
+              metacritic: result.game.metacritic ?? null,
+              stealRating: result.game.stealRating ?? existingGuess.stealRating ?? null,
+              genres: result.game.genres ?? [],
+              platforms: result.game.platforms ?? [],
+              developers: result.game.developers ?? [],
+              publishers: result.game.publishers ?? [],
+              tags: result.game.tags ?? [],
+              gameModes: result.game.gameModes ?? [],
+              themes: result.game.themes ?? [],
+              perspectives: result.game.perspectives ?? [],
+              companies: result.game.companies ?? [],
+              matchedRow: result.matchesRow,
+              matchedCol: result.matchesCol,
+            }
+          })
+        )
+      } catch (error) {
+        console.error('Failed to hydrate guess details:', error)
+      }
+    },
+    [guesses, puzzle]
+  )
 
   // Handle cell click
   const handleCellClick = async (index: number) => {
@@ -2145,9 +2235,7 @@ export function GameClient() {
 
       const existingGuess = guesses[index]
       const canSteal =
-        existingGuess !== null &&
-        existingGuess.owner !== currentPlayer &&
-        stealableCell === index
+        existingGuess !== null && existingGuess.owner !== currentPlayer && stealableCell === index
 
       if (existingGuess && !canSteal) {
         return
@@ -2178,8 +2266,8 @@ export function GameClient() {
       stealableCell === selectedCell
 
     if (
-      guesses.some((guess, index) =>
-        guess?.gameId === game.id && (mode !== 'versus' || index !== selectedCell)
+      guesses.some(
+        (guess, index) => guess?.gameId === game.id && (mode !== 'versus' || index !== selectedCell)
       )
     ) {
       toast({
@@ -2222,7 +2310,7 @@ export function GameClient() {
         })
         return
       }
-      
+
       const newGuess: CellGuess = {
         gameId: game.id,
         gameName: game.name,
@@ -2251,7 +2339,12 @@ export function GameClient() {
         setSelectedCell(null)
         setStealableCell(null)
         setLockImpactCell(null)
-        const missReason = buildMissReason(rowCategory, colCategory, result.matchesRow, result.matchesCol)
+        const missReason = buildMissReason(
+          rowCategory,
+          colCategory,
+          result.matchesRow,
+          result.matchesCol
+        )
         if (isVersusSteal) {
           setActiveStealMissSplash({
             burstId: Date.now(),
@@ -2321,10 +2414,9 @@ export function GameClient() {
               toast({
                 variant: 'destructive',
                 title: 'Steal failed',
-                description:
-                  !hasShowdownScores
-                    ? `${getPlayerLabel(pendingFinalSteal.defender)} keeps the win because both answers needed a score.`
-                    : `${game.name} (${attackingScore}) needed to be ${versusStealRule === 'lower' ? 'lower' : 'higher'} than ${existingGuess.gameName} (${defendingScore}). ${getPlayerLabel(pendingFinalSteal.defender)} keeps the win.`,
+                description: !hasShowdownScores
+                  ? `${getPlayerLabel(pendingFinalSteal.defender)} keeps the win because both answers needed a score.`
+                  : `${game.name} (${attackingScore}) needed to be ${versusStealRule === 'lower' ? 'lower' : 'higher'} than ${existingGuess.gameName} (${defendingScore}). ${getPlayerLabel(pendingFinalSteal.defender)} keeps the win.`,
               })
               return
             }
@@ -2334,10 +2426,9 @@ export function GameClient() {
             toast({
               variant: 'destructive',
               title: 'Steal failed',
-              description:
-                !hasShowdownScores
-                  ? `${getPlayerLabel(nextPlayer)} is up. Both answers need a score to settle the steal.`
-                  : `${getPlayerLabel(nextPlayer)} is up. ${game.name} (${attackingScore}) had to be ${versusStealRule === 'lower' ? 'lower' : 'higher'} than ${existingGuess.gameName} (${defendingScore}).`,
+              description: !hasShowdownScores
+                ? `${getPlayerLabel(nextPlayer)} is up. Both answers need a score to settle the steal.`
+                : `${getPlayerLabel(nextPlayer)} is up. ${game.name} (${attackingScore}) had to be ${versusStealRule === 'lower' ? 'lower' : 'higher'} than ${existingGuess.gameName} (${defendingScore}).`,
             })
           }
 
@@ -2354,29 +2445,43 @@ export function GameClient() {
       newGuesses[selectedCell] = newGuess
       setGuesses(newGuesses)
 
-      const easterEggDefinition = getEasterEggDefinition(game.name)
+      const easterEggDefinition = getEasterEggDefinition(game.id)
 
       if (easterEggDefinition) {
-        triggerEasterEggCelebration(game.name)
+        triggerEasterEggCelebration(game.id)
 
         if (easterEggDefinition.achievementId) {
-          unlockAchievementWithToast(easterEggDefinition.achievementId)
+          unlockAchievementWithToast(easterEggDefinition.achievementId, {
+            imageUrl: game.background_image,
+          })
         }
       }
-      
+
       const newGuessesRemaining = mode === 'versus' ? guessesRemaining : guessesRemaining - 1
       setGuessesRemaining(newGuessesRemaining)
       setSelectedCell(null)
 
       if (mode !== 'versus') {
         // Save state with full guess objects for proper restoration
-        saveGameState({
-          puzzleId: puzzle.id,
-          puzzle,
-          guesses: newGuesses.map(g => g ? { gameId: g.gameId, gameName: g.gameName, gameImage: g.gameImage, isCorrect: g.isCorrect } : null),
-          guessesRemaining: newGuessesRemaining,
-          isComplete: newGuessesRemaining === 0 || newGuesses.every(g => g !== null),
-        }, mode)
+        saveGameState(
+          {
+            puzzleId: puzzle.id,
+            puzzle,
+            guesses: newGuesses.map((g) =>
+              g
+                ? {
+                    gameId: g.gameId,
+                    gameName: g.gameName,
+                    gameImage: g.gameImage,
+                    isCorrect: g.isCorrect,
+                  }
+                : null
+            ),
+            guessesRemaining: newGuessesRemaining,
+            isComplete: newGuessesRemaining === 0 || newGuesses.every((g) => g !== null),
+          },
+          mode
+        )
       }
 
       if (mode === 'versus') {
@@ -2395,7 +2500,7 @@ export function GameClient() {
           setCurrentPlayer(nextPlayer)
           toast({
             title: 'Last chance steal',
-            description: 'Player 2 gets one chance to answer back on that square.',
+            description: 'O gets one chance to answer back on that square.',
           })
           return
         }
@@ -2420,9 +2525,9 @@ export function GameClient() {
       }
 
       // Check if game is complete
-      if (newGuessesRemaining === 0 || newGuesses.every(g => g !== null)) {
+      if (newGuessesRemaining === 0 || newGuesses.every((g) => g !== null)) {
         // Record completion
-        const finalScore = newGuesses.filter(g => g?.isCorrect).length
+        const finalScore = newGuesses.filter((g) => g?.isCorrect).length
 
         if (finalScore === 9) {
           unlockAchievementWithToast('perfect-grid')
@@ -2441,7 +2546,7 @@ export function GameClient() {
             }),
           })
         }
-        
+
         setTimeout(() => setShowResults(true), 500)
       }
     } catch (error) {
@@ -2480,24 +2585,12 @@ export function GameClient() {
     }
   }
 
-  const getCellLabel = useCallback((cellIndex: number) => {
-    if (!puzzle) {
-      return 'Unknown cell'
-    }
-
-    const rowCategory = puzzle.row_categories[Math.floor(cellIndex / 3)]
-    const colCategory = puzzle.col_categories[cellIndex % 3]
-    return `${rowCategory?.name ?? 'Row'} x ${colCategory?.name ?? 'Column'}`
-  }, [puzzle])
-
   const { row: selectedRowCategory, col: selectedColCategory } = getSelectedCategories()
   const detailGuess = detailCell !== null ? guesses[detailCell] : null
-  const detailRowCategory = detailCell !== null && puzzle
-    ? puzzle.row_categories[Math.floor(detailCell / 3)]
-    : null
-  const detailColCategory = detailCell !== null && puzzle
-    ? puzzle.col_categories[detailCell % 3]
-    : null
+  const detailRowCategory =
+    detailCell !== null && puzzle ? puzzle.row_categories[Math.floor(detailCell / 3)] : null
+  const detailColCategory =
+    detailCell !== null && puzzle ? puzzle.col_categories[detailCell % 3] : null
   const minimumCellOptions = puzzle?.cell_metadata?.reduce(
     (lowest, cell) => Math.min(lowest, cell.validOptionCount),
     Number.POSITIVE_INFINITY
@@ -2505,15 +2598,17 @@ export function GameClient() {
   const resolvedMinimumCellOptions = Number.isFinite(minimumCellOptions ?? Number.NaN)
     ? minimumCellOptions
     : null
-  const stealTargetLabel = stealableCell !== null ? getCellLabel(stealableCell) : null
-  const turnTimerLabel = isVersusMode && turnTimeLeft !== null
-    ? `Turn: ${Math.floor(turnTimeLeft / 60)}:${String(turnTimeLeft % 60).padStart(2, '0')}`
-    : null
+  const turnTimerLabel =
+    isVersusMode && turnTimeLeft !== null
+      ? `Turn: ${Math.floor(turnTimeLeft / 60)}:${String(turnTimeLeft % 60).padStart(2, '0')}`
+      : null
   const activeCategoryTypes = puzzle
-    ? Array.from(new Set([
-        ...puzzle.row_categories.map((category) => category.type),
-        ...puzzle.col_categories.map((category) => category.type),
-      ]))
+    ? Array.from(
+        new Set([
+          ...puzzle.row_categories.map((category) => category.type),
+          ...puzzle.col_categories.map((category) => category.type),
+        ])
+      )
     : []
 
   if (isLoading) {
@@ -2524,33 +2619,41 @@ export function GameClient() {
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-5xl md:flex md:items-start md:justify-center md:gap-4">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 p-6 shadow-xl backdrop-blur-sm">
-          <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-primary">
-            {mode === 'daily' ? 'Daily Puzzle' : mode === 'versus' ? 'Setting Up Match' : 'Building Grid'}
-          </p>
-          <p className="mt-3 whitespace-pre-line text-center text-lg font-semibold text-foreground">{loadingStage}</p>
-          <p className="mt-2 text-center text-sm text-muted-foreground">
-            {mode === 'daily'
-              ? loadingProgress < 10
-                ? 'Checking for today\'s puzzle...'
-                : loadingProgress < 75
-                  ? 'Generating today\'s puzzle and validating intersections.'
-                  : 'Almost done!'
-              : mode === 'versus'
-                ? 'Building a local head-to-head board and validating each intersection.'
-                : 'Generating a fresh practice puzzle and sanity-checking each intersection.'}
-          </p>
-          {mode !== 'daily' && (
-            <div className="mt-6 space-y-2">
-              <Progress value={loadingProgress} className="h-3" />
-              <p className="text-right text-xs font-medium text-muted-foreground">
-                {loadingProgress}% complete
-              </p>
-            </div>
-          )}
-        </div>
+            <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-primary">
+              {mode === 'daily'
+                ? 'Daily Puzzle'
+                : mode === 'versus'
+                  ? 'Setting Up Match'
+                  : 'Building Grid'}
+            </p>
+            <p className="mt-3 whitespace-pre-line text-center text-lg font-semibold text-foreground">
+              {loadingStage}
+            </p>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              {mode === 'daily'
+                ? loadingProgress < 10
+                  ? "Checking for today's puzzle..."
+                  : loadingProgress < 75
+                    ? "Generating today's puzzle and validating intersections."
+                    : 'Almost done!'
+                : mode === 'versus'
+                  ? 'Building a local head-to-head board and validating each intersection.'
+                  : 'Generating a fresh practice puzzle and sanity-checking each intersection.'}
+            </p>
+            {mode !== 'daily' && (
+              <div className="mt-6 space-y-2">
+                <Progress value={loadingProgress} className="h-3" />
+                <p className="text-right text-xs font-medium text-muted-foreground">
+                  {loadingProgress}% complete
+                </p>
+              </div>
+            )}
+          </div>
           {mode !== 'daily' && (
             <aside className="mt-4 w-full rounded-2xl border border-border bg-card/70 p-4 shadow-xl backdrop-blur-sm md:mt-0 md:max-w-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Attempt Notes</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+                Attempt Notes
+              </p>
               {!activeAttempt && (
                 <p className="mt-3 text-sm text-muted-foreground">
                   Waiting for the generator to pick a board...
@@ -2559,7 +2662,9 @@ export function GameClient() {
               {activeAttempt && (
                 <div className="mt-3 space-y-3">
                   <div className="rounded-xl border border-border/80 bg-secondary/30 p-3">
-                    <p className="text-sm font-semibold text-foreground">Attempt {activeAttempt.attempt}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      Attempt {activeAttempt.attempt}
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Rows: {activeAttempt.rows.join(', ')}
                     </p>
@@ -2573,12 +2678,15 @@ export function GameClient() {
                         key={`${activeAttempt.attempt}-${intersection.label}`}
                         className="flex items-center justify-between rounded-lg border border-border/70 bg-background/40 px-3 py-2 text-xs"
                       >
-                        <span className={`pr-3 text-foreground/90 whitespace-nowrap ${getIntersectionLabelClass(intersection.label)}`}>
+                        <span
+                          className={`pr-3 text-foreground/90 whitespace-nowrap ${getIntersectionLabelClass(intersection.label)}`}
+                        >
                           {intersection.label}
                         </span>
                         <span className="shrink-0 text-muted-foreground">
                           {intersection.status === 'passed' && 'OK'}
-                          {intersection.status === 'failed' && `X${typeof intersection.validOptionCount === 'number' ? ` ${intersection.validOptionCount}` : ''}`}
+                          {intersection.status === 'failed' &&
+                            `X${typeof intersection.validOptionCount === 'number' ? ` ${intersection.validOptionCount}` : ''}`}
                           {intersection.status === 'pending' && '...'}
                         </span>
                       </div>
@@ -2600,8 +2708,12 @@ export function GameClient() {
                             key={`history-${attempt.attempt}`}
                             className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-xs text-muted-foreground"
                           >
-                            <p className="font-medium text-foreground/80">Attempt {attempt.attempt}</p>
-                            <p className="mt-1 truncate">{attempt.rejectedMessage ?? 'Moved on to a new board.'}</p>
+                            <p className="font-medium text-foreground/80">
+                              Attempt {attempt.attempt}
+                            </p>
+                            <p className="mt-1 truncate">
+                              {attempt.rejectedMessage ?? 'Moved on to a new board.'}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -2617,7 +2729,10 @@ export function GameClient() {
   }
 
   if (!puzzle) {
-    if ((mode === 'versus' && showVersusStartOptions) || (mode === 'practice' && showPracticeStartOptions)) {
+    if (
+      (mode === 'versus' && showVersusStartOptions) ||
+      (mode === 'practice' && showPracticeStartOptions)
+    ) {
       const isPracticeStart = mode === 'practice'
 
       return (
@@ -2627,7 +2742,6 @@ export function GameClient() {
             guessesRemaining={guessesRemaining}
             score={score}
             currentPlayer={currentPlayer}
-            stealTargetLabel={null}
             winner={winner}
             turnTimerLabel={null}
             versusRecord={versusRecord}
@@ -2638,7 +2752,9 @@ export function GameClient() {
             onAchievements={() => setShowAchievements(true)}
             onHowToPlay={() => setShowHowToPlay(true)}
             onNewGame={undefined}
-            onCustomizeGame={() => (isPracticeStart ? setShowPracticeSetup(true) : setShowVersusSetup(true))}
+            onCustomizeGame={() =>
+              isPracticeStart ? setShowPracticeSetup(true) : setShowVersusSetup(true)
+            }
           />
 
           <div className="mx-auto mt-16 max-w-lg rounded-3xl border border-border bg-card/80 p-6 text-center shadow-xl backdrop-blur-sm">
@@ -2683,7 +2799,9 @@ export function GameClient() {
                 </p>
               </button>
               <button
-                onClick={() => (isPracticeStart ? setShowPracticeSetup(true) : setShowVersusSetup(true))}
+                onClick={() =>
+                  isPracticeStart ? setShowPracticeSetup(true) : setShowVersusSetup(true)
+                }
                 className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-4 text-left transition-colors hover:bg-primary/15"
               >
                 <p className="text-sm font-semibold text-foreground">
@@ -2720,10 +2838,7 @@ export function GameClient() {
             onApply={handleApplyVersusFilters}
           />
 
-          <AchievementsModal
-            isOpen={showAchievements}
-            onClose={() => setShowAchievements(false)}
-          />
+          <AchievementsModal isOpen={showAchievements} onClose={() => setShowAchievements(false)} />
 
           <HowToPlayModal
             isOpen={showHowToPlay}
@@ -2741,10 +2856,7 @@ export function GameClient() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-destructive mb-4">Failed to load puzzle</p>
-          <button
-            onClick={() => loadPuzzle(mode)}
-            className="text-primary hover:underline"
-          >
+          <button onClick={() => loadPuzzle(mode)} className="text-primary hover:underline">
             Try again
           </button>
         </div>
@@ -2756,7 +2868,9 @@ export function GameClient() {
     <main id="top" className="min-h-screen py-6 px-4">
       {activeEasterEgg && <EasterEggCelebration {...activeEasterEgg} />}
       {activePerfectCelebration && <PerfectGridCelebration {...activePerfectCelebration} />}
-      {activeStealShowdown && <StealShowdownOverlay {...activeStealShowdown} lowEffects={animationQuality === 'low'} />}
+      {activeStealShowdown && (
+        <StealShowdownOverlay {...activeStealShowdown} lowEffects={animationQuality === 'low'} />
+      )}
       {activeStealMissSplash && <StealMissSplash {...activeStealMissSplash} />}
 
       <GameHeader
@@ -2764,7 +2878,6 @@ export function GameClient() {
         guessesRemaining={guessesRemaining}
         score={score}
         currentPlayer={isVersusMode ? currentPlayer : null}
-        stealTargetLabel={isVersusMode ? stealTargetLabel : null}
         winner={isVersusMode ? winner : null}
         turnTimerLabel={turnTimerLabel}
         versusRecord={versusRecord}
@@ -2789,7 +2902,8 @@ export function GameClient() {
         <div className="max-w-lg mx-auto mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <p className="font-medium text-amber-200">Cross-sections are not fully validated</p>
           <p className="mt-1 text-amber-100/90">
-            {puzzle.validation_message ?? 'This puzzle may contain weaker or less certain intersections than usual.'}
+            {puzzle.validation_message ??
+              'This puzzle may contain weaker or less certain intersections than usual.'}
           </p>
         </div>
       )}
@@ -2806,6 +2920,10 @@ export function GameClient() {
         guessesRemaining={!isVersusMode ? guessesRemaining : undefined}
         winner={isVersusMode ? winner : null}
         turnTimerLabel={isVersusMode ? turnTimerLabel : null}
+        turnTimerSeconds={isVersusMode ? turnTimeLeft : null}
+        turnTimerMaxSeconds={
+          isVersusMode && versusTimerOption !== 'none' ? versusTimerOption : null
+        }
         versusRecord={versusRecord}
         lockImpactCell={isVersusMode ? lockImpactCell : null}
         isGameOver={isComplete}
@@ -2826,10 +2944,10 @@ export function GameClient() {
 
       {isVersusMode && winner && (
         <div className="max-w-lg mx-auto mt-6 rounded-2xl border border-border bg-card/70 p-5 text-center shadow-lg">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Match Over</p>
-          <p className="mt-2 text-2xl font-bold text-foreground">
-            {getPlayerLabel(winner)} wins with {winner.toUpperCase()}
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+            Match Over
           </p>
+          <p className="mt-2 text-2xl font-bold text-foreground">{getPlayerLabel(winner)} wins</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Start a new match to play the next board.
           </p>
@@ -2878,10 +2996,7 @@ export function GameClient() {
         dailyResetLabel={dailyResetLabel}
       />
 
-      <AchievementsModal
-        isOpen={showAchievements}
-        onClose={() => setShowAchievements(false)}
-      />
+      <AchievementsModal isOpen={showAchievements} onClose={() => setShowAchievements(false)} />
 
       <VersusSetupModal
         mode="practice"
@@ -2917,9 +3032,9 @@ export function GameClient() {
       <footer className="max-w-lg mx-auto mt-8 text-center text-xs text-muted-foreground">
         <p>
           Game data from{' '}
-          <a 
-            href="https://www.igdb.com" 
-            target="_blank" 
+          <a
+            href="https://www.igdb.com"
+            target="_blank"
             rel="noopener noreferrer"
             className="text-primary hover:underline"
           >

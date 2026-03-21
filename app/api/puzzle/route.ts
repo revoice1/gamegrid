@@ -31,15 +31,24 @@ function getGenerationPlans() {
   }))
 }
 
-function sanitizeCategories(categories: Category[]): Omit<Category, 'developerId' | 'publisherId'>[] {
-  return categories.map(({ developerId: _developerId, publisherId: _publisherId, ...safe }) => safe)
+function sanitizeCategories(
+  categories: Category[]
+): Omit<Category, 'developerId' | 'publisherId'>[] {
+  return categories.map(({ developerId, publisherId, ...safe }) => {
+    void developerId
+    void publisherId
+    return safe
+  })
 }
 
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-async function getExistingDailyPuzzle(supabase: Awaited<ReturnType<typeof createClient>>, today: string) {
+async function getExistingDailyPuzzle(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  today: string
+) {
   const { data } = await supabase
     .from('puzzles')
     .select('*')
@@ -65,13 +74,13 @@ async function computePuzzleCellMetadata(
     )
   )
   const validation = {
-    valid: exactCellResults.every(cell => cell.validOptionCount >= minValidOptionsPerCell),
+    valid: exactCellResults.every((cell) => cell.validOptionCount >= minValidOptionsPerCell),
     minValidOptionCount: exactCellResults.reduce(
       (lowest, cell) => Math.min(lowest, cell.validOptionCount),
       Number.POSITIVE_INFINITY
     ),
     cellResults: exactCellResults,
-    failedCells: exactCellResults.filter(cell => cell.validOptionCount < minValidOptionsPerCell),
+    failedCells: exactCellResults.filter((cell) => cell.validOptionCount < minValidOptionsPerCell),
   }
   return buildPuzzleCellMetadata(validation, minValidOptionsPerCell, VALIDATION_SAMPLE_SIZE, false)
 }
@@ -88,17 +97,19 @@ async function generateValidPuzzle(): Promise<{
 
   for (const plan of plans) {
     try {
-      const { rows, cols, rowFamilies, colFamilies, cellMetadata } = await generatePuzzleCategories({
-        minValidOptionsPerCell: plan.minValidOptionsPerCell,
-        maxAttempts: plan.maxAttempts,
-        sampleSize: VALIDATION_SAMPLE_SIZE,
-      })
+      const { rows, cols, rowFamilies, colFamilies, cellMetadata } = await generatePuzzleCategories(
+        {
+          minValidOptionsPerCell: plan.minValidOptionsPerCell,
+          maxAttempts: plan.maxAttempts,
+          sampleSize: VALIDATION_SAMPLE_SIZE,
+        }
+      )
 
       console.log(
-        `[v0] Generated puzzle - rows: ${rows.map(row => row.name).join(', ')} ` +
-          `(${rowFamilies.map(family => `${family.key}:${family.source}`).join(', ')}), ` +
-          `cols: ${cols.map(col => col.name).join(', ')} ` +
-          `(${colFamilies.map(family => `${family.key}:${family.source}`).join(', ')})`
+        `[v0] Generated puzzle - rows: ${rows.map((row) => row.name).join(', ')} ` +
+          `(${rowFamilies.map((family) => `${family.key}:${family.source}`).join(', ')}), ` +
+          `cols: ${cols.map((col) => col.name).join(', ')} ` +
+          `(${colFamilies.map((family) => `${family.key}:${family.source}`).join(', ')})`
       )
 
       if (plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL) {
@@ -226,9 +237,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[v0] Error in puzzle API:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: `Failed to get puzzle: ${errorMessage}` },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: `Failed to get puzzle: ${errorMessage}` }, { status: 500 })
   }
 }

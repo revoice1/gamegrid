@@ -8,7 +8,21 @@ interface CategoryHeaderProps {
   orientation: 'row' | 'col'
 }
 
+function getCategoryDisplayName(category: Category) {
+  if (category.type === 'game_mode' && category.name === 'Massively Multiplayer Online (MMO)') {
+    return 'MMO'
+  }
+
+  if (category.type === 'genre' && category.name === 'Role-playing (RPG)') {
+    return 'RPG'
+  }
+
+  return category.name
+}
+
 export function CategoryHeader({ category, orientation }: CategoryHeaderProps) {
+  const displayName = getCategoryDisplayName(category)
+
   return (
     <div
       className={cn(
@@ -18,17 +32,17 @@ export function CategoryHeader({ category, orientation }: CategoryHeaderProps) {
           : 'flex-col items-start justify-center gap-1.5 text-left'
       )}
     >
-      <span className="text-xs text-muted-foreground capitalize">
-        {category.type}
-      </span>
+      <span className="text-xs text-muted-foreground capitalize">{category.type}</span>
       <span className="text-sm font-semibold leading-snug text-foreground text-balance">
-        {category.name}
+        {displayName}
       </span>
     </div>
   )
 }
 
 export function CategoryHeaderSimple({ category, orientation }: CategoryHeaderProps) {
+  const displayName = getCategoryDisplayName(category)
+
   return (
     <div
       className={cn(
@@ -46,7 +60,7 @@ export function CategoryHeaderSimple({ category, orientation }: CategoryHeaderPr
             : 'max-sm:text-[9px] max-sm:leading-[1.15] max-sm:[text-wrap:pretty]'
         )}
       >
-        {category.name}
+        {displayName}
       </span>
       <span
         className={cn(

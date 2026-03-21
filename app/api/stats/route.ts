@@ -14,11 +14,11 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const searchParams = request.nextUrl.searchParams
   const puzzleId = searchParams.get('puzzleId')
-  
+
   if (!puzzleId) {
     return NextResponse.json({ error: 'Puzzle ID required' }, { status: 400 })
   }
-  
+
   try {
     const { data: puzzle, error: puzzleError } = await supabase
       .from('puzzles')
@@ -38,8 +38,10 @@ export async function GET(request: NextRequest) {
     const completionCount = completionRows?.length ?? 0
     const completedSessionIds = new Set(
       (completionRows ?? [])
-        .map(row => row.session_id)
-        .filter((sessionId): sessionId is string => typeof sessionId === 'string' && sessionId.length > 0)
+        .map((row) => row.session_id)
+        .filter(
+          (sessionId): sessionId is string => typeof sessionId === 'string' && sessionId.length > 0
+        )
     )
 
     let guessRows:
@@ -64,7 +66,7 @@ export async function GET(request: NextRequest) {
       guessRows = guessResponse.data
     }
 
-    const completedGuessRows = (guessRows ?? []).filter(guess =>
+    const completedGuessRows = (guessRows ?? []).filter((guess) =>
       guess.session_id ? completedSessionIds.has(guess.session_id) : false
     )
 
@@ -95,14 +97,14 @@ export async function GET(request: NextRequest) {
     for (let i = 0; i < 9; i++) {
       cellStats[i] = {
         correct: Array.from(correctStatsMap.values())
-          .filter(s => s.cell_index === i)
+          .filter((s) => s.cell_index === i)
           .sort((left, right) => right.count - left.count),
         incorrect: Array.from(incorrectStatsMap.values())
-          .filter(s => s.cell_index === i)
+          .filter((s) => s.cell_index === i)
           .sort((left, right) => right.count - left.count),
       }
     }
-    
+
     return NextResponse.json({
       puzzle,
       cellStats,
@@ -110,16 +112,13 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Stats error:', error)
-    return NextResponse.json(
-      { error: 'Failed to get stats' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to get stats' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  
+
   try {
     const { puzzleId, sessionId, score, rarityScore } = await request.json()
 
@@ -134,15 +133,13 @@ export async function POST(request: NextRequest) {
 
     const isNewCompletion = !existingCompletion
 
-    const { error } = await supabase
-      .from('puzzle_completions')
-      .upsert({
-        puzzle_id: puzzleId,
-        session_id: sessionId,
-        score,
-        rarity_score: rarityScore,
-      })
-    
+    const { error } = await supabase.from('puzzle_completions').upsert({
+      puzzle_id: puzzleId,
+      session_id: sessionId,
+      score,
+      rarity_score: rarityScore,
+    })
+
     if (error) throw error
 
     if (isNewCompletion) {
@@ -165,13 +162,10 @@ export async function POST(request: NextRequest) {
         })
       }
     }
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Stats POST error:', error)
-    return NextResponse.json(
-      { error: 'Failed to save completion' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to save completion' }, { status: 500 })
   }
 }

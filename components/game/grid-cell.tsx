@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { CellGuess, PuzzleCellMetadata } from '@/lib/types'
 import Image from 'next/image'
@@ -11,7 +12,9 @@ interface GridCellProps {
   isSelected: boolean
   isAvailable?: boolean
   availableTone?: 'x' | 'o' | null
+  isGamePoint?: boolean
   isStealable?: boolean
+  activeAlarmKey?: 'game-point' | 'steal' | null
   isLocked?: boolean
   isLockImpact?: boolean
   isDisabled: boolean
@@ -43,7 +46,9 @@ export function GridCell({
   isSelected,
   isAvailable = false,
   availableTone = null,
+  isGamePoint = false,
   isStealable = false,
+  activeAlarmKey = null,
   isLocked = false,
   isLockImpact = false,
   isDisabled,
@@ -51,15 +56,56 @@ export function GridCell({
 }: GridCellProps) {
   const hasGuess = guess !== null
   const isButtonDisabled = isDisabled && !hasGuess
+  const cellAlarmState =
+    isGamePoint && isStealable
+      ? activeAlarmKey
+      : isGamePoint
+        ? 'game-point'
+        : isStealable
+          ? 'steal'
+          : null
+  const showGamePointState = cellAlarmState === 'game-point'
+  const [alarmPulseOn, setAlarmPulseOn] = useState(false)
   const possibleLabel = metadata
     ? metadata.validOptionCount >= 1000
       ? `${(metadata.validOptionCount / 1000).toFixed(1)}k`
       : `${metadata.validOptionCount}`
     : null
-  const possibleTitle = metadata
-    ? `${metadata.validOptionCount} possible answers`
-    : null
+  const possibleTitle = metadata ? `${metadata.validOptionCount} possible answers` : null
   const difficultyMarker = metadata ? difficultyEmoji[metadata.difficulty] : null
+  const alarmStyle =
+    cellAlarmState === 'steal'
+      ? {
+          borderColor: alarmPulseOn ? 'rgba(251, 113, 133, 0.96)' : 'rgba(251, 113, 133, 0.8)',
+          boxShadow: alarmPulseOn
+            ? '0 0 0 1px rgba(251,113,133,0.44), 0 0 32px rgba(244,63,94,0.3), 0 0 52px rgba(244,63,94,0.2)'
+            : '0 0 0 1px rgba(251,113,133,0.28), 0 0 20px rgba(244,63,94,0.18), 0 0 36px rgba(244,63,94,0.1)',
+        }
+      : cellAlarmState === 'game-point'
+        ? {
+            borderColor: alarmPulseOn ? 'rgba(252, 211, 77, 0.95)' : 'rgba(252, 211, 77, 0.76)',
+            boxShadow: alarmPulseOn
+              ? '0 0 0 1px rgba(251,191,36,0.4), 0 0 30px rgba(251,191,36,0.26), 0 0 46px rgba(251,191,36,0.16)'
+              : '0 0 0 1px rgba(251,191,36,0.24), 0 0 18px rgba(251,191,36,0.16), 0 0 30px rgba(251,191,36,0.08)',
+          }
+        : undefined
+
+  useEffect(() => {
+    if (!cellAlarmState) {
+      setAlarmPulseOn(false)
+      return
+    }
+
+    setAlarmPulseOn(true)
+    const interval = window.setInterval(
+      () => {
+        setAlarmPulseOn((current) => !current)
+      },
+      cellAlarmState === 'game-point' ? 700 : 620
+    )
+
+    return () => window.clearInterval(interval)
+  }, [cellAlarmState])
 
   return (
     <button
@@ -68,28 +114,26 @@ export function GridCell({
       disabled={isButtonDisabled}
       className={cn(
         'game-cell relative aspect-square w-full rounded-lg border-2 border-border',
-        'flex items-center justify-center overflow-hidden',
+        'flex items-center justify-center overflow-visible',
         'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background',
-        'transition-all duration-200',
+        'transition-colors duration-200',
         isSelected && !hasGuess && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-        isAvailable && availableTone === 'x' && 'border-primary/45 shadow-[0_0_0_1px_rgba(34,197,94,0.22),0_0_18px_rgba(34,197,94,0.14)] hover:border-primary/65',
-        isAvailable && availableTone === 'o' && 'border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.22),0_0_18px_rgba(56,189,248,0.14)] hover:border-sky-300/65',
-        isStealable && 'ring-2 ring-sky-400/60 ring-offset-2 ring-offset-background',
+        isAvailable &&
+          availableTone === 'x' &&
+          'border-primary/45 shadow-[0_0_0_1px_rgba(34,197,94,0.22),0_0_18px_rgba(34,197,94,0.14)] hover:border-primary/65',
+        isAvailable &&
+          availableTone === 'o' &&
+          'border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.22),0_0_18px_rgba(56,189,248,0.14)] hover:border-sky-300/65',
         hasGuess && guess.isCorrect && 'correct border-primary/50',
         hasGuess && !guess.isCorrect && 'incorrect border-destructive/50',
         hasGuess && 'cursor-pointer hover:brightness-110',
         !hasGuess && !isDisabled && !isAvailable && 'cursor-pointer hover:border-primary/30',
         isDisabled && !hasGuess && 'opacity-50 cursor-not-allowed'
       )}
+      style={alarmStyle}
     >
-      {isStealable && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-[-3px] rounded-[12px] border border-sky-300/70 stealable-pulse-indicator"
-        />
-      )}
       {hasGuess ? (
-        <div className="relative h-full w-full group">
+        <div className="relative h-full w-full overflow-hidden rounded-[inherit] group">
           {guess.gameImage ? (
             <Image
               src={guess.gameImage}
@@ -112,15 +156,35 @@ export function GridCell({
           </div>
           {!guess.isCorrect && (
             <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive">
-              <svg className="h-3 w-3 text-destructive-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="h-3 w-3 text-destructive-foreground"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </div>
           )}
           {guess.isCorrect && (
             <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-              <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="h-3 w-3 text-primary-foreground"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
           )}
@@ -142,24 +206,37 @@ export function GridCell({
               )}
             >
               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V8a4 4 0 10-8 0v3m-1 0h10a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 11V8a4 4 0 10-8 0v3m-1 0h10a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z"
+                />
               </svg>
             </div>
           )}
         </div>
       ) : (
-        <div className="relative flex h-full w-full items-center justify-center">
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[inherit]">
+          {showGamePointState && (
+            <span className="absolute left-1/2 top-1/2 z-10 inline-flex -translate-x-1/2 -translate-y-1/2 items-center rounded-full border border-amber-300/35 bg-amber-400/18 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-amber-100 shadow-[0_0_14px_rgba(251,191,36,0.16)]">
+              Game Point
+            </span>
+          )}
           <div className="h-8 w-8 rounded-full border-2 border-dashed border-muted-foreground/30" />
           {metadata && (
             <>
               <span
                 className={cn(
-                  'absolute left-1/2 top-3 inline-flex -translate-x-1/2 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-sm',
+                  'absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-sm',
+                  'top-3',
                   difficultyStyles[metadata.difficulty]
                 )}
                 title={possibleTitle ?? undefined}
               >
-                {difficultyMarker && <span className="text-[11px] leading-none">{difficultyMarker}</span>}
+                {difficultyMarker && (
+                  <span className="text-[11px] leading-none">{difficultyMarker}</span>
+                )}
                 {metadata.difficultyLabel}
               </span>
               <span
@@ -175,26 +252,6 @@ export function GridCell({
       <style jsx>{`
         .lock-impact {
           animation: lock-slam 620ms cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .stealable-pulse-indicator {
-          animation: stealable-pulse-indicator 1.15s ease-in-out infinite;
-          will-change: transform, opacity;
-        }
-
-        @keyframes stealable-pulse-indicator {
-          0% {
-            opacity: 0.45;
-            transform: scale(0.985);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.03);
-          }
-          100% {
-            opacity: 0.45;
-            transform: scale(0.985);
-          }
         }
 
         @keyframes lock-slam {
@@ -219,7 +276,6 @@ export function GridCell({
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .stealable-pulse-indicator,
           .lock-impact {
             animation: none;
           }

@@ -50,21 +50,22 @@ export async function GET(request: NextRequest) {
 
   try {
     const explicitCategoryTypes = parseCategoryTypes(categoryTypesParam)
-    const categoryTypes = explicitCategoryTypes.size > 0
-      ? explicitCategoryTypes
-      : await getPuzzleCategoryTypes(puzzleId)
+    const categoryTypes =
+      explicitCategoryTypes.size > 0
+        ? explicitCategoryTypes
+        : await getPuzzleCategoryTypes(puzzleId)
     const games = await searchIGDBGames(query)
     const shouldScrub = (type: Category['type']) => categoryTypes.has(type)
 
     // Return lightweight display metadata, scrubbing any families that overlap
     // with active puzzle categories for this search session.
-    const safeResults = games.map(g => ({
+    const safeResults = games.map((g) => ({
       id: g.id,
       name: g.name,
       background_image: g.background_image,
       metacritic: g.metacritic,
       gameTypeLabel: g.gameTypeLabel ?? null,
-      originalPlatformName: shouldScrub('platform') ? null : g.originalPlatformName ?? null,
+      originalPlatformName: shouldScrub('platform') ? null : (g.originalPlatformName ?? null),
       released: shouldScrub('decade') ? null : g.released,
       genres: shouldScrub('genre') ? [] : g.genres,
       platforms: shouldScrub('platform') ? [] : g.platforms,

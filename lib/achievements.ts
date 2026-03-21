@@ -6,6 +6,11 @@ export interface AchievementDefinition {
   description: string
 }
 
+export interface UnlockedAchievementEntry {
+  id: string
+  imageUrl?: string | null
+}
+
 const ACHIEVEMENTS_STORAGE_KEY = 'gamegrid_achievements'
 
 export const ACHIEVEMENTS: AchievementDefinition[] = [
@@ -21,7 +26,31 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   })),
 ]
 
-export function loadUnlockedAchievementIds(): string[] {
+function normalizeUnlockedAchievements(parsed: unknown): UnlockedAchievementEntry[] {
+  if (!Array.isArray(parsed)) {
+    return []
+  }
+
+  return parsed.flatMap((value) => {
+    if (typeof value === 'string') {
+      return [{ id: value }]
+    }
+
+    if (value && typeof value === 'object' && 'id' in value && typeof value.id === 'string') {
+      return [
+        {
+          id: value.id,
+          imageUrl:
+            'imageUrl' in value && typeof value.imageUrl === 'string' ? value.imageUrl : null,
+        },
+      ]
+    }
+
+    return []
+  })
+}
+
+export function loadUnlockedAchievementEntries(): UnlockedAchievementEntry[] {
   if (typeof window === 'undefined') {
     return []
   }
@@ -34,32 +63,57 @@ export function loadUnlockedAchievementIds(): string[] {
 
   try {
     const parsed = JSON.parse(stored) as unknown
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : []
+    return normalizeUnlockedAchievements(parsed)
   } catch {
     return []
   }
 }
 
-export function loadUnlockedAchievements(): AchievementDefinition[] {
-  const unlockedIds = new Set(loadUnlockedAchievementIds())
-  return ACHIEVEMENTS.filter(achievement => unlockedIds.has(achievement.id))
+export function loadUnlockedAchievementIds(): string[] {
+  return loadUnlockedAchievementEntries().map((entry) => entry.id)
 }
 
-export function unlockAchievement(id: string): { unlocked: boolean; achievement?: AchievementDefinition } {
-  const achievement = ACHIEVEMENTS.find(entry => entry.id === id)
+export function loadUnlockedAchievementImageMap(): Map<string, string> {
+  return new Map(
+    loadUnlockedAchievementEntries()
+      .filter(
+        (entry): entry is UnlockedAchievementEntry & { imageUrl: string } =>
+          typeof entry.imageUrl === 'string' && entry.imageUrl.length > 0
+      )
+      .map((entry) => [entry.id, entry.imageUrl])
+  )
+}
+
+export function loadUnlockedAchievements(): AchievementDefinition[] {
+  const unlockedIds = new Set(loadUnlockedAchievementIds())
+  return ACHIEVEMENTS.filter((achievement) => unlockedIds.has(achievement.id))
+}
+
+export function unlockAchievement(
+  id: string,
+  options?: { imageUrl?: string | null }
+): {
+  unlocked: boolean
+  achievement?: AchievementDefinition
+} {
+  const achievement = ACHIEVEMENTS.find((entry) => entry.id === id)
 
   if (!achievement || typeof window === 'undefined') {
     return { unlocked: false }
   }
 
-  const unlockedIds = new Set(loadUnlockedAchievementIds())
+  const unlockedEntries = loadUnlockedAchievementEntries()
+  const unlockedIds = new Set(unlockedEntries.map((entry) => entry.id))
 
   if (unlockedIds.has(id)) {
     return { unlocked: false, achievement }
   }
 
-  unlockedIds.add(id)
-  window.localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify([...unlockedIds]))
+  unlockedEntries.push({
+    id,
+    imageUrl: options?.imageUrl ?? null,
+  })
+  window.localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(unlockedEntries))
 
   return { unlocked: true, achievement }
 }

@@ -3,8 +3,7 @@ import type { Category, Game, PuzzleCellMetadata } from './types'
 const TWITCH_IGDB_CLIENT_ID = process.env.TWITCH_IGDB_CLIENT_ID
 const TWITCH_IGDB_CLIENT_SECRET = process.env.TWITCH_IGDB_CLIENT_SECRET
 const USING_TEST_IGDB_CREDENTIALS =
-  TWITCH_IGDB_CLIENT_ID === 'test-client-id' ||
-  TWITCH_IGDB_CLIENT_SECRET === 'test-client-secret'
+  TWITCH_IGDB_CLIENT_ID === 'test-client-id' || TWITCH_IGDB_CLIENT_SECRET === 'test-client-secret'
 
 interface IGDBNamedEntity {
   id: number
@@ -73,18 +72,14 @@ interface IGDBTokenCache {
 
 let tokenCache: IGDBTokenCache | null = null
 const igdbGameCache = new Map<number, Game | null>()
-let categoryFamiliesCache:
-  | {
-      expiresAt: number
-      families: CategoryFamily[]
-    }
-  | null = null
-let versusCategoryFamiliesCache:
-  | {
-      expiresAt: number
-      families: CategoryFamily[]
-    }
-  | null = null
+let categoryFamiliesCache: {
+  expiresAt: number
+  families: CategoryFamily[]
+} | null = null
+let versusCategoryFamiliesCache: {
+  expiresAt: number
+  families: CategoryFamily[]
+} | null = null
 const DEFAULT_CELL_SAMPLE_SIZE = 40
 const DEFAULT_MIN_VALID_OPTIONS = 3
 const DEFAULT_MAX_GENERATION_ATTEMPTS = 12
@@ -129,7 +124,7 @@ export type PuzzleProgressCallback = (event: {
   stage: 'families' | 'attempt' | 'cell' | 'metadata' | 'rejected' | 'done'
   attempt?: number
   maxAttempts?: number
-  cellIndex?: number    // 0-8 within current attempt
+  cellIndex?: number // 0-8 within current attempt
   totalCells?: number
   message?: string
   rows?: string[]
@@ -374,14 +369,8 @@ const PLATFORM_ALIAS_GROUPS: Record<string, string[]> = {
     'family computer',
     'family computer disk system',
   ],
-  'super nintendo entertainment system': [
-    'super nintendo entertainment system',
-    'super famicom',
-  ],
-  'super famicom': [
-    'super nintendo entertainment system',
-    'super famicom',
-  ],
+  'super nintendo entertainment system': ['super nintendo entertainment system', 'super famicom'],
+  'super famicom': ['super nintendo entertainment system', 'super famicom'],
   'pc microsoft windows': ['pc microsoft windows', 'dos'],
   'pc windows dos': ['pc microsoft windows', 'dos'],
 }
@@ -407,10 +396,13 @@ function normalizeName(value: string): string {
 }
 
 function normalizeCompanyName(value: string): string {
-  return normalizeName(value).replace(
-    /\b(entertainment|interactive|studios|studio|games|game|software|softworks|inc|llc|ltd|corp|corporation|co)\b/g,
-    ''
-  ).replace(/\s+/g, ' ').trim()
+  return normalizeName(value)
+    .replace(
+      /\b(entertainment|interactive|studios|studio|games|game|software|softworks|inc|llc|ltd|corp|corporation|co)\b/g,
+      ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -470,8 +462,9 @@ function buildCoverUrl(imageId?: string): string | null {
 
 function getOriginalPlatformName(game: IGDBGame): string | null {
   const datedReleasePlatforms = (game.release_dates ?? [])
-    .filter((releaseDate): releaseDate is IGDBReleaseDate & { date: number; platform: IGDBPlatform } =>
-      typeof releaseDate.date === 'number' && Boolean(releaseDate.platform?.name)
+    .filter(
+      (releaseDate): releaseDate is IGDBReleaseDate & { date: number; platform: IGDBPlatform } =>
+        typeof releaseDate.date === 'number' && Boolean(releaseDate.platform?.name)
     )
     .sort((left, right) => left.date - right.date)
 
@@ -487,7 +480,7 @@ function getGameTypeLabel(gameType?: number | null): string | null {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function scheduleIGDBRequest(): Promise<void> {
@@ -612,7 +605,7 @@ async function queryIGDBCount(endpoint: string, whereClause: string): Promise<nu
     })
 
     if (response.ok) {
-      const data = await response.json() as { count: number }
+      const data = (await response.json()) as { count: number }
       return data.count
     }
 
@@ -637,11 +630,7 @@ async function fetchIGDBCategories(
   let offset = 0
 
   while (true) {
-    const query = [
-      'fields id,name,slug;',
-      `limit ${pageSize};`,
-      `offset ${offset};`,
-    ].join(' ')
+    const query = ['fields id,name,slug;', `limit ${pageSize};`, `offset ${offset};`].join(' ')
 
     const page = await queryIGDB<{ id: number; name: string; slug?: string }>(endpoint, query)
     results.push(...page)
@@ -654,22 +643,24 @@ async function fetchIGDBCategories(
   }
 
   return results
-    .filter(item => !allowedNames || allowedNames.has(item.name))
-    .map((item): Category => ({
-      type:
-        endpoint === 'game_modes'
-          ? 'game_mode'
-          : endpoint === 'player_perspectives'
-            ? 'perspective'
-            : endpoint === 'themes'
-              ? 'theme'
-              : endpoint === 'genres'
-                ? 'genre'
-                : 'platform',
-      id: item.id,
-      name: item.name,
-      slug: item.slug ?? normalizeName(item.name).replace(/\s+/g, '-'),
-    }))
+    .filter((item) => !allowedNames || allowedNames.has(item.name))
+    .map(
+      (item): Category => ({
+        type:
+          endpoint === 'game_modes'
+            ? 'game_mode'
+            : endpoint === 'player_perspectives'
+              ? 'perspective'
+              : endpoint === 'themes'
+                ? 'theme'
+                : endpoint === 'genres'
+                  ? 'genre'
+                  : 'platform',
+        id: item.id,
+        name: item.name,
+        slug: item.slug ?? normalizeName(item.name).replace(/\s+/g, '-'),
+      })
+    )
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
@@ -686,21 +677,11 @@ function buildFamily(
   }
 }
 
-function mergeCategoryLists(primary: Category[], fallback: Category[]): Category[] {
-  const merged = new Map<string, Category>()
-
-  for (const category of [...primary, ...fallback]) {
-    merged.set(`${category.type}:${String(category.id)}`, category)
-  }
-
-  return [...merged.values()].sort((left, right) => left.name.localeCompare(right.name))
-}
-
 function buildDifficultyMetadata(
   validOptionCount: number,
-  minValidOptionsPerCell: number,
-  sampleSize = DEFAULT_CELL_SAMPLE_SIZE
+  minValidOptionsPerCell: number
 ): Pick<PuzzleCellMetadata, 'difficulty' | 'difficultyLabel'> {
+  void minValidOptionsPerCell
   // Fixed absolute cutoffs tuned to real IGDB intersection counts.
   // These reflect what players will actually encounter across category pairs.
   //   Brutal : < 20    — almost no valid answers, very hard
@@ -710,10 +691,10 @@ function buildDifficultyMetadata(
   //   Cozy   : < 1000  — lots of options, approachable
   //   Feast  : 1000+   — huge pool, easy
   const brutalCutoff = 20
-  const spicyCutoff  = 50
+  const spicyCutoff = 50
   const trickyCutoff = 150
-  const fairCutoff   = 400
-  const cozyCutoff   = 1000
+  const fairCutoff = 400
+  const cozyCutoff = 1000
 
   if (validOptionCount <= brutalCutoff) {
     return { difficulty: 'brutal', difficultyLabel: 'Brutal' }
@@ -744,11 +725,13 @@ export function buildPuzzleCellMetadata(
   sampleSize = DEFAULT_CELL_SAMPLE_SIZE,
   treatSampleSizeAsCap = true
 ): PuzzleCellMetadata[] {
-  return validation.cellResults.map(cell => ({
+  void sampleSize
+  void treatSampleSizeAsCap
+  return validation.cellResults.map((cell) => ({
     cellIndex: cell.cellIndex,
     validOptionCount: cell.validOptionCount,
     isCapped: false, // counts are exact via /count endpoint, never capped
-    ...buildDifficultyMetadata(cell.validOptionCount, minValidOptionsPerCell, sampleSize),
+    ...buildDifficultyMetadata(cell.validOptionCount, minValidOptionsPerCell),
   }))
 }
 
@@ -757,8 +740,7 @@ async function queryValidGamesForCell(
   colCategory: Category,
   limit: number,
   offset = 0,
-  fields =
-    'name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.name,keywords.name'
+  fields = 'name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.name,keywords.name'
 ): Promise<Game[]> {
   const rowClause = buildIGDBWhereClause(rowCategory)
   const colClause = buildIGDBWhereClause(colCategory)
@@ -783,11 +765,12 @@ async function queryValidGamesForCell(
   const mappedGames = results.map(mapIGDBGameToGame)
   const filteredGames = needsPostFilter
     ? mappedGames.filter(
-        game => igdbGameMatchesCategory(game, rowCategory) && igdbGameMatchesCategory(game, colCategory)
+        (game) =>
+          igdbGameMatchesCategory(game, rowCategory) && igdbGameMatchesCategory(game, colCategory)
       )
     : mappedGames
 
-  return Array.from(new Map(filteredGames.map(game => [game.id, game])).values())
+  return Array.from(new Map(filteredGames.map((game) => [game.id, game])).values())
 }
 
 export async function getCategoryFamilies(): Promise<CategoryFamily[]> {
@@ -795,11 +778,11 @@ export async function getCategoryFamilies(): Promise<CategoryFamily[]> {
     return categoryFamiliesCache.families
   }
 
-  const allowedGameModes = new Set(FALLBACK_GAME_MODES.map(category => category.name))
-  const allowedThemes = new Set(FALLBACK_THEMES.map(category => category.name))
-  const allowedPerspectives = new Set(FALLBACK_PERSPECTIVES.map(category => category.name))
-  const allowedPlatforms = new Set(FALLBACK_PLATFORMS.map(category => category.name))
-  const allowedGenres = new Set(FALLBACK_GENRES.map(category => category.name))
+  const allowedGameModes = new Set(FALLBACK_GAME_MODES.map((category) => category.name))
+  const allowedThemes = new Set(FALLBACK_THEMES.map((category) => category.name))
+  const allowedPerspectives = new Set(FALLBACK_PERSPECTIVES.map((category) => category.name))
+  const allowedPlatforms = new Set(FALLBACK_PLATFORMS.map((category) => category.name))
+  const allowedGenres = new Set(FALLBACK_GENRES.map((category) => category.name))
 
   const [platforms, genres, gameModes, themes, perspectives] = await Promise.all([
     fetchIGDBCategories('platforms', allowedPlatforms),
@@ -837,7 +820,9 @@ export async function getVersusCategoryFamilies(): Promise<CategoryFamily[]> {
       return {
         key: 'perspective',
         source: 'fallback',
-        categories: [...CUSTOM_FALLBACK_PERSPECTIVES].sort((left, right) => left.name.localeCompare(right.name)),
+        categories: [...CUSTOM_FALLBACK_PERSPECTIVES].sort((left, right) =>
+          left.name.localeCompare(right.name)
+        ),
       }
     }
 
@@ -892,7 +877,10 @@ function getPairRejectionReason(rowCategory: Category, colCategory: Category): s
     return 'duplicate category pairing'
   }
 
-  if (names.has('single player') && (names.has('multiplayer') || names.has('massively multiplayer online mmo'))) {
+  if (
+    names.has('single player') &&
+    (names.has('multiplayer') || names.has('massively multiplayer online mmo'))
+  ) {
     return 'conflicting solo and multiplayer categories'
   }
 
@@ -900,8 +888,14 @@ function getPairRejectionReason(rowCategory: Category, colCategory: Category): s
     return 'conflicting solo and co-operative categories'
   }
 
-  const platformCategory = rowCategory.type === 'platform' ? rowCategory : colCategory.type === 'platform' ? colCategory : null
-  const decadeCategory = rowCategory.type === 'decade' ? rowCategory : colCategory.type === 'decade' ? colCategory : null
+  const platformCategory =
+    rowCategory.type === 'platform'
+      ? rowCategory
+      : colCategory.type === 'platform'
+        ? colCategory
+        : null
+  const decadeCategory =
+    rowCategory.type === 'decade' ? rowCategory : colCategory.type === 'decade' ? colCategory : null
   if (platformCategory && decadeCategory) {
     const normalizedPlatformName = normalizeName(platformCategory.name)
     const compatibleDecades = PLATFORM_VALID_DECADES[normalizedPlatformName]
@@ -911,7 +905,12 @@ function getPairRejectionReason(rowCategory: Category, colCategory: Category): s
     }
 
     const platformYear = PLATFORM_RELEASE_YEAR[normalizedPlatformName]
-    if (!compatibleDecades && platformYear && Number.isFinite(decadeStart) && platformYear > decadeStart + 9) {
+    if (
+      !compatibleDecades &&
+      platformYear &&
+      Number.isFinite(decadeStart) &&
+      platformYear > decadeStart + 9
+    ) {
       return 'platform released after the decade'
     }
   }
@@ -934,7 +933,7 @@ function buildAxisCategories(
 ): Category[] | null {
   const primaryPairs = shuffle(
     primary.categories.flatMap((first, firstIndex) =>
-      primary.categories.slice(firstIndex + 1).map(second => [first, second] as const)
+      primary.categories.slice(firstIndex + 1).map((second) => [first, second] as const)
     )
   )
   const secondaryOptions = shuffle(secondary.categories)
@@ -942,8 +941,10 @@ function buildAxisCategories(
   for (const [firstPrimary, secondPrimary] of primaryPairs) {
     for (const secondaryCategory of secondaryOptions) {
       const candidateAxis = shuffle([firstPrimary, secondPrimary, secondaryCategory]).slice(0, 3)
-      const hasInvalidCrossSection = candidateAxis.some(axisCategory =>
-        oppositeAxisCategories.some(oppositeCategory => getPairRejectionReason(axisCategory, oppositeCategory))
+      const hasInvalidCrossSection = candidateAxis.some((axisCategory) =>
+        oppositeAxisCategories.some((oppositeCategory) =>
+          getPairRejectionReason(axisCategory, oppositeCategory)
+        )
       )
 
       if (!hasInvalidCrossSection) {
@@ -1002,9 +1003,8 @@ function buildBoardFromSelectedFamilies(selectedFamilies: CategoryFamily[]): {
   return null
 }
 
-
 function mapIGDBGameToGame(game: IGDBGame): Game {
-  const platforms = (game.platforms ?? []).map(platform => ({
+  const platforms = (game.platforms ?? []).map((platform) => ({
     platform: {
       id: platform.id,
       name: platform.name,
@@ -1012,17 +1012,18 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
     },
   }))
 
-  const genres = (game.genres ?? []).map(genre => ({
+  const genres = (game.genres ?? []).map((genre) => ({
     id: genre.id,
     name: genre.name,
     slug: genre.slug ?? normalizeName(genre.name).replace(/\s+/g, '-'),
   }))
 
   const companies = (game.involved_companies ?? [])
-    .map(entry => entry.company)
+    .map((entry) => entry.company)
     .filter((company): company is IGDBCompany => Boolean(company))
-  const averagedSplitRating = [game.rating, game.aggregated_rating]
-    .filter((value): value is number => typeof value === 'number')
+  const averagedSplitRating = [game.rating, game.aggregated_rating].filter(
+    (value): value is number => typeof value === 'number'
+  )
   const stealRating =
     typeof game.total_rating === 'number'
       ? Math.round(game.total_rating)
@@ -1045,17 +1046,17 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
     originalPlatformName: getOriginalPlatformName(game),
     genres,
     platforms,
-    developers: companies.map(company => ({
+    developers: companies.map((company) => ({
       id: company.id,
       name: company.name,
       slug: normalizeName(company.name).replace(/\s+/g, '-'),
     })),
-    publishers: companies.map(company => ({
+    publishers: companies.map((company) => ({
       id: company.id,
       name: company.name,
       slug: normalizeName(company.name).replace(/\s+/g, '-'),
     })),
-    tags: (game.keywords ?? []).map(keyword => ({
+    tags: (game.keywords ?? []).map((keyword) => ({
       id: keyword.id,
       name: keyword.name,
       slug: normalizeName(keyword.name).replace(/\s+/g, '-'),
@@ -1066,21 +1067,23 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
       aggregated_rating: game.aggregated_rating ?? null,
       total_rating: game.total_rating ?? null,
       total_rating_count: game.total_rating_count ?? null,
-      game_modes: game.game_modes?.map(mode => mode.name) ?? [],
-      themes: game.themes?.map(theme => theme.name) ?? [],
-      player_perspectives: game.player_perspectives?.map(perspective => perspective.name) ?? [],
-      companies: companies.map(company => company.name),
-      keywords: game.keywords?.map(keyword => keyword.name) ?? [],
+      game_modes: game.game_modes?.map((mode) => mode.name) ?? [],
+      themes: game.themes?.map((theme) => theme.name) ?? [],
+      player_perspectives: game.player_perspectives?.map((perspective) => perspective.name) ?? [],
+      companies: companies.map((company) => company.name),
+      keywords: game.keywords?.map((keyword) => keyword.name) ?? [],
     },
   }
 }
 
 function hasOfficialCompanyData(game: IGDBGame): boolean {
-  return (game.involved_companies ?? []).some(entry => Boolean(entry.company?.name?.trim()))
+  return (game.involved_companies ?? []).some((entry) => Boolean(entry.company?.name?.trim()))
 }
 
 function hasDisqualifyingKeywords(game: IGDBGame): boolean {
-  return (game.keywords ?? []).some(keyword => DISQUALIFYING_KEYWORDS.has(normalizeName(keyword.name)))
+  return (game.keywords ?? []).some((keyword) =>
+    DISQUALIFYING_KEYWORDS.has(normalizeName(keyword.name))
+  )
 }
 
 function hasRecognizedRating(game: IGDBGame): boolean {
@@ -1112,7 +1115,7 @@ function isOfficialCatalogGame(game: IGDBGame): boolean {
     return false
   }
 
-  return !UNOFFICIAL_NAME_PATTERNS.some(pattern => pattern.test(game.name))
+  return !UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(game.name))
 }
 
 function buildOfficialGameWhereClause(): string {
@@ -1137,7 +1140,7 @@ function buildSearchGameWhereClause(): string {
 function tokenizeNormalized(value: string): string[] {
   return normalizeName(value)
     .split(' ')
-    .map(token => token.trim())
+    .map((token) => token.trim())
     .filter(Boolean)
 }
 
@@ -1154,7 +1157,9 @@ function levenshteinDistance(left: string, right: string): number {
     return left.length
   }
 
-  const matrix = Array.from({ length: left.length + 1 }, () => new Array<number>(right.length + 1).fill(0))
+  const matrix = Array.from({ length: left.length + 1 }, () =>
+    new Array<number>(right.length + 1).fill(0)
+  )
 
   for (let i = 0; i <= left.length; i += 1) {
     matrix[i][0] = i
@@ -1241,7 +1246,7 @@ function getFallbackSearchTerms(query: string): string[] {
     fallbackTerms.push(longestToken)
   }
 
-  return Array.from(new Set(fallbackTerms.filter(term => term && term !== normalizedQuery)))
+  return Array.from(new Set(fallbackTerms.filter((term) => term && term !== normalizedQuery)))
 }
 
 function scoreSearchCandidate(candidate: IGDBGame, query: string): number {
@@ -1276,7 +1281,7 @@ function scoreSearchCandidate(candidate: IGDBGame, query: string): number {
 
   score += Math.min(candidate.total_rating_count ?? 0, 50)
 
-  if (UNOFFICIAL_NAME_PATTERNS.some(pattern => pattern.test(candidate.name))) {
+  if (UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(candidate.name))) {
     score -= 200
   }
 
@@ -1313,7 +1318,9 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
     }
   }
 
-  const filteredResults = Array.from(new Map(mergedResults.map(result => [result.id, result])).values())
+  const filteredResults = Array.from(
+    new Map(mergedResults.map((result) => [result.id, result])).values()
+  )
     .filter(isOfficialCatalogGame)
     .sort((left, right) => scoreSearchCandidate(right, query) - scoreSearchCandidate(left, query))
 
@@ -1348,7 +1355,7 @@ export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
 }
 
 function matchesByName(values: string[] | undefined, target: string): boolean {
-  return values?.some(value => normalizeName(value) === normalizeName(target)) || false
+  return values?.some((value) => normalizeName(value) === normalizeName(target)) || false
 }
 
 function matchesGameMode(values: string[] | undefined, target: string): boolean {
@@ -1376,19 +1383,22 @@ function matchesTagBucket(game: Game, categoryName: string): boolean {
     ...(game.igdb?.keywords ?? []),
   ].map(normalizeName)
 
-  return sources.some(source => aliases.has(source))
+  return sources.some((source) => aliases.has(source))
 }
 
 export function igdbGameMatchesCategory(game: Game, category: Category): boolean {
   switch (category.type) {
     case 'platform':
       return (
-        game.platforms?.some(platform =>
+        game.platforms?.some((platform) =>
           getPlatformAliases(category.name).has(normalizeName(platform.platform.name))
         ) || false
       )
     case 'genre':
-      return game.genres?.some(genre => normalizeName(genre.name) === normalizeName(category.name)) || false
+      return (
+        game.genres?.some((genre) => normalizeName(genre.name) === normalizeName(category.name)) ||
+        false
+      )
     case 'decade': {
       if (!game.released) {
         return false
@@ -1399,7 +1409,11 @@ export function igdbGameMatchesCategory(game: Game, category: Category): boolean
       return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
     }
     case 'company':
-      return game.igdb?.companies?.some(company => normalizeCompanyName(company) === normalizeCompanyName(category.name)) || false
+      return (
+        game.igdb?.companies?.some(
+          (company) => normalizeCompanyName(company) === normalizeCompanyName(category.name)
+        ) || false
+      )
     case 'game_mode':
       return matchesGameMode(game.igdb?.game_modes, category.name)
     case 'theme':
@@ -1455,7 +1469,10 @@ export async function getValidGamesForCell(
   }
 
   try {
-    const games = (await queryValidGamesForCell(rowCategory, colCategory, sampleSize, 0)).slice(0, sampleSize)
+    const games = (await queryValidGamesForCell(rowCategory, colCategory, sampleSize, 0)).slice(
+      0,
+      sampleSize
+    )
     cellValidationCache.set(cacheKey, {
       expiresAt: Date.now() + CELL_VALIDATION_CACHE_TTL_MS,
       games,
@@ -1535,7 +1552,9 @@ export async function getValidGameCountForCell(
     return count
   } catch (error) {
     console.error('[v0] Error getting IGDB valid game count:', error)
-    const fallbackCount = (await getValidGamesForCell(rowCategory, colCategory, DEFAULT_CELL_SAMPLE_SIZE)).length
+    const fallbackCount = (
+      await getValidGamesForCell(rowCategory, colCategory, DEFAULT_CELL_SAMPLE_SIZE)
+    ).length
     cellCountCache.set(cacheKey, {
       expiresAt: Date.now() + Math.min(CELL_VALIDATION_CACHE_TTL_MS, 1000 * 60 * 5),
       count: fallbackCount,
@@ -1576,7 +1595,7 @@ export async function validatePuzzleCategories(
         cellIndex,
         rowCategory,
         colCategory,
-        validOptionCount: new Set(validGames.map(game => game.id)).size,
+        validOptionCount: new Set(validGames.map((game) => game.id)).size,
       }
       cellResults.push(result)
       onCellValidated?.({
@@ -1587,7 +1606,7 @@ export async function validatePuzzleCategories(
     }
   }
 
-  const failedCells = cellResults.filter(cell => cell.validOptionCount < minValidOptionsPerCell)
+  const failedCells = cellResults.filter((cell) => cell.validOptionCount < minValidOptionsPerCell)
   const minValidOptionCount = cellResults.reduce(
     (lowest, cell) => Math.min(lowest, cell.validOptionCount),
     Number.POSITIVE_INFINITY
@@ -1612,7 +1631,9 @@ export async function generatePuzzleCategories(
 
   onProgress?.({ stage: 'families', message: 'Loading category data...' })
   const allowedCategoryIds = options.allowedCategoryIds
-  const familySource = options.allowedCategoryIds ? await getVersusCategoryFamilies() : await getCategoryFamilies()
+  const familySource = options.allowedCategoryIds
+    ? await getVersusCategoryFamilies()
+    : await getCategoryFamilies()
   const families = familySource
     .map((family) => {
       const allowedIds = allowedCategoryIds?.[family.key]
@@ -1623,10 +1644,12 @@ export async function generatePuzzleCategories(
 
       return {
         ...family,
-        categories: family.categories.filter((category) => allowedIds.includes(String(category.id))),
+        categories: family.categories.filter((category) =>
+          allowedIds.includes(String(category.id))
+        ),
       }
     })
-    .filter(family => family.categories.length > 0)
+    .filter((family) => family.categories.length > 0)
   if (families.length < 4) {
     throw new Error('Custom setup needs at least 4 enabled category families to generate a board')
   }
@@ -1638,10 +1661,19 @@ export async function generatePuzzleCategories(
     })
     .map((family) => family.key)
 
-  let bestAttempt: { rows: Category[]; cols: Category[]; validation: PuzzleValidationResult } | null = null
+  let bestAttempt: {
+    rows: Category[]
+    cols: Category[]
+    validation: PuzzleValidationResult
+  } | null = null
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    onProgress?.({ stage: 'attempt', attempt, maxAttempts, message: `Attempt ${attempt} of ${maxAttempts}: picking categories...` })
+    onProgress?.({
+      stage: 'attempt',
+      attempt,
+      maxAttempts,
+      message: `Attempt ${attempt} of ${maxAttempts}: picking categories...`,
+    })
     const pinnedFamilies = families.filter((family) => pinnedFamilyKeys.includes(family.key))
     const remainingFamilies = families.filter((family) => !pinnedFamilyKeys.includes(family.key))
     const selectedFamilies = [
@@ -1661,27 +1693,32 @@ export async function generatePuzzleCategories(
       stage: 'attempt',
       attempt,
       maxAttempts,
-      rows: rows.map(category => category.name),
-      cols: cols.map(category => category.name),
+      rows: rows.map((category) => category.name),
+      cols: cols.map((category) => category.name),
       message: `Attempt ${attempt}/${maxAttempts}: testing ${rows[0].name} x ${cols[0].name}...`,
     })
-    const validation = await validatePuzzleCategories(rows, cols, {
-      minValidOptionsPerCell,
-      sampleSize,
-    }, (event) => {
-      onProgress?.({
-        stage: 'cell',
-        attempt,
-        maxAttempts,
-        cellIndex: event.cellIndex,
-        totalCells: event.totalCells,
-        rowCategory: event.rowCategory.name,
-        colCategory: event.colCategory.name,
-        validOptionCount: event.validOptionCount,
-        passed: event.passed,
-        message: `Attempt ${attempt}: checking intersection ${event.cellIndex + 1}/${event.totalCells}...`,
-      })
-    })
+    const validation = await validatePuzzleCategories(
+      rows,
+      cols,
+      {
+        minValidOptionsPerCell,
+        sampleSize,
+      },
+      (event) => {
+        onProgress?.({
+          stage: 'cell',
+          attempt,
+          maxAttempts,
+          cellIndex: event.cellIndex,
+          totalCells: event.totalCells,
+          rowCategory: event.rowCategory.name,
+          colCategory: event.colCategory.name,
+          validOptionCount: event.validOptionCount,
+          passed: event.passed,
+          message: `Attempt ${attempt}: checking intersection ${event.cellIndex + 1}/${event.totalCells}...`,
+        })
+      }
+    )
 
     if (
       !bestAttempt ||
@@ -1719,13 +1756,15 @@ export async function generatePuzzleCategories(
         )
       )
       const exactValidation: PuzzleValidationResult = {
-        valid: exactCellResults.every(cell => cell.validOptionCount >= minValidOptionsPerCell),
+        valid: exactCellResults.every((cell) => cell.validOptionCount >= minValidOptionsPerCell),
         minValidOptionCount: exactCellResults.reduce(
           (lowest, cell) => Math.min(lowest, cell.validOptionCount),
           Number.POSITIVE_INFINITY
         ),
         cellResults: exactCellResults,
-        failedCells: exactCellResults.filter(cell => cell.validOptionCount < minValidOptionsPerCell),
+        failedCells: exactCellResults.filter(
+          (cell) => cell.validOptionCount < minValidOptionsPerCell
+        ),
       }
       const cellMetadata = buildPuzzleCellMetadata(
         exactValidation,
@@ -1753,7 +1792,10 @@ export async function generatePuzzleCategories(
     console.log(
       `[v0] Rejected IGDB puzzle attempt ${attempt}: ` +
         validation.failedCells
-          .map(cell => `[${cell.rowCategory.name} x ${cell.colCategory.name}: ${cell.validOptionCount}]`)
+          .map(
+            (cell) =>
+              `[${cell.rowCategory.name} x ${cell.colCategory.name}: ${cell.validOptionCount}]`
+          )
           .join(', ')
     )
     const funniestFailure = validation.failedCells[0]
@@ -1771,7 +1813,9 @@ export async function generatePuzzleCategories(
 
   const failureSummary = bestAttempt
     ? bestAttempt.validation.failedCells
-        .map(cell => `${cell.rowCategory.name} x ${cell.colCategory.name} (${cell.validOptionCount})`)
+        .map(
+          (cell) => `${cell.rowCategory.name} x ${cell.colCategory.name} (${cell.validOptionCount})`
+        )
         .join(', ')
     : 'no candidate puzzle could be evaluated'
 

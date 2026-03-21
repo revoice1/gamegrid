@@ -14,7 +14,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   'Super Famicom': 'SNES',
   'Super Nintendo Entertainment System': 'SNES',
   'Sega Mega Drive/Genesis': 'Genesis',
-  'Dreamcast': 'Dreamcast',
+  Dreamcast: 'Dreamcast',
   'Game Boy': 'Game Boy',
   'Game Boy Advance': 'GBA',
   'Nintendo DS': 'DS',
@@ -34,7 +34,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   'Xbox 360': 'Xbox 360',
   'Xbox One': 'Xbox One',
   'Xbox Series X|S': 'Series X|S',
-  'DOS': 'PC',
+  DOS: 'PC',
   'PC (Windows/DOS)': 'PC',
   'PC (Microsoft Windows)': 'PC',
 }
@@ -89,7 +89,9 @@ function getPreferredPlatform(game: Game): string | null {
   }
 
   const platforms = game.platforms.map(({ platform }) => platform.name)
-  const rankedPlatform = PLATFORM_PREFERENCE.find(platformName => platforms.includes(platformName))
+  const rankedPlatform = PLATFORM_PREFERENCE.find((platformName) =>
+    platforms.includes(platformName)
+  )
 
   return getDisplayPlatformName(rankedPlatform ?? platforms[0])
 }
@@ -128,9 +130,10 @@ export function GameSearch({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resultRefs = useRef<Array<HTMLDivElement | null>>([])
   const activeCategoryTypesKey = [...activeCategoryTypes].sort().join(',')
-  const pendingConfirmationGame = pendingConfirmationId !== null
-    ? results.find((game) => game.id === pendingConfirmationId) ?? null
-    : null
+  const pendingConfirmationGame =
+    pendingConfirmationId !== null
+      ? (results.find((game) => game.id === pendingConfirmationId) ?? null)
+      : null
 
   // Focus input when opened
   useEffect(() => {
@@ -144,44 +147,48 @@ export function GameSearch({
   }, [isOpen])
 
   // Search with debounce
-  const search = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < 2) {
-      setResults([])
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams({ q: searchQuery })
-      const categoryTypes = activeCategoryTypesKey.length > 0
-        ? activeCategoryTypesKey.split(',').filter(
-            (type): type is Category['type'] => Boolean(type)
-          )
-        : [rowCategory?.type, colCategory?.type].filter(
-            (type): type is Category['type'] => Boolean(type)
-          )
-
-      if (puzzleId) {
-        params.set('puzzleId', puzzleId)
+  const search = useCallback(
+    async (searchQuery: string) => {
+      if (searchQuery.length < 2) {
+        setResults([])
+        return
       }
 
-      if (categoryTypes.length > 0) {
-        params.set('categoryTypes', categoryTypes.join(','))
-      }
+      setIsLoading(true)
+      try {
+        const params = new URLSearchParams({ q: searchQuery })
+        const categoryTypes =
+          activeCategoryTypesKey.length > 0
+            ? activeCategoryTypesKey
+                .split(',')
+                .filter((type): type is Category['type'] => Boolean(type))
+            : [rowCategory?.type, colCategory?.type].filter((type): type is Category['type'] =>
+                Boolean(type)
+              )
 
-      const response = await fetch(`/api/search?${params.toString()}`)
-      const data = await response.json()
-      setResults(data.results || [])
-      setSelectedIndex(0)
-      setPendingConfirmationId(null)
-    } catch (error) {
-      console.error('Search error:', error)
-      setResults([])
-      setPendingConfirmationId(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [activeCategoryTypesKey, colCategory?.type, puzzleId, rowCategory?.type])
+        if (puzzleId) {
+          params.set('puzzleId', puzzleId)
+        }
+
+        if (categoryTypes.length > 0) {
+          params.set('categoryTypes', categoryTypes.join(','))
+        }
+
+        const response = await fetch(`/api/search?${params.toString()}`)
+        const data = await response.json()
+        setResults(data.results || [])
+        setSelectedIndex(0)
+        setPendingConfirmationId(null)
+      } catch (error) {
+        console.error('Search error:', error)
+        setResults([])
+        setPendingConfirmationId(null)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [activeCategoryTypesKey, colCategory?.type, puzzleId, rowCategory?.type]
+  )
 
   useEffect(() => {
     if (debounceRef.current) {
@@ -214,14 +221,17 @@ export function GameSearch({
     }
   }, [pendingConfirmationId, results])
 
-  const handleSelect = useCallback((game: Game) => {
-    if (!confirmBeforeSelect) {
-      onSelect(game)
-      return
-    }
+  const handleSelect = useCallback(
+    (game: Game) => {
+      if (!confirmBeforeSelect) {
+        onSelect(game)
+        return
+      }
 
-    setPendingConfirmationId(game.id)
-  }, [confirmBeforeSelect, onSelect])
+      setPendingConfirmationId(game.id)
+    },
+    [confirmBeforeSelect, onSelect]
+  )
 
   const handleConfirm = useCallback(() => {
     if (!pendingConfirmationGame) {
@@ -238,13 +248,13 @@ export function GameSearch({
       if (pendingConfirmationId !== null) {
         setPendingConfirmationId(null)
       }
-      setSelectedIndex(i => Math.min(i + 1, results.length - 1))
+      setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (pendingConfirmationId !== null) {
         setPendingConfirmationId(null)
       }
-      setSelectedIndex(i => Math.max(i - 1, 0))
+      setSelectedIndex((i) => Math.max(i - 1, 0))
     } else if (e.key === 'Enter' && results[selectedIndex]) {
       e.preventDefault()
       if (pendingConfirmationGame?.id === results[selectedIndex].id) {
@@ -269,12 +279,12 @@ export function GameSearch({
 
     return [
       game.released ? { label: 'Year', value: game.released.slice(0, 4) } : null,
-      !hideScores && game.metacritic !== null ? { label: 'Score', value: `${game.metacritic}` } : null,
+      !hideScores && game.metacritic !== null
+        ? { label: 'Score', value: `${game.metacritic}` }
+        : null,
       game.gameTypeLabel ? { label: 'Type', value: game.gameTypeLabel } : null,
       game.genres?.[0]?.name ? { label: 'Genre', value: game.genres[0].name } : null,
-      preferredPlatform
-        ? { label: 'Platform', value: preferredPlatform }
-        : null,
+      preferredPlatform ? { label: 'Platform', value: preferredPlatform } : null,
     ].filter((item): item is { label: string; value: string } => item !== null)
   }
 
@@ -295,8 +305,7 @@ export function GameSearch({
         <div className="px-4 py-3 border-b border-border bg-secondary/30">
           <p className="text-sm text-muted-foreground text-center">
             Find a game that is both{' '}
-            <span className="font-semibold text-foreground">{rowCategory?.name}</span>
-            {' '}and{' '}
+            <span className="font-semibold text-foreground">{rowCategory?.name}</span> and{' '}
             <span className="font-semibold text-foreground">{colCategory?.name}</span>
           </p>
         </div>
@@ -323,9 +332,7 @@ export function GameSearch({
           )}
 
           {!isLoading && query.length >= 2 && results.length === 0 && (
-            <div className="p-4 text-center text-muted-foreground text-sm">
-              No games found
-            </div>
+            <div className="p-4 text-center text-muted-foreground text-sm">No games found</div>
           )}
 
           {!isLoading && results.length > 0 && (
@@ -353,7 +360,8 @@ export function GameSearch({
                       className={cn(
                         'flex w-full items-center gap-3 px-4 py-2 text-left transition-[background-color,box-shadow] duration-150',
                         index === selectedIndex ? 'bg-primary/20' : 'hover:bg-secondary/50',
-                        isPendingConfirmation && 'bg-primary/10 shadow-[0_0_0_1px_rgba(34,197,94,0.3)]'
+                        isPendingConfirmation &&
+                          'bg-primary/10 shadow-[0_0_0_1px_rgba(34,197,94,0.3)]'
                       )}
                     >
                       <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-secondary">
@@ -379,22 +387,27 @@ export function GameSearch({
                               <span
                                 aria-hidden="true"
                                 className={cn(
-                                  'pointer-events-none absolute -inset-1 rounded-xl border border-primary/45',
+                                  'pointer-events-none absolute -inset-1.5 rounded-2xl border border-primary/55',
                                   lowEffects
-                                    ? 'opacity-90'
-                                    : 'animate-pulse shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_24px_rgba(34,197,94,0.18)]'
+                                    ? 'opacity-100 shadow-[0_0_0_1px_rgba(34,197,94,0.22)]'
+                                    : 'animate-pulse shadow-[0_0_0_1px_rgba(34,197,94,0.24),0_0_24px_rgba(34,197,94,0.18)]'
                                 )}
                               />
                             )}
-                            <div className="relative z-10 flex flex-wrap gap-1.5">
+                            <div
+                              className={cn(
+                                'relative z-10 flex flex-wrap gap-1.5 rounded-xl px-1.5 py-1 transition-colors duration-150',
+                                isPendingConfirmation ? 'ring-1 ring-primary/30' : 'bg-transparent'
+                              )}
+                            >
                               {metadata.map((item) => (
                                 <span
                                   key={`${game.id}-${item.label}`}
                                   className={cn(
-                                    'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
+                                    'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors duration-150',
                                     isPendingConfirmation
-                                      ? 'bg-primary/16 text-foreground'
-                                      : 'bg-secondary/80 text-muted-foreground'
+                                      ? 'border-primary/35 bg-primary/20 text-foreground shadow-[0_0_12px_rgba(34,197,94,0.12)]'
+                                      : 'border-transparent bg-secondary/80 text-muted-foreground'
                                   )}
                                 >
                                   <span className="font-medium uppercase tracking-wide text-foreground/70">

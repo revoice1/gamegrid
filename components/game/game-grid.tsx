@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { GridCell } from './grid-cell'
 import { CategoryHeaderSimple } from './category-header'
 import type { Category, CellGuess, PuzzleCellMetadata } from '@/lib/types'
@@ -16,11 +17,37 @@ interface GameGridProps {
   guessesRemaining?: number
   currentPlayer?: 'x' | 'o' | null
   winner?: 'x' | 'o' | null
+  stealTargetLabel?: string | null
   turnTimerLabel?: string | null
+  turnTimerSeconds?: number | null
+  turnTimerMaxSeconds?: number | null
   versusRecord?: { xWins: number; oWins: number }
   stealableCell?: number | null
   lockImpactCell?: number | null
   onCellClick: (index: number) => void
+}
+
+const WINNING_LINES = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+] as const
+
+function getWinningOwner(guesses: (CellGuess | null)[]) {
+  for (const [a, b, c] of WINNING_LINES) {
+    const owner = guesses[a]?.owner
+
+    if (owner && owner === guesses[b]?.owner && owner === guesses[c]?.owner) {
+      return owner
+    }
+  }
+
+  return null
 }
 
 export function GameGrid({
@@ -34,45 +61,197 @@ export function GameGrid({
   guessesRemaining = 0,
   currentPlayer = null,
   winner = null,
+  stealTargetLabel = null,
   turnTimerLabel = null,
+  turnTimerSeconds = null,
+  turnTimerMaxSeconds = null,
   versusRecord = { xWins: 0, oWins: 0 },
   stealableCell = null,
   lockImpactCell = null,
   onCellClick,
 }: GameGridProps) {
-  const playerLabel = currentPlayer === 'x' ? 'Player 1' : 'Player 2'
-  const winnerLabel = winner === 'x' ? 'Player 1' : 'Player 2'
+  const winnerLabel = winner === 'x' ? 'X' : 'O'
+  const isStealPossible = stealTargetLabel !== null
+
+  const gamePointCells =
+    currentPlayer === null || isGameOver
+      ? new Set<number>()
+      : new Set(
+          guesses.flatMap((guess, index) => {
+            const isPlayable = guess === null || stealableCell === index
+
+            if (!isPlayable) {
+              return []
+            }
+
+            const nextGuesses = [...guesses]
+            nextGuesses[index] = {
+              ...(guess ?? {
+                gameId: -1,
+                gameName: '',
+                gameImage: null,
+                isCorrect: true,
+              }),
+              owner: currentPlayer,
+            }
+
+            return getWinningOwner(nextGuesses) === currentPlayer ? [index] : []
+          })
+        )
+  const hasGamePoint = gamePointCells.size > 0
+  const [alarmIndex, setAlarmIndex] = useState(0)
+  const [cellAlarmIndex, setCellAlarmIndex] = useState(0)
+  const timerDangerThreshold =
+    turnTimerMaxSeconds !== null
+      ? Math.min(30, Math.max(10, Math.round(turnTimerMaxSeconds * 0.3)))
+      : 10
+  const isTimerDanger = turnTimerSeconds !== null && turnTimerSeconds <= timerDangerThreshold
+  const timerDangerProgress =
+    turnTimerSeconds !== null && turnTimerSeconds <= timerDangerThreshold
+      ? Math.min(1, Math.max(0, (timerDangerThreshold - turnTimerSeconds) / timerDangerThreshold))
+      : 0
+  const timerDangerStyle = isTimerDanger
+    ? {
+        ['--timer-danger-duration' as string]: `${Math.max(0.36, 0.96 - timerDangerProgress * 0.5)}s`,
+        ['--timer-danger-rest-opacity' as string]: `${0.9 - timerDangerProgress * 0.08}`,
+        ['--timer-danger-rest-bg' as string]: `rgba(244,63,94,${0.1 + timerDangerProgress * 0.08})`,
+        ['--timer-danger-peak-bg' as string]: `rgba(244,63,94,${0.18 + timerDangerProgress * 0.14})`,
+        ['--timer-danger-rest-border' as string]: `rgba(251,113,133,${0.28 + timerDangerProgress * 0.14})`,
+        ['--timer-danger-peak-border' as string]: `rgba(251,113,133,${0.44 + timerDangerProgress * 0.22})`,
+        ['--timer-danger-rest-shadow' as string]: `0 0 ${14 + timerDangerProgress * 10}px rgba(244,63,94,${0.14 + timerDangerProgress * 0.12})`,
+        ['--timer-danger-peak-shadow' as string]: `0 0 ${24 + timerDangerProgress * 18}px rgba(244,63,94,${0.24 + timerDangerProgress * 0.18})`,
+      }
+    : undefined
+  const activeAlarms = [
+    ...(hasGamePoint ? ([{ label: 'Game Point', tone: 'amber' as const }] as const) : []),
+    ...(isStealPossible ? ([{ label: 'Steal Active', tone: 'rose' as const }] as const) : []),
+    ...(isTimerDanger ? ([{ label: 'Timer', tone: 'rose' as const }] as const) : []),
+  ]
+  const cellAlarmOptions = [
+    ...(hasGamePoint ? (['game-point'] as const) : []),
+    ...(isStealPossible ? (['steal'] as const) : []),
+  ]
+
+  useEffect(() => {
+    setAlarmIndex(0)
+
+    if (activeAlarms.length <= 1) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setAlarmIndex((current) => (current + 1) % activeAlarms.length)
+    }, 1150)
+
+    return () => window.clearInterval(interval)
+  }, [activeAlarms.length, hasGamePoint, isStealPossible, isTimerDanger])
+
+  useEffect(() => {
+    setCellAlarmIndex(0)
+
+    if (cellAlarmOptions.length <= 1) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setCellAlarmIndex((current) => (current + 1) % cellAlarmOptions.length)
+    }, 900)
+
+    return () => window.clearInterval(interval)
+  }, [cellAlarmOptions.length, hasGamePoint, isStealPossible])
+
+  const currentAlarm = activeAlarms[alarmIndex] ?? null
+  const alarmLabel = currentAlarm?.label ?? 'No Alarm'
+  const isGamePointAlarm = currentAlarm?.tone === 'amber'
+  const isRoseAlarm = currentAlarm?.tone === 'rose'
+  const cellAlarmKey =
+    cellAlarmOptions.length > 0 ? cellAlarmOptions[cellAlarmIndex % cellAlarmOptions.length] : null
 
   return (
     <div className="mx-auto w-full max-w-xl">
       <div className="grid auto-rows-fr grid-cols-[1.12fr_repeat(3,minmax(0,1fr))] gap-2 sm:grid-cols-4 sm:gap-3">
         <div className="aspect-square">
           {currentPlayer ? (
-            <div className="flex h-full flex-col justify-center rounded-lg border border-border/40 bg-secondary/20 px-2 py-2 text-center sm:px-3">
-              <p
-                className={
-                  winner === 'x'
-                    ? 'text-2xl font-bold uppercase text-primary sm:text-3xl'
-                    : winner === 'o'
-                      ? 'text-2xl font-bold uppercase text-sky-400 sm:text-3xl'
-                      : currentPlayer === 'x'
-                        ? 'text-2xl font-bold uppercase text-primary sm:text-3xl'
-                        : 'text-2xl font-bold uppercase text-sky-400 sm:text-3xl'
-                }
-              >
-                {winner ?? currentPlayer}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
-                {winner ? `${winnerLabel} Wins` : `${playerLabel} Turn`}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
-                Session: P1 {versusRecord.xWins} - P2 {versusRecord.oWins}
-              </p>
-              {turnTimerLabel && (
-                <div className="mt-2 inline-flex items-center justify-center self-center rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary sm:text-[11px]">
-                  {turnTimerLabel}
-                </div>
+            <div className="flex h-full flex-col items-center justify-center rounded-lg border border-border/40 bg-secondary/20 px-2 py-2 text-center sm:px-3">
+              {winner && (
+                <p
+                  className={cn(
+                    'text-2xl font-bold uppercase sm:text-3xl',
+                    winner === 'x' ? 'text-primary' : 'text-sky-400'
+                  )}
+                >
+                  {winner}
+                </p>
               )}
+              {winner && (
+                <p className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
+                  {winnerLabel} Wins
+                </p>
+              )}
+              <div
+                className={cn(
+                  'flex w-full items-center justify-between gap-2 rounded-xl border border-border/40 bg-secondary/30 px-2 py-1.5 text-[11px] sm:text-xs',
+                  winner ? 'mt-2' : ''
+                )}
+              >
+                <p className="flex-1 text-center font-medium uppercase tracking-[0.12em] text-muted-foreground/80">
+                  Wins:
+                </p>
+                <div className="flex flex-col items-start gap-1">
+                  <div className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary/85">
+                      X
+                    </span>
+                    <span className="text-sm font-bold leading-none text-primary">
+                      {versusRecord.xWins}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-1 rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-300/90">
+                      O
+                    </span>
+                    <span className="text-sm font-bold leading-none text-sky-300">
+                      {versusRecord.oWins}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                title={
+                  activeAlarms.length > 1
+                    ? activeAlarms.map((alarm) => alarm.label).join(' | ')
+                    : isStealPossible
+                      ? (stealTargetLabel ?? undefined)
+                      : hasGamePoint
+                        ? 'A winning move is available right now'
+                        : isTimerDanger
+                          ? 'The turn timer is in its warning window'
+                          : undefined
+                }
+                className={cn(
+                  'mt-1.5 inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] leading-none',
+                  isGamePointAlarm
+                    ? 'alarm-pill-amber border-amber-300/55 bg-amber-400/12 text-amber-100'
+                    : isRoseAlarm
+                      ? 'steal-pill-pulse border-rose-400/70 bg-rose-500/14 text-rose-50'
+                      : 'border-border/40 bg-secondary/30 text-muted-foreground'
+                )}
+              >
+                {alarmLabel}
+              </div>
+              <div
+                className={cn(
+                  'mt-1.5 inline-flex min-w-[88px] items-center justify-center self-center rounded-full border px-2.5 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] tabular-nums sm:min-w-[96px] sm:text-[11px]',
+                  turnTimerLabel
+                    ? isTimerDanger
+                      ? 'timer-danger-pulse border-rose-400/40 bg-rose-500/12 text-rose-50'
+                      : 'border-primary/25 bg-primary/10 text-primary'
+                    : 'border-border/40 bg-secondary/30 text-muted-foreground'
+                )}
+                style={timerDangerStyle}
+              >
+                {turnTimerLabel ?? 'OFF'}
+              </div>
             </div>
           ) : (
             <div className="flex h-full flex-col justify-center rounded-lg border border-border/40 bg-secondary/20 px-2 py-2 text-center sm:px-3">
@@ -102,34 +281,32 @@ export function GameGrid({
         </div>
 
         {colCategories.map((cat, i) => (
-          <CategoryHeaderSimple
-            key={`col-${i}`}
-            category={cat}
-            orientation="col"
-          />
+          <CategoryHeaderSimple key={`col-${i}`} category={cat} orientation="col" />
         ))}
 
         {rowCategories.map((rowCat, rowIndex) => (
           <div key={`row-${rowIndex}`} className="contents">
-            <CategoryHeaderSimple
-              category={rowCat}
-              orientation="row"
-            />
+            <CategoryHeaderSimple category={rowCat} orientation="row" />
 
             {colCategories.map((_, colIndex) => {
               const cellIndex = rowIndex * 3 + colIndex
               const guess = guesses[cellIndex]
-              const isAvailable = !isGameOver && currentPlayer !== null && (guess === null || stealableCell === cellIndex)
+              const isAvailable =
+                !isGameOver &&
+                currentPlayer !== null &&
+                (guess === null || stealableCell === cellIndex)
 
               return (
                 <GridCell
                   key={`cell-${cellIndex}`}
                   index={cellIndex}
                   guess={guess}
-                  metadata={cellMetadata?.find(cell => cell.cellIndex === cellIndex)}
+                  metadata={cellMetadata?.find((cell) => cell.cellIndex === cellIndex)}
                   isSelected={selectedCell === cellIndex}
                   isAvailable={isAvailable}
                   availableTone={currentPlayer}
+                  isGamePoint={gamePointCells.has(cellIndex)}
+                  activeAlarmKey={cellAlarmKey}
                   isStealable={stealableCell === cellIndex}
                   isLocked={Boolean(guess?.owner) && stealableCell !== cellIndex && !isGameOver}
                   isLockImpact={lockImpactCell === cellIndex}
@@ -141,6 +318,82 @@ export function GameGrid({
           </div>
         ))}
       </div>
+      <style jsx>{`
+        .steal-pill-pulse {
+          animation: steal-pill-pulse 1.05s ease-in-out infinite;
+          box-shadow:
+            0 0 0 1px rgba(251, 113, 133, 0.24),
+            0 0 20px rgba(244, 63, 94, 0.18),
+            0 0 34px rgba(244, 63, 94, 0.1);
+          will-change: opacity, box-shadow;
+        }
+
+        @keyframes steal-pill-pulse {
+          0%,
+          100% {
+            opacity: 0.94;
+            box-shadow:
+              0 0 0 1px rgba(251, 113, 133, 0.24),
+              0 0 16px rgba(244, 63, 94, 0.14),
+              0 0 30px rgba(244, 63, 94, 0.08);
+          }
+          50% {
+            opacity: 1;
+            box-shadow:
+              0 0 0 1px rgba(251, 113, 133, 0.38),
+              0 0 28px rgba(244, 63, 94, 0.24),
+              0 0 44px rgba(244, 63, 94, 0.16);
+          }
+        }
+
+        .alarm-pill-amber {
+          animation: alarm-pill-amber 1.2s ease-in-out infinite;
+          will-change: opacity, box-shadow;
+          box-shadow:
+            0 0 0 1px rgba(252, 211, 77, 0.18),
+            0 0 14px rgba(251, 191, 36, 0.12),
+            0 0 24px rgba(251, 191, 36, 0.06);
+        }
+
+        @keyframes alarm-pill-amber {
+          0%,
+          100% {
+            opacity: 0.94;
+            box-shadow:
+              0 0 0 1px rgba(252, 211, 77, 0.18),
+              0 0 14px rgba(251, 191, 36, 0.12),
+              0 0 24px rgba(251, 191, 36, 0.06);
+          }
+          50% {
+            opacity: 1;
+            box-shadow:
+              0 0 0 1px rgba(252, 211, 77, 0.3),
+              0 0 22px rgba(251, 191, 36, 0.2),
+              0 0 38px rgba(251, 191, 36, 0.12);
+          }
+        }
+
+        .timer-danger-pulse {
+          animation: timer-danger-pulse var(--timer-danger-duration, 0.96s) ease-in-out infinite;
+          will-change: opacity, box-shadow, background-color, border-color;
+        }
+
+        @keyframes timer-danger-pulse {
+          0%,
+          100% {
+            opacity: var(--timer-danger-rest-opacity, 0.9);
+            background: var(--timer-danger-rest-bg, rgba(244, 63, 94, 0.1));
+            border-color: var(--timer-danger-rest-border, rgba(251, 113, 133, 0.28));
+            box-shadow: var(--timer-danger-rest-shadow, 0 0 14px rgba(244, 63, 94, 0.14));
+          }
+          50% {
+            opacity: 1;
+            background: var(--timer-danger-peak-bg, rgba(244, 63, 94, 0.18));
+            border-color: var(--timer-danger-peak-border, rgba(251, 113, 133, 0.44));
+            box-shadow: var(--timer-danger-peak-shadow, 0 0 24px rgba(244, 63, 94, 0.24));
+          }
+        }
+      `}</style>
     </div>
   )
 }

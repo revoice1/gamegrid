@@ -61,12 +61,13 @@ async function resetStorage(page: Page) {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache',
       },
-      body: [
-        `data: ${JSON.stringify({ type: 'progress', pct: 20, message: 'Preparing daily board...' })}`,
-        '',
-        `data: ${JSON.stringify({ type: 'puzzle', puzzle: fakePuzzle })}`,
-        '',
-      ].join('\n') + '\n',
+      body:
+        [
+          `data: ${JSON.stringify({ type: 'progress', pct: 20, message: 'Preparing daily board...' })}`,
+          '',
+          `data: ${JSON.stringify({ type: 'puzzle', puzzle: fakePuzzle })}`,
+          '',
+        ].join('\n') + '\n',
     })
   })
 
@@ -101,9 +102,12 @@ async function seedAchievements(page: Page, achievementIds: string[]) {
 }
 
 async function seedStorageValue(page: Page, key: string, value: unknown) {
-  await page.addInitScript(([storageKey, storageValue]) => {
-    window.localStorage.setItem(storageKey, JSON.stringify(storageValue))
-  }, [key, value] as const)
+  await page.addInitScript(
+    ([storageKey, storageValue]) => {
+      window.localStorage.setItem(storageKey, JSON.stringify(storageValue))
+    },
+    [key, value] as const
+  )
 }
 
 function buildCompletedGuesses() {
@@ -123,10 +127,8 @@ async function openSettings(page: Page) {
 async function setTheme(page: Page, theme: 'light' | 'dark') {
   await openSettings(page)
 
-  const switchToThemeLabel =
-    theme === 'light' ? 'Switch to light mode' : 'Switch to dark mode'
-  const oppositeThemeLabel =
-    theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'
+  const switchToThemeLabel = theme === 'light' ? 'Switch to light mode' : 'Switch to dark mode'
+  const oppositeThemeLabel = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'
 
   const themeToggle = page.getByRole('button', { name: switchToThemeLabel })
   if (await themeToggle.isVisible().catch(() => false)) {
@@ -159,12 +161,13 @@ async function mockPuzzleStream(page: Page, puzzle: typeof fakePuzzle) {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache',
       },
-      body: [
-        `data: ${JSON.stringify({ type: 'progress', pct: 20, message: `Preparing ${mode} board...` })}`,
-        '',
-        `data: ${JSON.stringify({ type: 'puzzle', puzzle: { ...puzzle, id: `${mode}-puzzle`, is_daily: mode === 'daily', date: mode === 'daily' ? puzzle.date : null } })}`,
-        '',
-      ].join('\n') + '\n',
+      body:
+        [
+          `data: ${JSON.stringify({ type: 'progress', pct: 20, message: `Preparing ${mode} board...` })}`,
+          '',
+          `data: ${JSON.stringify({ type: 'puzzle', puzzle: { ...puzzle, id: `${mode}-puzzle`, is_daily: mode === 'daily', date: mode === 'daily' ? puzzle.date : null } })}`,
+          '',
+        ].join('\n') + '\n',
     })
   })
 }
@@ -189,16 +192,20 @@ test('confirm picks setting persists after reload', async ({ page }) => {
   await page.getByRole('button', { name: 'Open settings' }).click()
   await page.getByRole('button', { name: 'Turn on search confirmation' }).click()
 
-  await expect.poll(async () => {
-    return page.evaluate(() => window.localStorage.getItem('gamegrid_search_confirm'))
-  }).toBe('true')
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => window.localStorage.getItem('gamegrid_search_confirm'))
+    })
+    .toBe('true')
 
   await page.reload()
   await page.getByRole('button', { name: 'Open settings' }).click()
 
-  await expect.poll(async () => {
-    return page.evaluate(() => window.localStorage.getItem('gamegrid_search_confirm'))
-  }).toBe('true')
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => window.localStorage.getItem('gamegrid_search_confirm'))
+    })
+    .toBe('true')
   await expect(page.getByText('Ask before submitting')).toBeVisible()
   await expect
     .poll(async () => {
@@ -242,6 +249,7 @@ test('versus mode shows start options and opens setup controls', async ({ page }
   await expect(page.getByRole('heading', { name: 'Versus Setup' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Steal Rule' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Turn Timer' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '20 sec' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Reset to Default' })).toBeVisible()
 })
 
@@ -349,7 +357,7 @@ test('dev hooks can trigger animation overlays for visual and perf passes', asyn
     .toBe(true)
 
   await page.evaluate(() => {
-    window.__gameGridDev?.triggerEasterEgg('halo 2')
+    window.__gameGridDev?.triggerEasterEgg(986)
   })
   await expect(page.getByTestId('easter-egg-celebration')).toBeVisible()
 
@@ -359,7 +367,11 @@ test('dev hooks can trigger animation overlays for visual and perf passes', asyn
   await expect(page.getByTestId('perfect-grid-celebration')).toBeVisible()
 
   await page.evaluate(() => {
-    window.__gameGridDev?.triggerStealShowdown({ successful: false, attackerScore: 77, defenderScore: 81 })
+    window.__gameGridDev?.triggerStealShowdown({
+      successful: false,
+      attackerScore: 77,
+      defenderScore: 81,
+    })
   })
   await expect(page.getByTestId('steal-showdown-overlay')).toBeVisible()
 
@@ -415,11 +427,11 @@ test('animation matrix cycles through easter eggs and showdown states', async ({
     await setTheme(page, theme)
 
     for (const easterEgg of EASTER_EGGS) {
-      const triggerName = easterEgg.triggerNames[0]
+      const triggerGameId = easterEgg.triggerGameIds[0]
 
-      const triggered = await page.evaluate((name) => {
-        return window.__gameGridDev?.triggerEasterEgg(name) ?? false
-      }, triggerName)
+      const triggered = await page.evaluate((gameId) => {
+        return window.__gameGridDev?.triggerEasterEgg(gameId) ?? false
+      }, triggerGameId)
 
       expect(triggered).toBe(true)
       await expect(page.getByTestId('easter-egg-celebration')).toBeVisible()
@@ -433,13 +445,21 @@ test('animation matrix cycles through easter eggs and showdown states', async ({
     await page.waitForTimeout(220)
 
     await page.evaluate(() => {
-      window.__gameGridDev?.triggerStealShowdown({ successful: true, attackerScore: 71, defenderScore: 84 })
+      window.__gameGridDev?.triggerStealShowdown({
+        successful: true,
+        attackerScore: 71,
+        defenderScore: 84,
+      })
     })
     await expect(page.getByTestId('steal-showdown-overlay')).toBeVisible()
     await page.waitForTimeout(250)
 
     await page.evaluate(() => {
-      window.__gameGridDev?.triggerStealShowdown({ successful: false, attackerScore: 88, defenderScore: 81 })
+      window.__gameGridDev?.triggerStealShowdown({
+        successful: false,
+        attackerScore: 88,
+        defenderScore: 81,
+      })
     })
     await expect(page.getByTestId('steal-showdown-overlay')).toBeVisible()
     await page.waitForTimeout(250)
@@ -486,7 +506,11 @@ test('versus failed steal shows the destructive toast path', async ({ page }) =>
     .toBe(true)
 
   await page.evaluate(() => {
-    window.__gameGridDev?.triggerStealShowdown({ successful: false, attackerScore: 88, defenderScore: 81 })
+    window.__gameGridDev?.triggerStealShowdown({
+      successful: false,
+      attackerScore: 88,
+      defenderScore: 81,
+    })
     window.__gameGridDev?.triggerStealMiss()
   })
 
@@ -542,16 +566,20 @@ test('achievements modal shows locked and unlocked states correctly', async ({ p
   await expect(achievementsDialog.getByText('Perfect Grid', { exact: true })).toBeVisible()
   await expect(achievementsDialog.getByText('Finish a board with a flawless 9/9.')).toBeVisible()
   await expect(achievementsDialog.getByText('Breakfast Defender', { exact: true })).toBeVisible()
-  await expect(achievementsDialog.getByText('Use Chex Quest as a correct answer.')).toHaveCount(0)
+  await expect(
+    achievementsDialog.getByText('Unlocked by using its hidden trigger game as a correct answer.')
+  ).toHaveCount(0)
   await achievementsDialog.getByRole('button', { name: 'Close' }).first().click()
 })
 
-test('correct easter egg answer unlocks achievement toast and collection entry', async ({ page }) => {
+test('correct easter egg answer unlocks achievement toast and collection entry', async ({
+  page,
+}) => {
   const haloResult = {
-    id: 202,
+    id: 986,
     name: 'Halo 2',
     slug: 'halo-2',
-    background_image: null,
+    background_image: 'https://images.igdb.com/halo-2-cover.jpg',
     released: '2004-11-09',
     metacritic: 95,
     genres: [{ id: 5, name: 'Shooter', slug: 'shooter' }],
@@ -582,7 +610,7 @@ test('correct easter egg answer unlocks achievement toast and collection entry',
           name: requestBody.gameName,
           slug: haloResult.slug,
           url: null,
-          background_image: null,
+          background_image: haloResult.background_image,
           released: haloResult.released,
           metacritic: haloResult.metacritic,
           stealRating: 95,
@@ -601,28 +629,31 @@ test('correct easter egg answer unlocks achievement toast and collection entry',
   })
 
   await resetStorage(page)
-  await page.addInitScript((state) => {
-    window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(state))
-  }, {
-    puzzleId: fakePuzzle.id,
-    puzzle: {
-      ...fakePuzzle,
-      row_categories: [
-        { type: 'genre', id: 'genre-shooter', name: 'Shooter' },
-        fakePuzzle.row_categories[1],
-        fakePuzzle.row_categories[2],
-      ],
-      col_categories: [
-        { type: 'platform', id: 'platform-xbox', name: 'Xbox' },
-        fakePuzzle.col_categories[1],
-        fakePuzzle.col_categories[2],
-      ],
+  await page.addInitScript(
+    (state) => {
+      window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(state))
     },
-    guesses: Array(9).fill(null),
-    guessesRemaining: 9,
-    isComplete: false,
-    date: new Date().toISOString().slice(0, 10),
-  })
+    {
+      puzzleId: fakePuzzle.id,
+      puzzle: {
+        ...fakePuzzle,
+        row_categories: [
+          { type: 'genre', id: 'genre-shooter', name: 'Shooter' },
+          fakePuzzle.row_categories[1],
+          fakePuzzle.row_categories[2],
+        ],
+        col_categories: [
+          { type: 'platform', id: 'platform-xbox', name: 'Xbox' },
+          fakePuzzle.col_categories[1],
+          fakePuzzle.col_categories[2],
+        ],
+      },
+      guesses: Array(9).fill(null),
+      guessesRemaining: 9,
+      isComplete: false,
+      date: new Date().toISOString().slice(0, 10),
+    }
+  )
 
   await page.goto('/')
   await page.getByTestId('grid-cell-0').click()
@@ -632,13 +663,20 @@ test('correct easter egg answer unlocks achievement toast and collection entry',
 
   const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
   await expect(notifications.getByText('Achievement Unlocked: Finish the Fight')).toBeVisible()
-  await expect(notifications.getByText('Use Halo 2 as a correct answer.')).toBeVisible()
+  await expect(
+    notifications.getByText('Unlocked by using its hidden trigger game as a correct answer.')
+  ).toBeVisible()
 
   await page.getByRole('button', { name: 'Achievements' }).click()
   const achievementsDialog = page.getByRole('dialog')
   await expect(achievementsDialog.getByText(`1/${ACHIEVEMENTS.length}`)).toBeVisible()
   await expect(achievementsDialog.getByText('Finish the Fight', { exact: true })).toBeVisible()
-  await expect(achievementsDialog.getByText('Use Halo 2 as a correct answer.')).toBeVisible()
+  await expect(
+    achievementsDialog.getByText('Unlocked by using its hidden trigger game as a correct answer.')
+  ).toBeVisible()
+  await expect(
+    achievementsDialog.locator('img[src="https://images.igdb.com/halo-2-cover.jpg"]')
+  ).toBeVisible()
 })
 
 test('daily results modal keeps copy and playerbase features', async ({ page }) => {
@@ -730,6 +768,35 @@ test('practice and versus restore in-progress boards from local storage', async 
   await expect(page.getByTestId('grid-cell-0')).toContainText('Restored Versus Game')
 })
 
+test('versus timer enters danger state in the last 10 seconds', async ({ page }) => {
+  await resetStorage(page)
+  await seedStorageValue(page, 'gamegrid_versus_state', {
+    puzzleId: 'versus-timer-puzzle',
+    puzzle: { ...fakePuzzle, id: 'versus-timer-puzzle', is_daily: false, date: null },
+    guesses: Array(9).fill(null),
+    guessesRemaining: 9,
+    isComplete: false,
+    currentPlayer: 'x',
+    stealableCell: null,
+    winner: null,
+    pendingFinalSteal: null,
+    versusCategoryFilters: {},
+    versusStealRule: 'lower',
+    versusTimerOption: 20,
+    turnTimeLeft: 20,
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Versus' }).click()
+
+  await expect(page.getByText('Turn: 0:20')).toBeVisible()
+
+  const dangerTimerPill = page
+    .locator('.timer-danger-pulse')
+    .filter({ hasText: /Turn: 0:1\d|Turn: 0:0\d/ })
+  await expect(dangerTimerPill).toBeVisible({ timeout: 13000 })
+})
+
 test('reduced motion mode still supports the animation hooks', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await seedDailyPuzzle(page)
@@ -747,7 +814,11 @@ test('reduced motion mode still supports the animation hooks', async ({ page }) 
   await expect(page.getByTestId('perfect-grid-celebration')).toBeVisible()
 
   await page.evaluate(() => {
-    window.__gameGridDev?.triggerStealShowdown({ successful: true, attackerScore: 72, defenderScore: 85 })
+    window.__gameGridDev?.triggerStealShowdown({
+      successful: true,
+      attackerScore: 72,
+      defenderScore: 85,
+    })
   })
   await expect(page.getByTestId('steal-showdown-overlay')).toBeVisible()
 })

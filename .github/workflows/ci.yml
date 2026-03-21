@@ -35,6 +35,14 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
+      - name: Format check
+        id: format
+        run: npm run format:check
+
+      - name: Lint
+        id: lint
+        run: npm run lint
+
       - name: Typecheck
         id: typecheck
         run: npm run typecheck
@@ -61,6 +69,8 @@ jobs:
         if: always()
         run: |
           echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Format: ${{ steps.format.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Lint: ${{ steps.lint.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- Typecheck: ${{ steps.typecheck.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- Unit tests: ${{ steps.unit.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- E2E tests: ${{ steps.e2e.outcome }}" >> $GITHUB_STEP_SUMMARY

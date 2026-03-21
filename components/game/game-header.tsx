@@ -32,7 +32,6 @@ interface GameHeaderProps {
   guessesRemaining: number
   score: number
   currentPlayer?: 'x' | 'o' | null
-  stealTargetLabel?: string | null
   winner?: 'x' | 'o' | null
   turnTimerLabel?: string | null
   versusRecord?: { xWins: number; oWins: number }
@@ -52,7 +51,6 @@ export function GameHeader({
   guessesRemaining,
   score,
   currentPlayer = null,
-  stealTargetLabel = null,
   winner = null,
   turnTimerLabel = null,
   versusRecord = { xWins: 0, oWins: 0 },
@@ -66,6 +64,13 @@ export function GameHeader({
   onNewGame,
   onCustomizeGame,
 }: GameHeaderProps) {
+  void guessesRemaining
+  void score
+  void currentPlayer
+  void winner
+  void turnTimerLabel
+  void versusRecord
+
   return (
     <header className="w-full">
       <div className="max-w-lg mx-auto">
@@ -75,9 +80,7 @@ export function GameHeader({
               <span className="text-primary">Game</span>
               <span className="text-foreground">Grid</span>
             </h1>
-            <p className="mt-1 text-sm text-foreground/75">
-              The video game trivia challenge
-            </p>
+            <p className="mt-1 text-sm text-foreground/75">The video game trivia challenge</p>
           </div>
           <div className="absolute right-0 top-0 pt-0.5">
             <ThemeToggle />
@@ -122,21 +125,28 @@ export function GameHeader({
           </div>
         </div>
 
-        <div className="mb-4 flex items-center justify-between px-2">
+        <div className="mb-4 flex items-start justify-between gap-3 px-2">
           {mode === 'versus' ? (
-            <div className="min-w-[150px]">
-              {stealTargetLabel && (
-                <div className="inline-flex max-w-full items-center gap-3 rounded-xl border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-left">
-                  <div className="shrink-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300">
-                      Steal Target
-                    </p>
-                  </div>
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {stealTargetLabel}
-                  </p>
-                </div>
-              )}
+            <div className="min-w-[118px]">
+              <div className="inline-flex min-h-[46px] items-center gap-2 rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  {winner ? 'Winner:' : 'Turn:'}
+                </span>
+                <span
+                  className={cn(
+                    'text-lg font-black uppercase leading-none',
+                    winner === 'x'
+                      ? 'text-primary'
+                      : winner === 'o'
+                        ? 'text-sky-400'
+                        : currentPlayer === 'x'
+                          ? 'text-primary'
+                          : 'text-sky-400'
+                  )}
+                >
+                  {winner ?? currentPlayer ?? 'X'}
+                </span>
+              </div>
             </div>
           ) : (
             <div className="min-h-[1px]" />
@@ -149,7 +159,7 @@ export function GameHeader({
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-2">
               {(mode === 'practice' || mode === 'versus') && onNewGame && (
                 <Button
                   variant="outline"
@@ -187,7 +197,7 @@ export function GameHeader({
                 aria-label="Achievements"
                 title="Achievements"
                 className={cn(
-                  'h-9 w-9 border transition-colors',
+                  'h-[46px] w-[46px] border transition-colors',
                   isAchievementsOpen
                     ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
                     : 'border-border bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
@@ -207,7 +217,12 @@ export function GameHeader({
                 )}
               >
                 <svg className="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 How to Play
               </Button>

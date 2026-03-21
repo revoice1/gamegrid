@@ -8,10 +8,7 @@ function createSessionId(): string {
     return ''
   }
 
-  if (
-    typeof window.crypto !== 'undefined' &&
-    typeof window.crypto.randomUUID === 'function'
-  ) {
+  if (typeof window.crypto !== 'undefined' && typeof window.crypto.randomUUID === 'function') {
     return window.crypto.randomUUID()
   }
 
@@ -20,14 +17,14 @@ function createSessionId(): string {
 
 export function getSessionId(): string {
   if (typeof window === 'undefined') return ''
-  
+
   let sessionId = localStorage.getItem(SESSION_KEY)
-  
+
   if (!sessionId) {
     sessionId = createSessionId()
     localStorage.setItem(SESSION_KEY, sessionId)
   }
-  
+
   return sessionId
 }
 
@@ -82,7 +79,7 @@ export interface SavedGameState {
   } | null
   versusCategoryFilters?: Record<string, string[]>
   versusStealRule?: 'lower' | 'higher'
-  versusTimerOption?: 'none' | 60 | 120 | 300
+  versusTimerOption?: 'none' | 20 | 60 | 120 | 300
   turnTimeLeft?: number | null
 }
 
@@ -94,7 +91,7 @@ function getStateKey(mode: PersistedMode): string {
 
 export function saveGameState(state: SavedGameState, mode: PersistedMode): void {
   if (typeof window === 'undefined') return
-  
+
   const key = getStateKey(mode)
   const saveState = mode === 'daily' ? { ...state, date: getUtcDateKey() } : state
   localStorage.setItem(key, JSON.stringify(saveState))
@@ -102,21 +99,21 @@ export function saveGameState(state: SavedGameState, mode: PersistedMode): void 
 
 export function loadGameState(mode: PersistedMode): SavedGameState | null {
   if (typeof window === 'undefined') return null
-  
+
   const key = getStateKey(mode)
   const saved = localStorage.getItem(key)
-  
+
   if (!saved) return null
-  
+
   try {
     const state = JSON.parse(saved) as SavedGameState
-    
+
     // For daily, align the saved-state key with the server's UTC rollover.
     if (mode === 'daily' && state.date !== getUtcDateKey()) {
       localStorage.removeItem(key)
       return null
     }
-    
+
     return state
   } catch {
     return null

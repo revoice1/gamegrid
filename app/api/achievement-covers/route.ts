@@ -13,8 +13,8 @@ export async function POST(request: Request) {
 
     const idToGameId = new Map<string, number>()
     for (const egg of EASTER_EGGS) {
-      if (egg.gameIds.length > 0) {
-        idToGameId.set(egg.achievementId, egg.gameIds[0])
+      if (egg.triggerGameIds.length > 0) {
+        idToGameId.set(egg.achievementId, egg.triggerGameIds[0])
       }
     }
 

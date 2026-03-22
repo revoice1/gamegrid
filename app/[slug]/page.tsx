@@ -11,10 +11,10 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function IndexedRoutePage({ params }: { params: Promise<{ index: string }> }) {
-  const { index } = await params
+export default async function IndexedRoutePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
 
-  if (index.toUpperCase() !== ROUTE_SLUG) {
+  if (slug.toUpperCase() !== ROUTE_SLUG) {
     notFound()
   }
 

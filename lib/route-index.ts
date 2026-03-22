@@ -2,7 +2,7 @@ function decodeShiftedChars(values: number[], shift: number) {
   return String.fromCharCode(...values.map((value) => value - shift))
 }
 
-export const ROUTE_SLUG = decodeShiftedChars([85, 80, 71, 85, 77, 80, 68, 76, 84], 1)
+export const ROUTE_SLUG = decodeShiftedChars([84, 80, 71, 85, 77, 80, 68, 76, 84], 1)
 export const ROUTE_ACHIEVEMENT_ID = decodeShiftedChars(
   [117, 113, 104, 118, 110, 113, 101, 109, 117],
   2
@@ -38,8 +38,8 @@ const INDEX_BADGE_MATRIX = [
   ['row-0', 5, 84],
   ['row-1', 2, 87],
   ['row-2', 9, 91],
-  ['settings', 7, 79],
-  ['setup', 3, 82],
+  ['settings', 7, 75],
+  ['setup', 3, 78],
   ['achievements', 6, 87],
 ] as const satisfies ReadonlyArray<readonly [IndexBadgeSlot, number, number]>
 

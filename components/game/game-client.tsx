@@ -1432,6 +1432,8 @@ interface PuzzleStreamMessage {
 export function GameClient() {
   const skipNextVersusAutoLoadRef = useRef(false)
   const skipNextPracticeAutoLoadRef = useRef(false)
+  const activeTurnTimerKeyRef = useRef<string | null>(null)
+  const isPuzzleLoadInFlightRef = useRef(false)
   const { mode, setMode, loadedPuzzleMode, setLoadedPuzzleMode } = useGameModeState()
   const {
     puzzle,
@@ -1674,13 +1676,23 @@ export function GameClient() {
   }, [activeStealMissSplash])
 
   useEffect(() => {
-    if (!isVersusMode || winner || versusTimerOption === 'none') {
+    const isVersusBoardReady =
+      isVersusMode && !isLoading && loadedPuzzleMode === 'versus' && puzzle !== null
+
+    if (!isVersusBoardReady || winner || versusTimerOption === 'none') {
+      activeTurnTimerKeyRef.current = null
       setTurnTimeLeft(null)
       return
     }
 
-    setTurnTimeLeft(versusTimerOption)
-  }, [currentPlayer, isVersusMode, versusTimerOption, winner])
+    const turnTimerKey = `${puzzle.id}:${currentPlayer}`
+    if (activeTurnTimerKeyRef.current === turnTimerKey) {
+      return
+    }
+
+    activeTurnTimerKeyRef.current = turnTimerKey
+    setTurnTimeLeft((current) => (current === null ? versusTimerOption : versusTimerOption))
+  }, [currentPlayer, isLoading, isVersusMode, loadedPuzzleMode, puzzle, versusTimerOption, winner])
 
   useEffect(() => {
     if (!isVersusMode || winner || turnTimeLeft === null) {
@@ -1710,6 +1722,11 @@ export function GameClient() {
   // Load puzzle
   const loadPuzzle = useCallback(
     async (gameMode: GameMode, customFilters?: VersusCategoryFilters) => {
+      if (isPuzzleLoadInFlightRef.current) {
+        return
+      }
+
+      isPuzzleLoadInFlightRef.current = true
       const shouldPersist = true
       const streamMode = gameMode === 'daily' ? 'daily' : 'practice'
       const savedState = loadGameState(gameMode)
@@ -1721,6 +1738,10 @@ export function GameClient() {
             : undefined
 
       if (savedState?.puzzle) {
+        activeTurnTimerKeyRef.current =
+          gameMode === 'versus' && savedState.currentPlayer
+            ? `${savedState.puzzle.id}:${savedState.currentPlayer}`
+            : null
         setLoadedPuzzleMode(gameMode)
         setPuzzle(savedState.puzzle)
         setGuesses(savedState.guesses as (CellGuess | null)[])
@@ -1738,10 +1759,12 @@ export function GameClient() {
         setShowResults(savedState.isComplete)
         setDetailCell(null)
         setIsLoading(false)
+        isPuzzleLoadInFlightRef.current = false
         return
       }
 
       setIsLoading(true)
+      activeTurnTimerKeyRef.current = null
       setGuesses(Array(9).fill(null))
       setGuessesRemaining(gameMode === 'versus' ? MAX_GUESSES : MAX_GUESSES)
       setCurrentPlayer('x')
@@ -1923,6 +1946,7 @@ export function GameClient() {
           })
         }
       } finally {
+        isPuzzleLoadInFlightRef.current = false
         setIsLoading(false)
       }
     },
@@ -2011,6 +2035,10 @@ export function GameClient() {
 
     if (mode === 'versus' && skipNextVersusAutoLoadRef.current) {
       skipNextVersusAutoLoadRef.current = false
+      return
+    }
+
+    if (isPuzzleLoadInFlightRef.current) {
       return
     }
 
@@ -2804,7 +2832,7 @@ export function GameClient() {
           <HowToPlayModal
             isOpen={showHowToPlay}
             onClose={() => setShowHowToPlay(false)}
-            mode="versus"
+            mode={mode}
             minimumCellOptions={resolvedMinimumCellOptions}
             validationStatus={undefined}
             dailyResetLabel={dailyResetLabel}

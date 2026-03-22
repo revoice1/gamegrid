@@ -68,35 +68,24 @@ export function GameHeader({
   void score
   void versusRecord
 
-  const poolLabel = hasActiveCustomSetup ? 'Custom Pool' : 'Standard Pool'
+  const poolLabel = hasActiveCustomSetup ? 'Custom' : 'Standard'
   const versusTurnLabel = winner ? 'Winner' : 'Turn'
   const versusTurnValue = (winner ?? currentPlayer ?? 'x').toUpperCase()
 
   return (
     <header className="w-full">
-      <div className="max-w-lg mx-auto">
+      <div className="mx-auto max-w-xl">
         <div className="relative mb-4">
-          {mode === 'daily' && dailyResetLabel && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2">
-              <div className="inline-flex h-9 items-center gap-1 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
-                <span className="shrink-0 tracking-[0.12em]">Next grid</span>
-                <span className="tabular-nums tracking-[0.12em] text-foreground">
-                  {dailyResetLabel}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="px-16 text-center sm:px-20">
+          <div className="px-6 text-center sm:px-24">
             <h1 className="text-3xl font-bold tracking-tight">
               <span className="text-primary">Game</span>
               <span className="text-foreground">Grid</span>
             </h1>
             <p className="mt-1 text-sm text-foreground/75">The video game trivia challenge</p>
           </div>
+
           <div className="absolute right-0 top-0 flex flex-col items-end gap-2 pt-0.5">
-            <ThemeToggle />
-            <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -134,11 +123,12 @@ export function GameHeader({
                   />
                 </svg>
               </Button>
+              <ThemeToggle />
             </div>
           </div>
         </div>
 
-        <div className="mb-3 flex justify-center">
+        <div className="relative mb-3 flex justify-center">
           <div className="inline-flex rounded-lg bg-secondary/50 p-1">
             <button
               onClick={() => onModeChange('daily')}
@@ -174,15 +164,24 @@ export function GameHeader({
               Versus
             </button>
           </div>
+
+          {mode === 'daily' && dailyResetLabel && (
+            <div className="absolute right-0 top-1/2 -translate-y-1/2">
+              <div className="inline-flex flex-col items-start justify-center rounded-2xl border border-border bg-secondary/35 px-4 py-2 text-[10px] font-medium uppercase leading-none text-muted-foreground">
+                <span className="shrink-0 tracking-[0.16em]">Next grid</span>
+                <span className="mt-1 tabular-nums text-[11px] tracking-[0.14em] text-foreground">
+                  {dailyResetLabel}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
             {(mode === 'practice' || mode === 'versus') && (
               <div className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
-                <span className="tracking-[0.12em]">
-                  {mode === 'practice' ? 'Practice' : 'Pool'}
-                </span>
+                <span className="tracking-[0.12em]">Pool</span>
                 <span className="tracking-[0.12em] text-foreground">{poolLabel}</span>
               </div>
             )}

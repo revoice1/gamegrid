@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { ThemeToggle, type ThemeToggleAction } from '@/components/theme-toggle'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 function AchievementEggIcon({ className }: { className?: string }) {
   return (
@@ -68,32 +68,6 @@ export function GameHeader({
   void score
   void versusRecord
 
-  const settingsActions: ThemeToggleAction[] = [
-    {
-      label: 'How to Play',
-      description: mode === 'versus' ? 'Rules, steals, and turn flow' : 'Rules and scoring details',
-      onClick: onHowToPlay,
-      isActive: isHowToPlayOpen,
-      icon: (
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      ),
-    },
-    {
-      label: 'Achievements',
-      description: 'Check your collection and egg unlocks',
-      onClick: onAchievements,
-      isActive: isAchievementsOpen,
-      icon: <AchievementEggIcon className="h-4 w-4" />,
-    },
-  ]
-
   const poolLabel = hasActiveCustomSetup ? 'Custom Pool' : 'Standard Pool'
   const versusTurnLabel = winner ? 'Winner' : 'Turn'
   const versusTurnValue = (winner ?? currentPlayer ?? 'x').toUpperCase()
@@ -102,15 +76,65 @@ export function GameHeader({
     <header className="w-full">
       <div className="max-w-lg mx-auto">
         <div className="relative mb-4">
-          <div className="text-center">
+          {mode === 'daily' && dailyResetLabel && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2">
+              <div className="inline-flex h-9 items-center gap-1 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
+                <span className="shrink-0 tracking-[0.12em]">Next grid</span>
+                <span className="tabular-nums tracking-[0.12em] text-foreground">
+                  {dailyResetLabel}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="px-16 text-center sm:px-20">
             <h1 className="text-3xl font-bold tracking-tight">
               <span className="text-primary">Game</span>
               <span className="text-foreground">Grid</span>
             </h1>
             <p className="mt-1 text-sm text-foreground/75">The video game trivia challenge</p>
           </div>
-          <div className="absolute right-0 top-0 pt-0.5">
-            <ThemeToggle actions={settingsActions} />
+          <div className="absolute right-0 top-0 flex flex-col items-end gap-2 pt-0.5">
+            <ThemeToggle />
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onAchievements}
+                aria-label="Achievements"
+                title="Achievements"
+                className={cn(
+                  'h-10 w-10 rounded-xl border transition-colors',
+                  isAchievementsOpen
+                    ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
+                    : 'border-border bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                )}
+              >
+                <AchievementEggIcon className="h-[18px] w-[18px]" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onHowToPlay}
+                aria-label="How to Play"
+                title="How to Play"
+                className={cn(
+                  'h-10 w-10 rounded-xl border transition-colors',
+                  isHowToPlayOpen
+                    ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
+                    : 'border-primary/30 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                )}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -154,15 +178,6 @@ export function GameHeader({
 
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
-            {mode === 'daily' && dailyResetLabel && (
-              <div className="inline-flex h-9 items-center gap-1 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
-                <span className="shrink-0 tracking-[0.12em]">Next grid</span>
-                <span className="tabular-nums tracking-[0.12em] text-foreground">
-                  {dailyResetLabel}
-                </span>
-              </div>
-            )}
-
             {(mode === 'practice' || mode === 'versus') && (
               <div className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
                 <span className="tracking-[0.12em]">

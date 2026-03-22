@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { ThemeToggle, type ThemeToggleAction } from '@/components/theme-toggle'
 
 function AchievementEggIcon({ className }: { className?: string }) {
   return (
@@ -66,15 +66,42 @@ export function GameHeader({
 }: GameHeaderProps) {
   void guessesRemaining
   void score
-  void currentPlayer
-  void winner
-  void turnTimerLabel
   void versusRecord
+
+  const settingsActions: ThemeToggleAction[] = [
+    {
+      label: 'How to Play',
+      description: mode === 'versus' ? 'Rules, steals, and turn flow' : 'Rules and scoring details',
+      onClick: onHowToPlay,
+      isActive: isHowToPlayOpen,
+      icon: (
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      ),
+    },
+    {
+      label: 'Achievements',
+      description: 'Check your collection and egg unlocks',
+      onClick: onAchievements,
+      isActive: isAchievementsOpen,
+      icon: <AchievementEggIcon className="h-4 w-4" />,
+    },
+  ]
+
+  const poolLabel = hasActiveCustomSetup ? 'Custom Pool' : 'Standard Pool'
+  const versusTurnLabel = winner ? 'Winner' : 'Turn'
+  const versusTurnValue = (winner ?? currentPlayer ?? 'x').toUpperCase()
 
   return (
     <header className="w-full">
       <div className="max-w-lg mx-auto">
-        <div className="relative mb-6">
+        <div className="relative mb-4">
           <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">
               <span className="text-primary">Game</span>
@@ -83,11 +110,11 @@ export function GameHeader({
             <p className="mt-1 text-sm text-foreground/75">The video game trivia challenge</p>
           </div>
           <div className="absolute right-0 top-0 pt-0.5">
-            <ThemeToggle />
+            <ThemeToggle actions={settingsActions} />
           </div>
         </div>
 
-        <div className="mb-4 flex justify-center">
+        <div className="mb-3 flex justify-center">
           <div className="inline-flex rounded-lg bg-secondary/50 p-1">
             <button
               onClick={() => onModeChange('daily')}
@@ -125,16 +152,32 @@ export function GameHeader({
           </div>
         </div>
 
-        <div className="mb-4 flex items-start justify-between gap-3 px-2">
-          {mode === 'versus' ? (
-            <div className="min-w-[118px]">
-              <div className="inline-flex min-h-[46px] items-center gap-2 rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  {winner ? 'Winner:' : 'Turn:'}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {mode === 'daily' && dailyResetLabel && (
+              <div className="inline-flex h-9 items-center gap-1 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
+                <span className="shrink-0 tracking-[0.12em]">Next grid</span>
+                <span className="tabular-nums tracking-[0.12em] text-foreground">
+                  {dailyResetLabel}
                 </span>
+              </div>
+            )}
+
+            {(mode === 'practice' || mode === 'versus') && (
+              <div className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
+                <span className="tracking-[0.12em]">
+                  {mode === 'practice' ? 'Practice' : 'Pool'}
+                </span>
+                <span className="tracking-[0.12em] text-foreground">{poolLabel}</span>
+              </div>
+            )}
+
+            {mode === 'versus' && (
+              <div className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-secondary/35 px-3 text-[11px] font-medium uppercase text-muted-foreground">
+                <span className="tracking-[0.12em]">{versusTurnLabel}</span>
                 <span
                   className={cn(
-                    'text-lg font-black uppercase leading-none',
+                    'text-sm font-black leading-none',
                     winner === 'x'
                       ? 'text-primary'
                       : winner === 'o'
@@ -144,89 +187,28 @@ export function GameHeader({
                           : 'text-sky-400'
                   )}
                 >
-                  {winner ?? currentPlayer ?? 'X'}
+                  {versusTurnValue}
                 </span>
-              </div>
-            </div>
-          ) : (
-            <div className="min-h-[1px]" />
-          )}
-          <div className="flex flex-col items-end gap-2">
-            {mode === 'daily' && dailyResetLabel && (
-              <div className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/40 px-2 py-1 text-[11px] font-medium uppercase text-muted-foreground">
-                <span className="shrink-0 tracking-[0.12em]">Next grid:</span>
-                <span className="tabular-nums tracking-[0.12em]">{dailyResetLabel}</span>
+                {turnTimerLabel && (
+                  <span className="rounded-full border border-border/70 bg-background/65 px-2 py-0.5 text-[10px] tracking-[0.12em] text-foreground">
+                    {turnTimerLabel.replace(/^Turn:\s*/, '')}
+                  </span>
+                )}
               </div>
             )}
+          </div>
 
-            <div className="flex items-start gap-2">
-              {(mode === 'practice' || mode === 'versus') && onNewGame && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onNewGame}
-                  className="h-auto min-w-[92px] px-3 py-2"
-                >
-                  <span className="flex flex-col items-start leading-tight">
-                    <span>{mode === 'versus' ? 'New Match' : 'New Game'}</span>
-                    <span className="text-[10px] font-medium text-muted-foreground">
-                      {hasActiveCustomSetup ? 'Uses Custom Pool' : 'Standard Pool'}
-                    </span>
-                  </span>
-                </Button>
-              )}
-              {(mode === 'practice' || mode === 'versus') && onCustomizeGame && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onCustomizeGame}
-                  className="h-auto min-w-[92px] px-3 py-2"
-                >
-                  <span className="flex flex-col items-start leading-tight">
-                    <span>Customize</span>
-                    <span className="text-[10px] font-medium text-muted-foreground">
-                      {hasActiveCustomSetup ? 'Edit Custom Pool' : 'Set Up Pool'}
-                    </span>
-                  </span>
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onAchievements}
-                aria-label="Achievements"
-                title="Achievements"
-                className={cn(
-                  'h-[46px] w-[46px] border transition-colors',
-                  isAchievementsOpen
-                    ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
-                    : 'border-border bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                )}
-              >
-                <AchievementEggIcon className="h-[18px] w-[18px]" />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {(mode === 'practice' || mode === 'versus') && onCustomizeGame && (
+              <Button variant="outline" size="sm" onClick={onCustomizeGame} className="h-9 px-3">
+                {hasActiveCustomSetup ? 'Edit Setup' : 'Customize'}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onHowToPlay}
-                className={cn(
-                  'border transition-colors',
-                  isHowToPlayOpen
-                    ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
-                    : 'border-primary/30 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
-                )}
-              >
-                <svg className="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                How to Play
+            )}
+            {(mode === 'practice' || mode === 'versus') && onNewGame && (
+              <Button variant="outline" size="sm" onClick={onNewGame} className="h-9 px-3">
+                {mode === 'versus' ? 'New Match' : 'New Game'}
               </Button>
-            </div>
+            )}
           </div>
         </div>
       </div>

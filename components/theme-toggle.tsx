@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Moon, Settings2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
@@ -33,7 +34,19 @@ function FlashbangIcon({ className }: { className?: string }) {
   )
 }
 
-export function ThemeToggle() {
+export interface ThemeToggleAction {
+  label: string
+  description: string
+  onClick: () => void
+  icon?: ReactNode
+  isActive?: boolean
+}
+
+interface ThemeToggleProps {
+  actions?: ThemeToggleAction[]
+}
+
+export function ThemeToggle({ actions = [] }: ThemeToggleProps) {
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -167,6 +180,48 @@ export function ThemeToggle() {
               />
             </button>
           </div>
+          {actions.length > 0 && (
+            <div className="mt-3 rounded-xl border border-border/70 bg-secondary/20 p-2">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Help
+              </p>
+              <div className="mt-2 flex flex-col gap-1">
+                {actions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => {
+                      action.onClick()
+                      setIsSettingsOpen(false)
+                    }}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors',
+                      action.isActive
+                        ? 'border-primary/35 bg-primary/10 text-foreground'
+                        : 'border-border/60 bg-background/55 text-foreground hover:bg-background/80'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border',
+                        action.isActive
+                          ? 'border-primary/30 bg-primary/15 text-primary'
+                          : 'border-border/70 bg-secondary/30 text-muted-foreground'
+                      )}
+                    >
+                      {action.icon}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{action.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {action.description}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-2.5">
             <p className="text-sm font-medium text-foreground">Feedback</p>
             <p className="mt-1 text-[11px] text-muted-foreground">

@@ -8,6 +8,7 @@ import { ResultsModal } from './results-modal'
 import { HowToPlayModal } from './how-to-play-modal'
 import { GuessDetailsModal } from './guess-details-modal'
 import { AchievementsModal } from './achievements-modal'
+import { FallingParticlesOverlay } from './falling-particles-overlay'
 import {
   buildAttemptIntersections,
   getIntersectionLabelClass,
@@ -1306,11 +1307,13 @@ function getEasterEggDefinition(gameId: number): EasterEggDefinition | null {
 
 function EasterEggCelebration({ burstId, renderPiece, particles }: ActiveEasterEgg) {
   return (
-    <div
-      data-testid="easter-egg-celebration"
-      className="pointer-events-none fixed inset-0 z-[80] overflow-hidden"
-    >
-      <style>{`
+    <FallingParticlesOverlay
+      burstId={burstId}
+      particles={particles}
+      dataTestId="easter-egg-celebration"
+      zIndexClassName="z-[80]"
+      animationName="easter-egg-fall"
+      animationStyles={`
         @keyframes easter-egg-fall {
           0% {
             transform: translate3d(0, -14vh, 0) rotate(var(--rotation));
@@ -1324,39 +1327,21 @@ function EasterEggCelebration({ burstId, renderPiece, particles }: ActiveEasterE
             opacity: 0.95;
           }
         }
-      `}</style>
-      {particles.map((particle) => {
-        return (
-          <div
-            key={`${burstId}-${particle.id}`}
-            className="absolute top-0"
-            style={{
-              left: particle.left,
-              animationName: 'easter-egg-fall',
-              animationDelay: particle.delay,
-              animationDuration: particle.duration,
-              animationTimingFunction: 'linear',
-              animationFillMode: 'both',
-              willChange: 'transform, opacity',
-              ['--rotation' as string]: particle.rotate,
-              ['--drift' as string]: particle.drift,
-            }}
-          >
-            {renderPiece(particle)}
-          </div>
-        )
-      })}
-    </div>
+      `}
+      renderParticle={renderPiece}
+    />
   )
 }
 
 function PerfectGridCelebration({ burstId, particles }: ActivePerfectCelebration) {
   return (
-    <div
-      data-testid="perfect-grid-celebration"
-      className="pointer-events-none fixed inset-0 z-[90] overflow-hidden"
-    >
-      <style>{`
+    <FallingParticlesOverlay
+      burstId={burstId}
+      particles={particles}
+      dataTestId="perfect-grid-celebration"
+      zIndexClassName="z-[90]"
+      animationName="perfect-grid-fall"
+      animationStyles={`
         @keyframes perfect-grid-fall {
           0% {
             transform: translate3d(0, -12vh, 0) rotate(var(--rotation)) scale(0.9);
@@ -1370,7 +1355,6 @@ function PerfectGridCelebration({ burstId, particles }: ActivePerfectCelebration
             opacity: 0;
           }
         }
-
         @keyframes perfect-grid-banner {
           0% {
             transform: translateY(16px) scale(0.96);
@@ -1389,57 +1373,43 @@ function PerfectGridCelebration({ burstId, particles }: ActivePerfectCelebration
             opacity: 0;
           }
         }
-      `}</style>
-
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(98,212,140,0.14),transparent_52%)]" />
-
-      {particles.map((particle) => (
+      `}
+      background={
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(98,212,140,0.14),transparent_52%)]" />
+      }
+      renderParticle={(particle) => (
         <div
-          key={`${burstId}-${particle.id}`}
-          className="absolute top-0"
+          className="relative"
           style={{
-            left: particle.left,
-            animationName: 'perfect-grid-fall',
-            animationDelay: particle.delay,
-            animationDuration: particle.duration,
-            animationTimingFunction: 'linear',
-            animationFillMode: 'both',
-            ['--rotation' as string]: particle.rotate,
-            ['--drift' as string]: particle.drift,
+            width: particle.size,
+            height: particle.size,
           }}
         >
           <div
-            className="relative"
+            className="absolute inset-0 flex items-center justify-center text-center text-2xl font-black italic leading-none drop-shadow-[0_8px_18px_rgba(0,0,0,0.28)]"
             style={{
-              width: particle.size,
-              height: particle.size,
+              color: particle.variant === 'g-green' ? '#16C23A' : '#F5F7FB',
             }}
           >
-            <div
-              className="absolute inset-0 flex items-center justify-center text-center text-2xl font-black italic leading-none drop-shadow-[0_8px_18px_rgba(0,0,0,0.28)]"
-              style={{
-                color: particle.variant === 'g-green' ? '#16C23A' : '#F5F7FB',
-              }}
-            >
-              G
-            </div>
+            G
           </div>
         </div>
-      ))}
-
-      <div className="absolute inset-x-4 top-14 flex justify-center sm:top-20">
-        <div
-          className="rounded-2xl border border-[#D7B65A]/60 bg-[#11161F]/92 px-5 py-4 text-center shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm"
-          style={{ animation: 'perfect-grid-banner 2600ms ease-out both' }}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#F7D772]">
-            Perfect Grid
-          </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">9/9</p>
-          <p className="mt-1 text-sm text-foreground/75">Clean sweep.</p>
+      )}
+      overlay={
+        <div className="absolute inset-x-4 top-14 flex justify-center sm:top-20">
+          <div
+            className="rounded-2xl border border-[#D7B65A]/60 bg-[#11161F]/92 px-5 py-4 text-center shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+            style={{ animation: 'perfect-grid-banner 2600ms ease-out both' }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#F7D772]">
+              Perfect Grid
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">9/9</p>
+            <p className="mt-1 text-sm text-foreground/75">Clean sweep.</p>
+          </div>
         </div>
-      </div>
-    </div>
+      }
+    />
   )
 }
 

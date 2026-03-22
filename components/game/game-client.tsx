@@ -19,14 +19,16 @@ import { useSearchConfirmPreference } from '@/lib/ui-preferences'
 import { unlockAchievement } from '@/lib/achievements'
 import { EASTER_EGGS, type EasterEggConfig, type EasterEggPieceKind } from '@/lib/easter-eggs'
 import type { Puzzle, CellGuess, Game, Category } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { cn, getTimeUntilNextUtcMidnight } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useAnimationQuality } from '@/hooks/use-animation-quality'
+import { useLoadingState } from '@/hooks/use-loading-state'
 import { useGameModeState } from '@/hooks/use-game-mode-state'
 import { useOverlayState } from '@/hooks/use-overlay-state'
 import { usePracticeSetupState } from '@/hooks/use-practice-setup-state'
 import { usePuzzleState } from '@/hooks/use-puzzle-state'
+import { useVersusMatchState } from '@/hooks/use-versus-match-state'
 import { useVersusSetupState } from '@/hooks/use-versus-setup-state'
 
 const MAX_GUESSES = 9
@@ -1486,24 +1488,6 @@ function getIntersectionLabelClass(label: string): string {
   return 'text-xs'
 }
 
-function getTimeUntilNextUtcMidnight(now = new Date()) {
-  const nextReset = new Date(now)
-  nextReset.setUTCHours(24, 0, 0, 0)
-
-  const diffMs = Math.max(0, nextReset.getTime() - now.getTime())
-  const totalSeconds = Math.floor(diffMs / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-
-  return {
-    hours,
-    minutes,
-    seconds,
-    label: `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`,
-  }
-}
-
 export function GameClient() {
   const skipNextVersusAutoLoadRef = useRef(false)
   const skipNextPracticeAutoLoadRef = useRef(false)
@@ -1559,11 +1543,18 @@ export function GameClient() {
     versusSetupError,
     setVersusSetupError,
   } = useVersusSetupState()
-  const [sessionId, setSessionId] = useState('')
-  const [loadingProgress, setLoadingProgress] = useState(8)
-  const [loadingStage, setLoadingStage] = useState('Warming up the puzzle generator...')
-  const [loadingAttempts, setLoadingAttempts] = useState<LoadingAttempt[]>([])
-  const [dailyResetLabel, setDailyResetLabel] = useState(() => getTimeUntilNextUtcMidnight().label)
+  const {
+    sessionId,
+    setSessionId,
+    loadingProgress,
+    setLoadingProgress,
+    loadingStage,
+    setLoadingStage,
+    loadingAttempts,
+    setLoadingAttempts,
+    dailyResetLabel,
+    setDailyResetLabel,
+  } = useLoadingState<LoadingAttempt>()
   const [activeEasterEgg, setActiveEasterEgg] = useState<ActiveEasterEgg | null>(null)
   const [activePerfectCelebration, setActivePerfectCelebration] =
     useState<ActivePerfectCelebration | null>(null)
@@ -1571,10 +1562,18 @@ export function GameClient() {
   const [activeStealMissSplash, setActiveStealMissSplash] = useState<ActiveStealMissSplash | null>(
     null
   )
-  const [turnTimeLeft, setTurnTimeLeft] = useState<number | null>(null)
-  const [versusRecord, setVersusRecord] = useState<VersusRecord>({ xWins: 0, oWins: 0 })
-  const [pendingFinalSteal, setPendingFinalSteal] = useState<PendingFinalSteal | null>(null)
-  const [lockImpactCell, setLockImpactCell] = useState<number | null>(null)
+  const {
+    turnTimeLeft,
+    setTurnTimeLeft,
+    versusRecord,
+    setVersusRecord,
+    pendingFinalSteal,
+    setPendingFinalSteal,
+    lockImpactCell,
+    setLockImpactCell,
+  } = useVersusMatchState<VersusRecord, PendingFinalSteal>({
+    initialRecord: { xWins: 0, oWins: 0 },
+  })
   const animationQuality = useAnimationQuality(detectAnimationQuality)
   const { enabled: confirmBeforeSelect } = useSearchConfirmPreference()
   const { toast } = useToast()

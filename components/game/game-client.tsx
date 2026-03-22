@@ -9,6 +9,11 @@ import { HowToPlayModal } from './how-to-play-modal'
 import { GuessDetailsModal } from './guess-details-modal'
 import { AchievementsModal } from './achievements-modal'
 import {
+  buildAttemptIntersections,
+  getIntersectionLabelClass,
+  type LoadingAttempt,
+} from './loading-helpers'
+import {
   VersusSetupModal,
   type VersusCategoryFilters,
   type VersusStealRule,
@@ -19,7 +24,7 @@ import { useSearchConfirmPreference } from '@/lib/ui-preferences'
 import { unlockAchievement } from '@/lib/achievements'
 import { EASTER_EGGS, type EasterEggConfig, type EasterEggPieceKind } from '@/lib/easter-eggs'
 import type { Puzzle, CellGuess, Game, Category } from '@/lib/types'
-import { cn, getTimeUntilNextUtcMidnight } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useAnimationQuality } from '@/hooks/use-animation-quality'
@@ -1453,41 +1458,6 @@ interface PuzzleStreamMessage {
   passed?: boolean
 }
 
-interface LoadingIntersection {
-  label: string
-  status: 'pending' | 'passed' | 'failed'
-  validOptionCount?: number
-}
-
-interface LoadingAttempt {
-  attempt: number
-  rows: string[]
-  cols: string[]
-  intersections: LoadingIntersection[]
-  rejectedMessage?: string
-}
-
-function buildAttemptIntersections(rows: string[], cols: string[]): LoadingIntersection[] {
-  return rows.flatMap((row) =>
-    cols.map((col) => ({
-      label: `${row} x ${col}`,
-      status: 'pending' as const,
-    }))
-  )
-}
-
-function getIntersectionLabelClass(label: string): string {
-  if (label.length > 42) {
-    return 'text-[10px]'
-  }
-
-  if (label.length > 30) {
-    return 'text-[11px]'
-  }
-
-  return 'text-xs'
-}
-
 export function GameClient() {
   const skipNextVersusAutoLoadRef = useRef(false)
   const skipNextPracticeAutoLoadRef = useRef(false)
@@ -1553,7 +1523,6 @@ export function GameClient() {
     loadingAttempts,
     setLoadingAttempts,
     dailyResetLabel,
-    setDailyResetLabel,
   } = useLoadingState<LoadingAttempt>()
   const [activeEasterEgg, setActiveEasterEgg] = useState<ActiveEasterEgg | null>(null)
   const [activePerfectCelebration, setActivePerfectCelebration] =
@@ -1683,17 +1652,6 @@ export function GameClient() {
   useEffect(() => {
     setSessionId(getSessionId())
     setVersusRecord(getInitialVersusRecord())
-  }, [])
-
-  useEffect(() => {
-    const updateResetCountdown = () => {
-      setDailyResetLabel(getTimeUntilNextUtcMidnight().label)
-    }
-
-    updateResetCountdown()
-    const timer = setInterval(updateResetCountdown, 1000)
-
-    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {

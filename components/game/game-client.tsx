@@ -12,6 +12,7 @@ import {
   buildAttemptIntersections,
   getIntersectionLabelClass,
   type LoadingAttempt,
+  type LoadingIntersection,
 } from './loading-helpers'
 import {
   VersusSetupModal,

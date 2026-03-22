@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { GameMode } from '@/lib/types'
+
+type GameMode = 'daily' | 'practice' | 'versus'
 
 export function useGameModeState() {
   const [mode, setMode] = useState<GameMode>('daily')

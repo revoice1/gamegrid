@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import type { CellGuess, Puzzle, TicTacToePlayer } from '@/lib/types'
+import type { CellGuess, Puzzle } from '@/lib/types'
+
+type TicTacToePlayer = 'x' | 'o'
 
 type PuzzleStateOptions = {
   cellCount: number

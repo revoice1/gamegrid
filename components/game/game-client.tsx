@@ -23,6 +23,11 @@ import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useAnimationQuality } from '@/hooks/use-animation-quality'
+import { useGameModeState } from '@/hooks/use-game-mode-state'
+import { useOverlayState } from '@/hooks/use-overlay-state'
+import { usePracticeSetupState } from '@/hooks/use-practice-setup-state'
+import { usePuzzleState } from '@/hooks/use-puzzle-state'
+import { useVersusSetupState } from '@/hooks/use-versus-setup-state'
 
 const MAX_GUESSES = 9
 const WINNING_LINES = [
@@ -1502,26 +1507,58 @@ function getTimeUntilNextUtcMidnight(now = new Date()) {
 export function GameClient() {
   const skipNextVersusAutoLoadRef = useRef(false)
   const skipNextPracticeAutoLoadRef = useRef(false)
-  const [mode, setMode] = useState<GameMode>('daily')
-  const [loadedPuzzleMode, setLoadedPuzzleMode] = useState<GameMode | null>(null)
-  const [puzzle, setPuzzle] = useState<Puzzle | null>(null)
-  const [guesses, setGuesses] = useState<(CellGuess | null)[]>(Array(9).fill(null))
-  const [guessesRemaining, setGuessesRemaining] = useState(MAX_GUESSES)
-  const [currentPlayer, setCurrentPlayer] = useState<TicTacToePlayer>('x')
-  const [stealableCell, setStealableCell] = useState<number | null>(null)
-  const [winner, setWinner] = useState<TicTacToePlayer | null>(null)
-  const [selectedCell, setSelectedCell] = useState<number | null>(null)
+  const { mode, setMode, loadedPuzzleMode, setLoadedPuzzleMode } = useGameModeState()
+  const {
+    puzzle,
+    setPuzzle,
+    guesses,
+    setGuesses,
+    guessesRemaining,
+    setGuessesRemaining,
+    currentPlayer,
+    setCurrentPlayer,
+    stealableCell,
+    setStealableCell,
+    winner,
+    setWinner,
+    selectedCell,
+    setSelectedCell,
+  } = usePuzzleState({ cellCount: 9, maxGuesses: MAX_GUESSES })
   const [isLoading, setIsLoading] = useState(true)
-  const [showResults, setShowResults] = useState(false)
-  const [showHowToPlay, setShowHowToPlay] = useState(false)
-  const [showAchievements, setShowAchievements] = useState(false)
-  const [showPracticeSetup, setShowPracticeSetup] = useState(false)
-  const [showPracticeStartOptions, setShowPracticeStartOptions] = useState(false)
-  const [practiceSetupError, setPracticeSetupError] = useState<string | null>(null)
-  const [showVersusSetup, setShowVersusSetup] = useState(false)
-  const [showVersusStartOptions, setShowVersusStartOptions] = useState(false)
-  const [versusSetupError, setVersusSetupError] = useState<string | null>(null)
-  const [detailCell, setDetailCell] = useState<number | null>(null)
+  const {
+    showResults,
+    setShowResults,
+    showHowToPlay,
+    setShowHowToPlay,
+    showAchievements,
+    setShowAchievements,
+    detailCell,
+    setDetailCell,
+  } = useOverlayState()
+  const {
+    practiceCategoryFilters,
+    setPracticeCategoryFilters,
+    showPracticeSetup,
+    setShowPracticeSetup,
+    showPracticeStartOptions,
+    setShowPracticeStartOptions,
+    practiceSetupError,
+    setPracticeSetupError,
+  } = usePracticeSetupState()
+  const {
+    versusCategoryFilters,
+    setVersusCategoryFilters,
+    versusStealRule,
+    setVersusStealRule,
+    versusTimerOption,
+    setVersusTimerOption,
+    showVersusSetup,
+    setShowVersusSetup,
+    showVersusStartOptions,
+    setShowVersusStartOptions,
+    versusSetupError,
+    setVersusSetupError,
+  } = useVersusSetupState()
   const [sessionId, setSessionId] = useState('')
   const [loadingProgress, setLoadingProgress] = useState(8)
   const [loadingStage, setLoadingStage] = useState('Warming up the puzzle generator...')
@@ -1534,10 +1571,6 @@ export function GameClient() {
   const [activeStealMissSplash, setActiveStealMissSplash] = useState<ActiveStealMissSplash | null>(
     null
   )
-  const [practiceCategoryFilters, setPracticeCategoryFilters] = useState<VersusCategoryFilters>({})
-  const [versusCategoryFilters, setVersusCategoryFilters] = useState<VersusCategoryFilters>({})
-  const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('lower')
-  const [versusTimerOption, setVersusTimerOption] = useState<VersusTurnTimerOption>('none')
   const [turnTimeLeft, setTurnTimeLeft] = useState<number | null>(null)
   const [versusRecord, setVersusRecord] = useState<VersusRecord>({ xWins: 0, oWins: 0 })
   const [pendingFinalSteal, setPendingFinalSteal] = useState<PendingFinalSteal | null>(null)

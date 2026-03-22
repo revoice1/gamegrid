@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { GridCell } from './grid-cell'
 import { CategoryHeaderSimple } from './category-header'
+import type { IndexBadgeSlot } from '@/lib/route-index'
 import type { Category, CellGuess, PuzzleCellMetadata } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +40,9 @@ const WINNING_LINES = [
   [0, 4, 8],
   [2, 4, 6],
 ] as const
+
+const COLUMN_CLUE_SLOTS: IndexBadgeSlot[] = ['col-0', 'col-1', 'col-2']
+const ROW_CLUE_SLOTS: IndexBadgeSlot[] = ['row-0', 'row-1', 'row-2']
 
 function getWinningOwner(guesses: (CellGuess | null)[]) {
   for (const [a, b, c] of WINNING_LINES) {
@@ -289,12 +293,21 @@ export function GameGrid({
         </div>
 
         {colCategories.map((cat, i) => (
-          <CategoryHeaderSimple key={`col-${i}`} category={cat} orientation="col" />
+          <CategoryHeaderSimple
+            key={`col-${i}`}
+            category={cat}
+            orientation="col"
+            clueSlot={COLUMN_CLUE_SLOTS[i]}
+          />
         ))}
 
         {rowCategories.map((rowCat, rowIndex) => (
           <div key={`row-${rowIndex}`} className="contents">
-            <CategoryHeaderSimple category={rowCat} orientation="row" />
+            <CategoryHeaderSimple
+              category={rowCat}
+              orientation="row"
+              clueSlot={ROW_CLUE_SLOTS[rowIndex]}
+            />
 
             {colCategories.map((_, colIndex) => {
               const cellIndex = rowIndex * 3 + colIndex

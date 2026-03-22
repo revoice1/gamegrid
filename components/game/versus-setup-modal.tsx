@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { IndexBadge } from '@/components/index-badge'
 import type { CategoryType } from '@/lib/types'
 
 type VersusFamilyKey = Extract<
@@ -404,6 +405,7 @@ export function VersusSetupModal({
             {applyDisabledReason && (
               <p className="text-xs font-medium text-amber-300">{applyDisabledReason}</p>
             )}
+            <IndexBadge slot="setup" className="mt-2" />
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={resetToDefault}>

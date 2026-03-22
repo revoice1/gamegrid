@@ -9,6 +9,7 @@ import {
   mergeUnlockedAchievementImages,
 } from '@/lib/achievements'
 import { EASTER_EGGS } from '@/lib/easter-eggs'
+import { getIndexBadge, ROUTE_ACHIEVEMENT_ID } from '@/lib/route-index'
 import { useEffect, useState } from 'react'
 
 interface AchievementsModalProps {
@@ -75,6 +76,7 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
   const unlockedCount = ACHIEVEMENTS.filter((achievement) =>
     unlockedAchievementSet.has(achievement.id)
   ).length
+  const achievementsClue = getIndexBadge('achievements')
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -98,6 +100,11 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
               const isUnlocked = unlockedAchievementSet.has(achievement.id)
               const imageUrl = achievementImageMap.get(achievement.id)
               const isPerfectGrid = achievement.id === 'perfect-grid'
+              const isSecretRouteAchievement = achievement.id === ROUTE_ACHIEVEMENT_ID
+              const isHiddenLocked = achievement.hidden && !isUnlocked
+              const displayTitle = isHiddenLocked ? '???' : achievement.title
+              const displayDescription = isHiddenLocked ? null : achievement.description
+              const showDescription = isUnlocked && Boolean(displayDescription)
 
               return (
                 <div
@@ -121,6 +128,18 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
                       >
                         {isUnlocked && imageUrl ? (
                           <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                        ) : isSecretRouteAchievement ? (
+                          <div
+                            className={cn(
+                              'flex h-9 min-w-[38px] items-center justify-center rounded-md border px-1 font-mono text-[15px] font-black uppercase tracking-[0.08em]',
+                              isUnlocked
+                                ? 'border-primary/35 bg-primary/14 text-primary'
+                                : 'border-border/80 bg-background/75 text-muted-foreground'
+                            )}
+                            aria-label={`Secret clue ${achievementsClue.index}${achievementsClue.letter}`}
+                          >
+                            {`${achievementsClue.index}${achievementsClue.letter}`}
+                          </div>
                         ) : isUnlocked && isPerfectGrid ? (
                           <svg
                             viewBox="0 0 24 24"
@@ -145,7 +164,7 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
                               isUnlocked ? 'text-primary' : 'text-muted-foreground'
                             )}
                           >
-                            {achievement.title.slice(0, 2)}
+                            {displayTitle.slice(0, 2)}
                           </span>
                         )}
                       </div>
@@ -156,12 +175,10 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
                             isUnlocked ? 'text-foreground' : 'text-muted-foreground'
                           )}
                         >
-                          {achievement.title}
+                          {displayTitle}
                         </p>
-                        {isUnlocked && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {achievement.description}
-                          </p>
+                        {showDescription && (
+                          <p className="mt-1 text-xs text-muted-foreground">{displayDescription}</p>
                         )}
                       </div>
                     </div>

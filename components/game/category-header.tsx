@@ -12,12 +12,15 @@ import {
   getCategoryTypeLabel,
   getFallbackCategoryDefinition,
 } from '@/lib/category-definition-content'
+import { IndexBadge } from '@/components/index-badge'
+import type { IndexBadgeSlot } from '@/lib/route-index'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/lib/types'
 
 interface CategoryHeaderProps {
   category: Category
   orientation: 'row' | 'col'
+  clueSlot?: IndexBadgeSlot
 }
 
 function getCategoryDisplayName(category: Category) {
@@ -43,11 +46,13 @@ interface CategoryDefinitionResponse {
 function CategoryDefinitionDialog({
   category,
   displayName,
+  clueSlot,
   open,
   onOpenChange,
 }: {
   category: Category
   displayName: string
+  clueSlot?: IndexBadgeSlot
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -80,6 +85,11 @@ function CategoryDefinitionDialog({
 
         <div className="rounded-2xl border border-border/70 bg-secondary/35 p-4">
           <p className="text-sm leading-6 text-foreground/90">{definition.description}</p>
+          {clueSlot && (
+            <div className="mt-4 flex justify-end">
+              <IndexBadge slot={clueSlot} />
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -106,7 +116,7 @@ export function CategoryHeader({ category, orientation }: CategoryHeaderProps) {
   )
 }
 
-export function CategoryHeaderSimple({ category, orientation }: CategoryHeaderProps) {
+export function CategoryHeaderSimple({ category, orientation, clueSlot }: CategoryHeaderProps) {
   const displayName = getCategoryDisplayName(category)
   const [isOpen, setIsOpen] = useState(false)
 
@@ -147,6 +157,7 @@ export function CategoryHeaderSimple({ category, orientation }: CategoryHeaderPr
       <CategoryDefinitionDialog
         category={category}
         displayName={displayName}
+        clueSlot={clueSlot}
         open={isOpen}
         onOpenChange={setIsOpen}
       />

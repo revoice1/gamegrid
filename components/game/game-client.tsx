@@ -29,6 +29,7 @@ import {
 } from '@/lib/ui-preferences'
 import { unlockAchievement } from '@/lib/achievements'
 import { EASTER_EGGS, type EasterEggConfig, type EasterEggPieceKind } from '@/lib/easter-eggs'
+import { ROUTE_ACHIEVEMENT_ID, ROUTE_PENDING_TOAST_KEY } from '@/lib/route-index'
 import type { Puzzle, CellGuess, Game, Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
@@ -1753,6 +1754,31 @@ export function GameClient() {
       return nextRecord
     })
   }, [mode, puzzle, winner, setVersusRecord])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const pendingAchievementId = window.sessionStorage.getItem(ROUTE_PENDING_TOAST_KEY)
+    if (pendingAchievementId !== ROUTE_ACHIEVEMENT_ID) {
+      return
+    }
+
+    window.sessionStorage.removeItem(ROUTE_PENDING_TOAST_KEY)
+    const result = unlockAchievement(ROUTE_ACHIEVEMENT_ID)
+
+    if (!result.achievement) {
+      return
+    }
+
+    toast({
+      title: result.unlocked
+        ? `Achievement Unlocked: ${result.achievement.title}`
+        : `${result.achievement.title} Found`,
+      description: result.achievement.description,
+    })
+  }, [toast])
 
   useEffect(() => {
     if (!activeEasterEgg) {

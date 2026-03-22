@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Moon, Settings2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { IndexBadge } from '@/components/index-badge'
 import { cn } from '@/lib/utils'
 import {
   useAnimationPreference,
@@ -260,6 +261,9 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
               >
                 Request Feature
               </a>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <IndexBadge slot="settings" />
             </div>
           </div>
         </div>

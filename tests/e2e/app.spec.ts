@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { ACHIEVEMENTS } from '@/lib/achievements'
 import { EASTER_EGGS } from '@/lib/easter-eggs'
+import { ROUTE_SLUG } from '@/lib/route-index'
 
 const fakePuzzle = {
   id: 'test-puzzle',
@@ -708,11 +709,37 @@ test('achievements modal shows locked and unlocked states correctly', async ({ p
   await expect(achievementsDialog.getByText(`1/${ACHIEVEMENTS.length}`)).toBeVisible()
   await expect(achievementsDialog.getByText('Perfect Grid', { exact: true })).toBeVisible()
   await expect(achievementsDialog.getByText('Finish a board with a flawless 9/9.')).toBeVisible()
+  await expect(achievementsDialog.getByText('???', { exact: true })).toBeVisible()
   await expect(achievementsDialog.getByText('Breakfast Defender', { exact: true })).toBeVisible()
   await expect(
     achievementsDialog.getByText('Unlocked by using its hidden trigger game as a correct answer.')
   ).toHaveCount(0)
   await achievementsDialog.getByRole('button', { name: 'Close' }).first().click()
+})
+
+test('indexed route unlocks the hidden route achievement', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Achievements' }).click()
+  const achievementsDialog = page.getByRole('dialog')
+  await expect(achievementsDialog.getByText(ROUTE_SLUG, { exact: true })).toHaveCount(0)
+  await expect(achievementsDialog.getByText('???', { exact: true })).toBeVisible()
+  await achievementsDialog.getByRole('button', { name: 'Close' }).first().click()
+
+  await page.goto(`/${ROUTE_SLUG}`)
+  await expect(page.getByText(ROUTE_SLUG, { exact: true })).toBeVisible()
+  await expect(page.getByText('...you found me')).toBeVisible()
+  await page.waitForURL('**/')
+  const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
+  await expect(notifications.getByText(`Achievement Unlocked: ${ROUTE_SLUG}`)).toBeVisible()
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Achievements' }).click()
+  await expect(achievementsDialog.getByText(ROUTE_SLUG, { exact: true })).toBeVisible()
+  await expect(
+    achievementsDialog.getByText('Found the hidden route and slipped back out through the glitch.')
+  ).toBeVisible()
 })
 
 test('correct easter egg answer unlocks achievement toast and collection entry', async ({

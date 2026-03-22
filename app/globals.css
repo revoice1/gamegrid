@@ -34,6 +34,8 @@
   --chart-4: oklch(0.75 0.18 80);
   --chart-5: oklch(0.55 0.22 25);
   --radius: 0.5rem;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.18, 1.15, 0.3, 1);
 
   /* Custom game colors */
   --cell-empty: oklch(0.96 0.006 250);

@@ -22,6 +22,7 @@ import type { Puzzle, CellGuess, Game, Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
+import { useAnimationQuality } from '@/hooks/use-animation-quality'
 
 const MAX_GUESSES = 9
 const WINNING_LINES = [
@@ -428,19 +429,19 @@ function StealShowdownOverlay({
       </div>
       <style jsx>{`
         .showdown-shell {
-          animation: showdown-shell-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
+          animation: showdown-shell-in 320ms var(--ease-spring);
         }
 
         .showdown-panel-left {
-          animation: showdown-panel-left 520ms cubic-bezier(0.22, 1, 0.36, 1);
+          animation: showdown-panel-left 520ms var(--ease-spring);
         }
 
         .showdown-panel-right {
-          animation: showdown-panel-right 520ms cubic-bezier(0.22, 1, 0.36, 1);
+          animation: showdown-panel-right 520ms var(--ease-spring);
         }
 
         .showdown-vs {
-          animation: showdown-vs-pop 420ms cubic-bezier(0.22, 1, 0.36, 1);
+          animation: showdown-vs-pop 420ms var(--ease-spring);
         }
 
         @keyframes showdown-shell-in {
@@ -506,7 +507,7 @@ function StealMissSplash({ burstId }: ActiveStealMissSplash) {
         .steal-miss-splash {
           font-size: clamp(2.8rem, 10vw, 6.5rem);
           line-height: 1;
-          animation: steal-miss-hit 700ms cubic-bezier(0.18, 1.15, 0.3, 1);
+          animation: steal-miss-hit 700ms var(--ease-bounce);
         }
 
         @keyframes steal-miss-hit {
@@ -1541,7 +1542,7 @@ export function GameClient() {
   const [versusRecord, setVersusRecord] = useState<VersusRecord>({ xWins: 0, oWins: 0 })
   const [pendingFinalSteal, setPendingFinalSteal] = useState<PendingFinalSteal | null>(null)
   const [lockImpactCell, setLockImpactCell] = useState<number | null>(null)
-  const [animationQuality, setAnimationQuality] = useState<AnimationQuality>('high')
+  const animationQuality = useAnimationQuality(detectAnimationQuality)
   const { enabled: confirmBeforeSelect } = useSearchConfirmPreference()
   const { toast } = useToast()
 
@@ -1650,7 +1651,6 @@ export function GameClient() {
   useEffect(() => {
     setSessionId(getSessionId())
     setVersusRecord(getInitialVersusRecord())
-    setAnimationQuality(detectAnimationQuality())
   }, [])
 
   useEffect(() => {

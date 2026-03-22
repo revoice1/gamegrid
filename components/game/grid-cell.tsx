@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { usePulse } from '@/hooks/use-pulse'
 import { cn } from '@/lib/utils'
 import type { CellGuess, PuzzleCellMetadata } from '@/lib/types'
 import Image from 'next/image'
@@ -65,7 +65,10 @@ export function GridCell({
           ? 'steal'
           : null
   const showGamePointState = cellAlarmState === 'game-point'
-  const [alarmPulseOn, setAlarmPulseOn] = useState(false)
+  const alarmPulseOn = usePulse(
+    Boolean(cellAlarmState),
+    cellAlarmState === 'game-point' ? 700 : 620
+  )
   const possibleLabel = metadata
     ? metadata.validOptionCount >= 1000
       ? `${(metadata.validOptionCount / 1000).toFixed(1)}k`
@@ -89,23 +92,6 @@ export function GridCell({
               : '0 0 0 1px rgba(251,191,36,0.24), 0 0 18px rgba(251,191,36,0.16), 0 0 30px rgba(251,191,36,0.08)',
           }
         : undefined
-
-  useEffect(() => {
-    if (!cellAlarmState) {
-      setAlarmPulseOn(false)
-      return
-    }
-
-    setAlarmPulseOn(true)
-    const interval = window.setInterval(
-      () => {
-        setAlarmPulseOn((current) => !current)
-      },
-      cellAlarmState === 'game-point' ? 700 : 620
-    )
-
-    return () => window.clearInterval(interval)
-  }, [cellAlarmState])
 
   return (
     <button
@@ -251,7 +237,7 @@ export function GridCell({
       )}
       <style jsx>{`
         .lock-impact {
-          animation: lock-slam 620ms cubic-bezier(0.22, 1, 0.36, 1);
+          animation: lock-slam 620ms var(--ease-spring);
         }
 
         @keyframes lock-slam {

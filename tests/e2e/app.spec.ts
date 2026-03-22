@@ -664,6 +664,8 @@ test('toast appears for duplicate guess rejection', async ({ page }) => {
   await page.getByPlaceholder('Search for a video game...').fill('wo')
   await expect(page.getByText('World of Warcraft')).toBeVisible()
   await page.getByRole('button', { name: /World of Warcraft/i }).click()
+  await expect(page.getByText('Confirm this answer?')).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm World of Warcraft' }).click()
 
   const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
   await expect(notifications.getByText('Game already used', { exact: true })).toBeVisible()
@@ -776,6 +778,8 @@ test('correct easter egg answer unlocks achievement toast and collection entry',
   await page.getByPlaceholder('Search for a video game...').fill('ha')
   await expect(page.getByText('Halo 2')).toBeVisible()
   await page.getByRole('button', { name: /Halo 2/i }).click()
+  await expect(page.getByText('Confirm this answer?')).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm Halo 2' }).click()
 
   const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
   await expect(notifications.getByText('Achievement Unlocked: Finish the Fight')).toBeVisible()

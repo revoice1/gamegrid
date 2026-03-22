@@ -113,7 +113,7 @@ const DISQUALIFYING_KEYWORDS = new Set([
 ])
 
 export interface CategoryFamily {
-  key: 'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective'
+  key: 'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective' | 'tag'
   source: 'dynamic' | 'fallback'
   categories: Category[]
 }
@@ -235,6 +235,32 @@ const CUSTOM_FALLBACK_PERSPECTIVES: Category[] = [
   { type: 'perspective', id: 7, name: 'Virtual Reality', slug: 'virtual-reality' },
 ]
 
+const CUSTOM_FALLBACK_TAGS: Category[] = [
+  { type: 'tag', id: 'tag-metroidvania', name: 'Metroidvania', slug: 'metroidvania' },
+  {
+    type: 'tag',
+    id: 'tag-female-protagonist',
+    name: 'Female Protagonist',
+    slug: 'female-protagonist',
+  },
+  {
+    type: 'tag',
+    id: 'tag-platform-exclusive',
+    name: 'Platform Exclusive',
+    slug: 'platform-exclusive',
+  },
+  { type: 'tag', id: 'tag-roguex', name: 'Rogue-Like/Lite', slug: 'roguex' },
+  { type: 'tag', id: 'tag-sequel', name: 'Sequel', slug: 'sequel' },
+]
+
+const CURATED_TAG_KEYWORD_IDS: Partial<Record<string, number[]>> = {
+  metroidvania: [477],
+  'female-protagonist': [962],
+  'platform-exclusive': [4239],
+  roguex: [416, 17292, 26332, 41781, 46224, 27419, 27688, 26705],
+  sequel: [2071],
+}
+
 const FALLBACK_PLATFORMS: Category[] = [
   { type: 'platform', id: 59, name: 'Atari 2600', slug: 'atari2600' },
   { type: 'platform', id: 18, name: 'Nintendo Entertainment System', slug: 'nes' },
@@ -353,6 +379,24 @@ const TAG_ALIAS_GROUPS: Record<string, string[]> = {
   exploration: ['exploration', 'open world'],
   'third person': ['third person'],
   'first person': ['first person'],
+  'female protagonist': ['female protagonist'],
+  metroidvania: ['metroidvania'],
+  'platform exclusive': ['platform exclusive'],
+  roguex: [
+    'roguelike',
+    'rogue like',
+    'rogue-lite',
+    'rogue lite',
+    'roguelite',
+    'action roguelike',
+    'action roguelite',
+    'traditional roguelike',
+    'roguelike deckbuilder',
+    'roguelike horror',
+    'roguelike platform',
+    'roguevania',
+  ],
+  sequel: ['sequel'],
 }
 
 const PLATFORM_ALIAS_GROUPS: Record<string, string[]> = {
@@ -856,6 +900,14 @@ export async function getVersusCategoryFamilies(): Promise<CategoryFamily[]> {
       ...family,
       categories: [...family.categories].sort((left, right) => left.name.localeCompare(right.name)),
     }
+  })
+
+  families.push({
+    key: 'tag',
+    source: 'fallback',
+    categories: [...CUSTOM_FALLBACK_TAGS].sort((left, right) =>
+      left.name.localeCompare(right.name)
+    ),
   })
 
   versusCategoryFamiliesCache = {
@@ -1400,8 +1452,16 @@ function matchesGameMode(values: string[] | undefined, target: string): boolean 
   return false
 }
 
-function matchesTagBucket(game: Game, categoryName: string): boolean {
-  const aliases = getTagAliases(categoryName)
+function matchesTagBucket(game: Game, category: Category): boolean {
+  const keywordIds = CURATED_TAG_KEYWORD_IDS[category.slug ?? '']
+  if (keywordIds?.length) {
+    const gameKeywordIds = new Set((game.tags ?? []).map((tag) => tag.id))
+    if (keywordIds.some((keywordId) => gameKeywordIds.has(keywordId))) {
+      return true
+    }
+  }
+
+  const aliases = getTagAliases(category.name)
   const sources = [
     ...(game.igdb?.game_modes ?? []),
     ...(game.igdb?.themes ?? []),
@@ -1447,7 +1507,7 @@ export function igdbGameMatchesCategory(game: Game, category: Category): boolean
     case 'perspective':
       return matchesByName(game.igdb?.player_perspectives, category.name)
     case 'tag':
-      return matchesTagBucket(game, category.name)
+      return matchesTagBucket(game, category)
     default:
       return false
   }

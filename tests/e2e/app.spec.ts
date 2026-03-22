@@ -332,6 +332,31 @@ test('versus mode shows start options and opens setup controls', async ({ page }
   await expect(page.getByRole('button', { name: 'Reset to Default' })).toBeVisible()
 })
 
+test('practice setup tag family supports label toggles, check all, and reset to default', async ({
+  page,
+}) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Practice' }).click()
+  await page.getByRole('button', { name: 'Custom Puzzle' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Practice Setup' })).toBeVisible()
+
+  const tagsSection = page.locator('section').filter({ hasText: 'Tags' }).first()
+  await tagsSection.getByRole('button', { name: /show/i }).click()
+  await expect(tagsSection.getByText('0 of 5 enabled')).toBeVisible()
+
+  await tagsSection.getByText('Metroidvania').click()
+  await expect(tagsSection.getByText('1 of 5 enabled')).toBeVisible()
+
+  await tagsSection.getByRole('button', { name: 'Check All', exact: true }).click()
+  await expect(tagsSection.getByText('All 5 enabled')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Reset to Default' }).click()
+  await expect(tagsSection.getByText('0 of 5 enabled')).toBeVisible()
+})
+
 test('mode switching across daily practice and versus stays responsive', async ({ page }) => {
   await resetStorage(page)
   await page.goto('/')

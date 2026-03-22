@@ -15,7 +15,7 @@ import type { CategoryType } from '@/lib/types'
 
 type VersusFamilyKey = Extract<
   CategoryType,
-  'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective'
+  'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective' | 'tag'
 >
 
 export interface VersusCategoryFamilyOption {
@@ -63,6 +63,7 @@ const FAMILY_LABELS: Record<VersusFamilyKey, string> = {
   game_mode: 'Modes',
   theme: 'Themes',
   perspective: 'Perspectives',
+  tag: 'Tags',
 }
 
 export function VersusSetupModal({
@@ -131,6 +132,15 @@ export function VersusSetupModal({
       .map((category) => category.id)
   }
 
+  const hasSameSelection = (left: string[], right: string[]) => {
+    if (left.length !== right.length) {
+      return false
+    }
+
+    const leftSet = new Set(left)
+    return right.every((value) => leftSet.has(value))
+  }
+
   const getEffectiveSelection = (family: VersusCategoryFamilyOption) => {
     return draftFilters[family.key] ?? getDefaultSelection(family)
   }
@@ -155,7 +165,7 @@ export function VersusSetupModal({
         return current
       }
 
-      if (nextValues.length === family.categories.length) {
+      if (hasSameSelection(nextValues, getDefaultSelection(family))) {
         const { [familyKey]: removed, ...rest } = current
         void removed
         return rest
@@ -168,11 +178,25 @@ export function VersusSetupModal({
     })
   }
 
-  const clearFamily = (familyKey: VersusFamilyKey) => {
+  const checkFamily = (familyKey: VersusFamilyKey) => {
     setDraftFilters((current) => {
-      const { [familyKey]: removed, ...rest } = current
-      void removed
-      return rest
+      const family = families.find((entry) => entry.key === familyKey)
+      if (!family) {
+        return current
+      }
+
+      const nextValues = family.categories.map((category) => category.id)
+
+      if (hasSameSelection(nextValues, getDefaultSelection(family))) {
+        const { [familyKey]: removed, ...rest } = current
+        void removed
+        return rest
+      }
+
+      return {
+        ...current,
+        [familyKey]: nextValues,
+      }
     })
   }
 
@@ -211,7 +235,7 @@ export function VersusSetupModal({
     for (const family of families) {
       const selected = getEffectiveSelection(family)
 
-      if (selected.length < family.categories.length) {
+      if (!hasSameSelection(selected, getDefaultSelection(family))) {
         nextFilters[family.key] = selected
       }
     }
@@ -338,7 +362,7 @@ export function VersusSetupModal({
                         Uncheck All
                       </Button>
                       {isCustom && (
-                        <Button variant="ghost" size="sm" onClick={() => clearFamily(family.key)}>
+                        <Button variant="ghost" size="sm" onClick={() => checkFamily(family.key)}>
                           Check All
                         </Button>
                       )}
@@ -348,18 +372,20 @@ export function VersusSetupModal({
                   {isExpanded && (
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {family.categories.map((category) => (
-                        <div
+                        <label
                           key={`${family.key}-${category.id}`}
-                          className="flex items-center gap-3 rounded-xl border border-border/70 bg-background/40 px-3 py-2 text-sm"
+                          htmlFor={`${family.key}-${category.id}`}
+                          className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/90 bg-background/65 px-3 py-2 text-sm transition-colors hover:bg-background/85"
                         >
                           <Checkbox
+                            id={`${family.key}-${category.id}`}
                             checked={selected.has(category.id)}
                             onCheckedChange={(checked) =>
                               toggleCategory(family.key, category.id, checked === true)
                             }
                           />
                           <span className="text-foreground">{category.name}</span>
-                        </div>
+                        </label>
                       ))}
                     </div>
                   )}

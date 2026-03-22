@@ -79,6 +79,19 @@ const GAME_MODE_DESCRIPTIONS: Partial<Record<string, string>> = {
     'A competitive mode where many players enter the same match and play until one player or team remains.',
 }
 
+const TAG_DESCRIPTIONS: Partial<Record<string, string>> = {
+  'female-protagonist':
+    'A tag for games whose primary playable lead is a female protagonist. It is about the central player character, not just the broader cast.',
+  metroidvania:
+    'A tag for exploration-driven action games built around interconnected spaces, gated progression, backtracking, and unlocking new traversal abilities over time.',
+  'platform-exclusive':
+    'A tag for games closely identified with a specific platform release ecosystem rather than broad simultaneous availability across many platforms.',
+  roguex:
+    'A catch-all GameGrid tag for roguelike, roguelite, and closely related run-based designs. These games usually emphasize repeat attempts, procedural variation, and progress or adaptation across runs.',
+  sequel:
+    'A tag for games that continue, follow, or build directly on an earlier game or series entry.',
+}
+
 const TYPE_LABELS: Record<CategoryType, string> = {
   platform: 'Platform',
   genre: 'Genre',
@@ -111,6 +124,16 @@ function getMappedDescription(
   return mapping[key] ?? fallback
 }
 
+function getDecadeRangeLabel(category: Category): string | null {
+  const decadeStart = Number.parseInt(String(category.id), 10)
+
+  if (!Number.isFinite(decadeStart)) {
+    return null
+  }
+
+  return `${decadeStart}-${decadeStart + 9}`
+}
+
 export function getCategoryTypeLabel(type: CategoryType): string {
   return TYPE_LABELS[type]
 }
@@ -118,7 +141,7 @@ export function getCategoryTypeLabel(type: CategoryType): string {
 export function getFallbackCategoryDefinition(category: Category): CategoryDefinitionContent {
   if (category.type === 'platform') {
     return {
-      description: `${category.name} refers to games released for that hardware platform or system family. Ports, originals, and platform-specific versions can all qualify when they were released there.`,
+      description: `${category.name} is a platform category. A game qualifies if it had an official release on that hardware or within that platform family, including ports and platform-specific versions.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -129,7 +152,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         GENRE_DESCRIPTIONS,
         category,
-        `${category.name} is a genre classification used to describe a game’s dominant style of play.`
+        `${category.name} is a genre classification used to describe a game's dominant style of play.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -173,8 +196,12 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
   }
 
   if (category.type === 'decade') {
+    const rangeLabel = getDecadeRangeLabel(category)
+
     return {
-      description: `${category.name} means games originally released during that ten-year span, based on their release date rather than later ports or re-releases.`,
+      description: rangeLabel
+        ? `${category.name} covers games originally released from ${rangeLabel}. This is based on the game's original release window, not later ports, remasters, or re-releases.`
+        : `${category.name} covers games originally released during that ten-year span, based on the game's original release window rather than later ports, remasters, or re-releases.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -182,7 +209,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
   if (category.type === 'developer') {
     return {
-      description: `${category.name} means the studio or team that developed the game itself.`,
+      description: `${category.name} refers to the studio or development team that made the game. In GameGrid, this category is about authorship rather than release timing, platforms, or publishing ownership.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -190,7 +217,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
   if (category.type === 'publisher') {
     return {
-      description: `${category.name} means the company that published or distributed the game.`,
+      description: `${category.name} refers to the company responsible for publishing or distributing the game. This is about release and publishing credit, not who necessarily developed it.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -198,14 +225,26 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
   if (category.type === 'company') {
     return {
-      description: `${category.name} means games associated with that company, typically through development or publishing credits.`,
+      description: `${category.name} is a company category. A game can qualify through its credited relationship to that company, most commonly as a developer or publisher.`,
+      source: 'fallback',
+      sourceLabel: 'GameGrid guide',
+    }
+  }
+
+  if (category.type === 'tag') {
+    return {
+      description: getMappedDescription(
+        TAG_DESCRIPTIONS,
+        category,
+        `${category.name} is a tag-style category used to group games by notable traits, themes, mechanics, or player-facing qualities. It points to what a game is known for, not a specific release date or platform.`
+      ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
   }
 
   return {
-    description: `${category.name} is a descriptive tag used to group games by notable traits, themes, mechanics, or player-facing qualities.`,
+    description: `${category.name} is a tag-style category used to group games by notable traits, themes, mechanics, or player-facing qualities. It points to what a game is known for, not a specific release date or platform.`,
     source: 'fallback',
     sourceLabel: 'GameGrid guide',
   }

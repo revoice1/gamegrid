@@ -22,10 +22,11 @@ export async function GET() {
               : category.name,
           type: category.type,
           defaultChecked: !(
-            family.key === 'perspective' &&
-            (String(category.id) === '5' ||
-              String(category.id) === '6' ||
-              String(category.id) === '7')
+            (family.key === 'perspective' &&
+              (String(category.id) === '5' ||
+                String(category.id) === '6' ||
+                String(category.id) === '7')) ||
+            family.key === 'tag'
           ),
         })),
       })),

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { ACHIEVEMENTS } from '@/lib/achievements'
 import { EASTER_EGGS } from '@/lib/easter-eggs'
+import { ROUTE_SLUG } from '@/lib/route-index'
 
 const fakePuzzle = {
   id: 'test-puzzle',
@@ -110,6 +111,15 @@ async function seedStorageValue(page: Page, key: string, value: unknown) {
   )
 }
 
+async function seedSessionValue(page: Page, key: string, value: unknown) {
+  await page.addInitScript(
+    ([storageKey, storageValue]) => {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(storageValue))
+    },
+    [key, value] as const
+  )
+}
+
 function buildCompletedGuesses() {
   return Array.from({ length: 9 }, (_, index) => ({
     gameId: index + 1,
@@ -190,13 +200,12 @@ test('confirm picks setting persists after reload', async ({ page }) => {
   await page.goto('/')
 
   await page.getByRole('button', { name: 'Open settings' }).click()
-  await page.getByRole('button', { name: 'Turn on search confirmation' }).click()
 
   await expect
     .poll(async () => {
       return page.evaluate(() => window.localStorage.getItem('gamegrid_search_confirm'))
     })
-    .toBe('true')
+    .toBe(null)
 
   await page.reload()
   await page.getByRole('button', { name: 'Open settings' }).click()
@@ -205,7 +214,7 @@ test('confirm picks setting persists after reload', async ({ page }) => {
     .poll(async () => {
       return page.evaluate(() => window.localStorage.getItem('gamegrid_search_confirm'))
     })
-    .toBe('true')
+    .toBe(null)
   await expect(page.getByText('Ask before submitting')).toBeVisible()
   await expect
     .poll(async () => {
@@ -215,6 +224,77 @@ test('confirm picks setting persists after reload', async ({ page }) => {
         .getAttribute('aria-label')
     })
     .toBe('Turn off search confirmation')
+})
+
+test('animations setting persists and disables root animation mode', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await openSettings(page)
+  await expect(page.getByText('Animations')).toBeVisible()
+  await expect(page.getByText('Show effects and pulses')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Turn off animations' }).click()
+
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => window.localStorage.getItem('gamegrid_animations'))
+    })
+    .toBe('false')
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => document.documentElement.dataset.gamegridAnimations)
+    })
+    .toBe('off')
+})
+
+test('versus alarms setting only appears in versus settings', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await openSettings(page)
+  await expect(page.getByText('Versus Alarms')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Open settings' }).click()
+  await page.getByRole('button', { name: 'Versus' }).click()
+  await expect(page.getByText('Versus Mode')).toBeVisible()
+
+  await openSettings(page)
+  await expect(page.getByText('Versus Alarms')).toBeVisible()
+  await expect(page.getByText('Show timer and threat alarms')).toBeVisible()
+})
+
+test('turning versus alarms off changes the board alarm pill to off', async ({ page }) => {
+  await resetStorage(page)
+  await seedStorageValue(page, 'gamegrid_versus_state', {
+    puzzleId: 'versus-alarm-toggle',
+    puzzle: { ...fakePuzzle, id: 'versus-alarm-toggle', is_daily: false, date: null },
+    guesses: [
+      { gameId: 1, gameName: 'X1', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 2, gameName: 'X2', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 3, gameName: 'O3', gameImage: null, isCorrect: true, owner: 'o' },
+      ...Array(6).fill(null),
+    ],
+    guessesRemaining: 9,
+    isComplete: false,
+    currentPlayer: 'x',
+    stealableCell: 2,
+    winner: null,
+    pendingFinalSteal: null,
+    versusCategoryFilters: {},
+    versusStealRule: 'lower',
+    versusTimerOption: 'none',
+    turnTimeLeft: null,
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Versus' }).click()
+
+  await openSettings(page)
+  await page.getByRole('button', { name: 'Turn off versus alarms' }).click()
+  await page.getByRole('button', { name: 'Open settings' }).click()
+
+  await expect(page.getByTitle('Versus alarms are disabled in settings')).toContainText('OFF')
 })
 
 test('practice mode shows start options and opens custom setup', async ({ page }) => {
@@ -251,6 +331,31 @@ test('versus mode shows start options and opens setup controls', async ({ page }
   await expect(page.getByRole('heading', { name: 'Turn Timer' })).toBeVisible()
   await expect(page.getByRole('button', { name: '20 sec' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Reset to Default' })).toBeVisible()
+})
+
+test('practice setup tag family supports label toggles, check all, and reset to default', async ({
+  page,
+}) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Practice' }).click()
+  await page.getByRole('button', { name: 'Custom Puzzle' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Practice Setup' })).toBeVisible()
+
+  const tagsSection = page.locator('section').filter({ hasText: 'Tags' }).first()
+  await tagsSection.getByRole('button', { name: /show/i }).click()
+  await expect(tagsSection.getByText('0 of 5 enabled')).toBeVisible()
+
+  await tagsSection.getByText('Metroidvania').click()
+  await expect(tagsSection.getByText('1 of 5 enabled')).toBeVisible()
+
+  await tagsSection.getByRole('button', { name: 'Check All', exact: true }).click()
+  await expect(tagsSection.getByText('All 5 enabled')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Reset to Default' }).click()
+  await expect(tagsSection.getByText('0 of 5 enabled')).toBeVisible()
 })
 
 test('mode switching across daily practice and versus stays responsive', async ({ page }) => {
@@ -332,10 +437,6 @@ test('search confirm flow can pick a correct answer onto the board', async ({ pa
   await seedDailyPuzzle(page)
   await page.goto('/')
 
-  await page.getByRole('button', { name: 'Open settings' }).click()
-  await page.getByRole('button', { name: 'Turn on search confirmation' }).click()
-  await page.getByRole('button', { name: 'Open settings' }).click()
-
   await page.getByTestId('grid-cell-0').click()
   await page.getByPlaceholder('Search for a video game...').fill('wo')
   await expect(page.getByText('World of Warcraft')).toBeVisible()
@@ -345,6 +446,51 @@ test('search confirm flow can pick a correct answer onto the board', async ({ pa
   await page.getByRole('button', { name: 'Confirm World of Warcraft' }).click()
 
   await expect(page.getByTestId('grid-cell-0')).toContainText('World of Warcraft')
+})
+
+test('search cover preview opens a larger image dialog', async ({ page }) => {
+  const previewResult = {
+    ...fakeSearchResult,
+    background_image: 'https://images.igdb.com/wow-cover.jpg',
+  }
+
+  await page.route('**/api/search?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [previewResult] }),
+    })
+  })
+
+  await seedDailyPuzzle(page)
+  await page.goto('/')
+
+  await page.getByTestId('grid-cell-0').click()
+  await page.getByPlaceholder('Search for a video game...').fill('wo')
+  await expect(page.getByText('World of Warcraft')).toBeVisible()
+
+  await page.getByTitle('Preview cover for World of Warcraft').click()
+  const previewDialog = page.getByRole('dialog')
+  await expect(previewDialog).toBeVisible()
+  await expect(previewDialog.getByAltText('World of Warcraft')).toBeVisible()
+  await expect(previewDialog.getByText('World of Warcraft', { exact: true })).toBeVisible()
+})
+
+test('category definition dialog shows local guide copy without loading for non-platform categories', async ({
+  page,
+}) => {
+  await seedDailyPuzzle(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /RPG/i }).click()
+  const definitionDialog = page.getByRole('dialog')
+  await expect(definitionDialog.getByText('GameGrid guide')).toBeVisible()
+  await expect(definitionDialog.getByText('Loading')).toHaveCount(0)
+  await expect(
+    definitionDialog.getByText(
+      'Games built around character growth, stats, party building, quests, and long-term progression choices.'
+    )
+  ).toBeVisible()
 })
 
 test('dev hooks can trigger animation overlays for visual and perf passes', async ({ page }) => {
@@ -392,10 +538,6 @@ test('confirm flow renders cleanly in both light and dark themes', async ({ page
 
   await seedDailyPuzzle(page)
   await page.goto('/')
-
-  await openSettings(page)
-  await page.getByRole('button', { name: 'Turn on search confirmation' }).click()
-  await page.getByRole('button', { name: 'Open settings' }).click()
 
   for (const theme of ['light', 'dark'] as const) {
     await setTheme(page, theme)
@@ -548,6 +690,8 @@ test('toast appears for duplicate guess rejection', async ({ page }) => {
   await page.getByPlaceholder('Search for a video game...').fill('wo')
   await expect(page.getByText('World of Warcraft')).toBeVisible()
   await page.getByRole('button', { name: /World of Warcraft/i }).click()
+  await expect(page.getByText('Confirm this answer?')).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm World of Warcraft' }).click()
 
   const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
   await expect(notifications.getByText('Game already used', { exact: true })).toBeVisible()
@@ -565,11 +709,37 @@ test('achievements modal shows locked and unlocked states correctly', async ({ p
   await expect(achievementsDialog.getByText(`1/${ACHIEVEMENTS.length}`)).toBeVisible()
   await expect(achievementsDialog.getByText('Perfect Grid', { exact: true })).toBeVisible()
   await expect(achievementsDialog.getByText('Finish a board with a flawless 9/9.')).toBeVisible()
+  await expect(achievementsDialog.getByText('???', { exact: true })).toBeVisible()
   await expect(achievementsDialog.getByText('Breakfast Defender', { exact: true })).toBeVisible()
   await expect(
     achievementsDialog.getByText('Unlocked by using its hidden trigger game as a correct answer.')
   ).toHaveCount(0)
   await achievementsDialog.getByRole('button', { name: 'Close' }).first().click()
+})
+
+test('indexed route unlocks the hidden route achievement', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Achievements' }).click()
+  const achievementsDialog = page.getByRole('dialog')
+  await expect(achievementsDialog.getByText(ROUTE_SLUG, { exact: true })).toHaveCount(0)
+  await expect(achievementsDialog.getByText('???', { exact: true })).toBeVisible()
+  await achievementsDialog.getByRole('button', { name: 'Close' }).first().click()
+
+  await page.goto(`/${ROUTE_SLUG}`)
+  await expect(page.getByText(ROUTE_SLUG, { exact: true })).toBeVisible()
+  await expect(page.getByText('...you found me')).toBeVisible()
+  await page.waitForURL('**/')
+  const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
+  await expect(notifications.getByText(`Achievement Unlocked: ${ROUTE_SLUG}`)).toBeVisible()
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Achievements' }).click()
+  await expect(achievementsDialog.getByText(ROUTE_SLUG, { exact: true })).toBeVisible()
+  await expect(
+    achievementsDialog.getByText('Found the hidden route and slipped back out through the glitch.')
+  ).toBeVisible()
 })
 
 test('correct easter egg answer unlocks achievement toast and collection entry', async ({
@@ -660,6 +830,8 @@ test('correct easter egg answer unlocks achievement toast and collection entry',
   await page.getByPlaceholder('Search for a video game...').fill('ha')
   await expect(page.getByText('Halo 2')).toBeVisible()
   await page.getByRole('button', { name: /Halo 2/i }).click()
+  await expect(page.getByText('Confirm this answer?')).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm Halo 2' }).click()
 
   const notifications = page.getByRole('region', { name: 'Notifications (F8)' })
   await expect(notifications.getByText('Achievement Unlocked: Finish the Fight')).toBeVisible()
@@ -766,6 +938,77 @@ test('practice and versus restore in-progress boards from local storage', async 
 
   await page.getByRole('button', { name: 'Versus' }).click()
   await expect(page.getByTestId('grid-cell-0')).toContainText('Restored Versus Game')
+})
+
+test('versus winner panel can be dismissed while keeping the board visible', async ({ page }) => {
+  await resetStorage(page)
+  await seedSessionValue(page, 'gamegrid_versus_record', { xWins: 2, oWins: 1 })
+  await seedStorageValue(page, 'gamegrid_versus_state', {
+    puzzleId: 'versus-win-panel',
+    puzzle: { ...fakePuzzle, id: 'versus-win-panel', is_daily: false, date: null },
+    guesses: [
+      { gameId: 1, gameName: 'X1', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 2, gameName: 'X2', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 3, gameName: 'X3', gameImage: null, isCorrect: true, owner: 'x' },
+      ...Array(6).fill(null),
+    ],
+    guessesRemaining: 9,
+    isComplete: true,
+    currentPlayer: 'x',
+    stealableCell: null,
+    winner: 'x',
+    pendingFinalSteal: null,
+    versusCategoryFilters: {},
+    versusStealRule: 'lower',
+    versusTimerOption: 'none',
+    turnTimeLeft: null,
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Versus' }).click()
+
+  await expect(page.getByText('X wins', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('grid-cell-0')).toContainText('X1')
+  await page.getByRole('button', { name: 'Hide' }).click()
+  await expect(page.getByText('Match Over')).toHaveCount(0)
+  await expect(page.getByTestId('grid-cell-0')).toContainText('X1')
+})
+
+test('versus draw restore renders tie state without a winner', async ({ page }) => {
+  await resetStorage(page)
+  await seedStorageValue(page, 'gamegrid_versus_state', {
+    puzzleId: 'versus-draw-panel',
+    puzzle: { ...fakePuzzle, id: 'versus-draw-panel', is_daily: false, date: null },
+    guesses: [
+      { gameId: 1, gameName: 'X1', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 2, gameName: 'X2', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 3, gameName: 'O3', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 4, gameName: 'O4', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 5, gameName: 'O5', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 6, gameName: 'X6', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 7, gameName: 'X7', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 8, gameName: 'O8', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 9, gameName: 'X9', gameImage: null, isCorrect: true, owner: 'x' },
+    ],
+    guessesRemaining: 9,
+    isComplete: true,
+    currentPlayer: 'x',
+    stealableCell: null,
+    winner: 'draw',
+    pendingFinalSteal: null,
+    versusCategoryFilters: {},
+    versusStealRule: 'lower',
+    versusTimerOption: 'none',
+    turnTimeLeft: null,
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Versus' }).click()
+
+  await expect(page.getByText('Draw game')).toBeVisible()
+  await expect(page.getByText('No line was completed before the board filled up.')).toBeVisible()
+  await expect(page.locator('header').getByText('Result', { exact: true })).toBeVisible()
+  await expect(page.locator('header').getByText('Tie', { exact: true })).toBeVisible()
 })
 
 test('double alarm cells alternate between steal and game point only', async ({ page }) => {

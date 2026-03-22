@@ -1,9 +1,11 @@
 import { EASTER_EGGS } from './easter-eggs'
+import { ROUTE_ACHIEVEMENT_ID, ROUTE_SLUG } from './route-index'
 
 export interface AchievementDefinition {
   id: string
   title: string
   description: string
+  hidden?: boolean
 }
 
 export interface UnlockedAchievementEntry {
@@ -18,6 +20,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: 'perfect-grid',
     title: 'Perfect Grid',
     description: 'Finish a board with a flawless 9/9.',
+  },
+  {
+    id: ROUTE_ACHIEVEMENT_ID,
+    title: ROUTE_SLUG,
+    description: 'Found the hidden route and slipped back out through the glitch.',
+    hidden: true,
   },
   ...EASTER_EGGS.map(({ achievementId, achievementTitle, achievementDescription }) => ({
     id: achievementId,

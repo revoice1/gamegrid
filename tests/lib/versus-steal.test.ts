@@ -61,6 +61,35 @@ describe('resolveStealOutcome', () => {
     expect(outcome.actions).toContainEqual({ kind: 'clearPendingSteal' })
   })
 
+  it('treats tied showdown scores as a failed steal', () => {
+    const outcome = resolveStealOutcome({
+      ...baseContext,
+      rule: 'higher',
+      defendingGuess: makeGuess(77),
+      attackingGuess: makeGuess(77),
+    })
+
+    expect(outcome.successful).toBe(false)
+    expect(outcome.hasShowdownScores).toBe(true)
+    expect(outcome.actions).toContainEqual({ kind: 'setNextPlayer', player: 'x' })
+    expect(outcome.actions).not.toContainEqual({ kind: 'setWinner', player: 'x' })
+  })
+
+  it('does not award a defender win when the pending final steal is for another cell', () => {
+    const outcome = resolveStealOutcome({
+      ...baseContext,
+      rule: 'higher',
+      defendingGuess: makeGuess(91),
+      attackingGuess: makeGuess(77),
+      pendingFinalSteal: { defender: 'x', cellIndex: 1 },
+    })
+
+    expect(outcome.successful).toBe(false)
+    expect(outcome.actions).toContainEqual({ kind: 'setNextPlayer', player: 'x' })
+    expect(outcome.actions).not.toContainEqual({ kind: 'setWinner', player: 'x' })
+    expect(outcome.actions).not.toContainEqual({ kind: 'clearPendingSteal' })
+  })
+
   it('treats missing scores as a failed steal without a showdown', () => {
     const outcome = resolveStealOutcome({
       ...baseContext,

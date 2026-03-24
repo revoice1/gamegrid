@@ -9,6 +9,7 @@ export function useVersusSetupState() {
   const [versusCategoryFilters, setVersusCategoryFilters] = useState<VersusCategoryFilters>({})
   const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('lower')
   const [versusTimerOption, setVersusTimerOption] = useState<VersusTurnTimerOption>('none')
+  const [versusDisableDraws, setVersusDisableDraws] = useState(false)
   const [showVersusSetup, setShowVersusSetup] = useState(false)
   const [showVersusStartOptions, setShowVersusStartOptions] = useState(false)
   const [versusSetupError, setVersusSetupError] = useState<string | null>(null)
@@ -20,6 +21,8 @@ export function useVersusSetupState() {
     setVersusStealRule,
     versusTimerOption,
     setVersusTimerOption,
+    versusDisableDraws,
+    setVersusDisableDraws,
     showVersusSetup,
     setShowVersusSetup,
     showVersusStartOptions,

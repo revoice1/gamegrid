@@ -14,12 +14,14 @@
 
 - Search should stay legible even when metadata is scrubbed.
 - Duplicate-title disambiguation should reduce bad fast-click mistakes without turning into clutter.
+- Representative results can hint when hidden same-name ports exist behind the selected family.
 
 ## Versus
 
 - Turn state needs to be obvious, but not loud enough to destabilize the header layout.
 - Final steal should feel focused and dramatic.
 - Alarm-driven motion and audio should respect the versus alarm setting.
+- Custom rules like disabling draws should be explained in setup and feel predictable at match end.
 
 ## Results
 

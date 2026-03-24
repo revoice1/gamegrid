@@ -117,10 +117,16 @@
     @apply border-border outline-ring/50;
   }
   html {
-    scrollbar-gutter: stable;
+    scrollbar-gutter: stable both-edges;
   }
   body {
+    scrollbar-gutter: stable both-edges;
     @apply bg-background text-foreground;
+  }
+
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
 }
 

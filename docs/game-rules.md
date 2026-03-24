@@ -28,6 +28,9 @@
 - Each game can only be used once per board.
 - Search selection is not the same as correctness. Correctness is decided by backend validation.
 - Search can hide metadata that would directly overlap with the active puzzle categories.
+- Same-name ports can be hidden from search when they are just duplicate clutter.
+- Selected guesses can still validate against an original-plus-official-ports family when that
+  makes platform or release-history matching more faithful.
 
 ## Daily Timing
 
@@ -68,6 +71,8 @@
 ### Versus
 
 - A match can end in an `X` win, an `O` win, or a draw.
+- Custom versus can disable draws and award the match to the player with more claimed cells when a
+  full board has no line.
 - The winner panel should be dismissible without hiding the finished board.
 
 ## Achievements And Easter Eggs

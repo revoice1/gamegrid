@@ -14,6 +14,7 @@ function serializeGameDetails(game: Awaited<ReturnType<typeof validateIGDBGameFo
         url: game.gameUrl,
         background_image: game.background_image,
         released: game.released,
+        releaseDates: game.releaseDates ?? [],
         metacritic: game.metacritic,
         stealRating: game.stealRating ?? null,
         genres: game.genres?.map((genre) => genre.name) ?? [],
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
       resolvedSession
     )
   } catch (error) {
-    console.error('Guess error:', error)
+    console.error(`${LOG_PREFIX} Guess error:`, error)
     return NextResponse.json({ error: 'Failed to process guess', valid: false }, { status: 500 })
   }
 }

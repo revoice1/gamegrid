@@ -80,7 +80,12 @@ function getDuplicateDisplayTitle(game: SearchResultGame, isDuplicateTitle: bool
     ? getPlatformDisplayLabel(game.disambiguationPlatform)
     : getPreferredPlatform(game)
 
-  return preferredPlatform ? `${game.name} (${preferredPlatform})` : game.name
+  if (!preferredPlatform) {
+    return game.name
+  }
+
+  const suffix = game.hasSameNamePortFamily ? `${preferredPlatform}+Ports` : preferredPlatform
+  return `${game.name} (${suffix})`
 }
 
 interface GameSearchProps {

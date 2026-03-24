@@ -21,6 +21,8 @@ This is a product choice, not just a data concern.
 
 - Exact duplicate visible titles should be disambiguated.
 - The current behavior uses `(Platform)` in the title line for duplicate results only.
+- Same-name `Port` entries should be hidden when the parent/original has the same visible title.
+- Ports with genuinely different titles can still stay visible.
 - This is intentionally narrow:
   - exact duplicate titles in the current result set
   - not franchise-wide fuzzy grouping
@@ -35,6 +37,22 @@ Examples:
 - Search results are suggestions.
 - Correctness is decided by backend validation against the selected cell categories.
 - Validation is based on structured game data plus curated category rules.
+
+## Original Plus Port Families
+
+- When a selected game is validated, the backend can resolve the game as an original-plus-official-ports family.
+- This family resolution is intentionally narrow:
+  - the selected game
+  - its original/parent game when applicable
+  - official `Port` children only
+- The family can contribute union metadata for validation, especially:
+  - platform
+  - decade via merged release dates
+  - company/developer/publisher
+  - other structured IGDB arrays when they differ between releases
+- Family resolution follows the selected game's `parent_game` chain, not just the visible title.
+- That means two results with the same title can still resolve to different families if IGDB treats them as different parent chains.
+- This keeps search cleaner without forcing the player to pick a specific same-name port entry.
 
 ## Company Validation
 

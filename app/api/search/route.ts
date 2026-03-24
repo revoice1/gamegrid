@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
         metacritic: g.metacritic,
         gameTypeLabel: g.gameTypeLabel ?? null,
         originalPlatformName: shouldScrub('platform') ? null : (g.originalPlatformName ?? null),
+        hasSameNamePortFamily: g.hasSameNamePortFamily === true,
         released: shouldScrub('decade') ? null : g.released,
         genres: shouldScrub('genre') ? [] : g.genres,
         platforms: shouldScrub('platform') ? [] : g.platforms,

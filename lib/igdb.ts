@@ -84,6 +84,7 @@ export interface IGDBGame {
   player_perspectives?: IGDBNamedEntity[]
   involved_companies?: IGDBInvolvedCompany[]
   keywords?: IGDBNamedEntity[]
+  hasSameNamePortFamily?: boolean
 }
 
 interface IGDBTokenCache {
@@ -95,6 +96,8 @@ interface IGDBTokenCache {
 // but are not shared across serverless cold starts or between regions.
 let tokenCache: IGDBTokenCache | null = null
 const igdbGameCache = new Map<number, Game | null>()
+const igdbRawGameCache = new Map<number, IGDBGame | null>()
+const igdbResolvedPortFamilyCache = new Map<number, Game | null>()
 const DEFAULT_CELL_SAMPLE_SIZE = 40
 const DEFAULT_MIN_VALID_OPTIONS = 3
 const DEFAULT_MAX_GENERATION_ATTEMPTS = 12
@@ -215,6 +218,9 @@ const GAME_TYPE_LABELS: Record<number, string> = {
   11: 'Port',
 }
 
+const IGDB_GAME_FIELDS =
+  'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.id,release_dates.platform.name,release_dates.platform.slug,genres.id,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.id,keywords.name;'
+
 function normalizeName(value: string): string {
   return value
     .toLowerCase()
@@ -240,6 +246,10 @@ function pickRandomItems<T>(items: T[], count: number): T[] {
   return shuffle(items).slice(0, count)
 }
 
+function uniqueByKey<T>(items: T[], getKey: (item: T) => string | number): T[] {
+  return Array.from(new Map(items.map((item) => [getKey(item), item])).values())
+}
+
 function getCategoryCacheKey(category: Category): string {
   return [
     category.type,
@@ -256,6 +266,17 @@ function getCellCacheKey(rowCategory: Category, colCategory: Category, sampleSiz
 
 function escapeIGDBSearch(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+export function shouldHideSameNamePortResult(
+  portGame: IGDBGame,
+  parentGame: IGDBGame | null
+): boolean {
+  if (portGame.game_type !== 11 || !parentGame) {
+    return false
+  }
+
+  return normalizeName(portGame.name) === normalizeName(parentGame.name)
 }
 
 function formatIGDBDate(timestamp?: number | null): string | null {
@@ -663,14 +684,15 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
     .filter((entry) => entry.publisher)
     .map((entry) => entry.company)
   const getCompanyKey = (company: IGDBCompany) => company.id ?? normalizeName(company.name)
-  const uniqueCompanies = Array.from(
-    new Map(companies.map((company) => [getCompanyKey(company), company])).values()
-  )
-  const uniqueDevelopers = Array.from(
-    new Map(developers.map((company) => [getCompanyKey(company), company])).values()
-  )
-  const uniquePublishers = Array.from(
-    new Map(publishers.map((company) => [getCompanyKey(company), company])).values()
+  const uniqueCompanies = uniqueByKey(companies, getCompanyKey)
+  const uniqueDevelopers = uniqueByKey(developers, getCompanyKey)
+  const uniquePublishers = uniqueByKey(publishers, getCompanyKey)
+  const releaseDates = uniqueByKey(
+    [
+      formatIGDBDate(game.first_release_date),
+      ...(game.release_dates ?? []).map((entry) => formatIGDBDate(entry.date)),
+    ].filter((date): date is string => Boolean(date)),
+    (date) => date
   )
   const averagedSplitRating = [game.rating, game.aggregated_rating].filter(
     (value): value is number => typeof value === 'number'
@@ -691,10 +713,12 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
     gameUrl: game.url ?? null,
     background_image: buildCoverUrl(game.cover?.image_id),
     released: formatIGDBDate(game.first_release_date),
+    releaseDates,
     metacritic: getMetacriticScore(game.total_rating),
     stealRating,
     gameTypeLabel: getGameTypeLabel(game.game_type),
     originalPlatformName: getOriginalPlatformName(game),
+    hasSameNamePortFamily: game.hasSameNamePortFamily === true,
     genres,
     platforms,
     developers: uniqueDevelopers.map((company) => ({
@@ -769,6 +793,26 @@ function isOfficialCatalogGame(game: IGDBGame): boolean {
   return !UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(game.name))
 }
 
+function isSupplementalPortFamilyGame(game: IGDBGame): boolean {
+  if (!game.first_release_date) {
+    return false
+  }
+
+  if (game.game_type !== 11) {
+    return false
+  }
+
+  if (!hasOfficialCompanyData(game)) {
+    return false
+  }
+
+  if (hasDisqualifyingKeywords(game)) {
+    return false
+  }
+
+  return !UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(game.name))
+}
+
 function buildOfficialGameWhereClause(): string {
   return [
     'version_parent = null',
@@ -785,6 +829,16 @@ function buildSearchGameWhereClause(): string {
     'first_release_date != null',
     'involved_companies != null',
     '(rating != null | aggregated_rating != null)',
+  ].join(' & ')
+}
+
+function buildSupplementalPortFamilyWhereClause(parentId: number): string {
+  return [
+    `parent_game = ${parentId}`,
+    'version_parent = null',
+    'first_release_date != null',
+    'involved_companies != null',
+    'game_type = 11',
   ].join(' & ')
 }
 
@@ -939,6 +993,177 @@ function scoreSearchCandidate(candidate: IGDBGame, query: string): number {
   return score
 }
 
+async function queryIGDBGamesByIds(gameIds: number[]): Promise<IGDBGame[]> {
+  const uniqueIds = Array.from(new Set(gameIds.filter((id) => Number.isFinite(id))))
+  if (uniqueIds.length === 0) {
+    return []
+  }
+
+  const query = [
+    IGDB_GAME_FIELDS,
+    `where id = (${uniqueIds.join(',')}) & ${buildOfficialGameWhereClause()};`,
+    `limit ${Math.max(uniqueIds.length, 1)};`,
+  ].join(' ')
+
+  const results = await queryIGDB<IGDBGame>('games', query)
+  const officialResults = results.filter(isOfficialCatalogGame)
+  const resultMap = new Map(officialResults.map((game) => [game.id, game]))
+
+  for (const gameId of uniqueIds) {
+    igdbRawGameCache.set(gameId, resultMap.get(gameId) ?? null)
+  }
+
+  return officialResults
+}
+
+async function getRawIGDBGameDetails(gameId: number): Promise<IGDBGame | null> {
+  if (igdbRawGameCache.has(gameId)) {
+    return igdbRawGameCache.get(gameId) ?? null
+  }
+
+  const [result] = await queryIGDBGamesByIds([gameId])
+  const cachedResult = result ?? null
+  igdbRawGameCache.set(gameId, cachedResult)
+  return cachedResult
+}
+
+async function getParentLookupMap(gameIds: number[]): Promise<Map<number, IGDBGame>> {
+  const parentGames = await queryIGDBGamesByIds(gameIds)
+  return new Map(parentGames.map((game) => [game.id, game]))
+}
+
+async function hideSameNamePortResults(results: IGDBGame[]): Promise<IGDBGame[]> {
+  const parentIds = Array.from(
+    new Set(
+      results
+        .filter((result) => result.game_type === 11 && typeof result.parent_game === 'number')
+        .map((result) => result.parent_game as number)
+    )
+  )
+
+  if (parentIds.length === 0) {
+    return results
+  }
+
+  const parentLookup = await getParentLookupMap(parentIds)
+  const hiddenParentIds = new Set<number>()
+  const visibleResults = results.filter((result) => {
+    if (result.game_type !== 11 || typeof result.parent_game !== 'number') {
+      return true
+    }
+
+    const shouldHide = shouldHideSameNamePortResult(
+      result,
+      parentLookup.get(result.parent_game) ?? null
+    )
+    if (shouldHide) {
+      hiddenParentIds.add(result.parent_game)
+    }
+    return !shouldHide
+  })
+
+  return visibleResults.map((result) =>
+    hiddenParentIds.has(result.id) ? { ...result, hasSameNamePortFamily: true } : result
+  )
+}
+
+function mergeNamedItems<T extends { id: number; name: string; slug?: string }>(
+  groups: Array<T[] | undefined>
+): T[] {
+  return uniqueByKey(
+    groups.flatMap((group) => group ?? []),
+    (item) => item.id ?? `${normalizeName(item.name)}:${item.slug ?? ''}`
+  )
+}
+
+function mergeStringArrays(groups: Array<string[] | undefined>): string[] {
+  return uniqueByKey(
+    groups.flatMap((group) => group ?? []),
+    (value) => normalizeName(value)
+  )
+}
+
+export function mergePortFamilyGameDetails(
+  selectedGame: Game,
+  familyGames: Game[],
+  canonicalGame: Game | null
+): Game {
+  const mergedFamily = uniqueByKey([selectedGame, ...familyGames], (game) => game.id)
+  const mergedPlatforms = uniqueByKey(
+    mergedFamily.flatMap((game) => game.platforms ?? []),
+    (platform) => platform.platform.id
+  )
+  const mergedReleaseDates = uniqueByKey(
+    mergedFamily.flatMap((game) =>
+      game.releaseDates && game.releaseDates.length > 0
+        ? game.releaseDates
+        : game.released
+          ? [game.released]
+          : []
+    ),
+    (date) => date
+  )
+
+  return {
+    ...selectedGame,
+    gameUrl: canonicalGame?.gameUrl ?? selectedGame.gameUrl,
+    releaseDates: mergedReleaseDates,
+    genres: mergeNamedItems(mergedFamily.map((game) => game.genres)),
+    platforms: mergedPlatforms,
+    developers: mergeNamedItems(mergedFamily.map((game) => game.developers)),
+    publishers: mergeNamedItems(mergedFamily.map((game) => game.publishers)),
+    tags: mergeNamedItems(mergedFamily.map((game) => game.tags)),
+    igdb: selectedGame.igdb
+      ? {
+          ...selectedGame.igdb,
+          game_modes: mergeStringArrays(mergedFamily.map((game) => game.igdb?.game_modes)),
+          themes: mergeStringArrays(mergedFamily.map((game) => game.igdb?.themes)),
+          player_perspectives: mergeStringArrays(
+            mergedFamily.map((game) => game.igdb?.player_perspectives)
+          ),
+          companies: mergeStringArrays(mergedFamily.map((game) => game.igdb?.companies)),
+          keywords: mergeStringArrays(mergedFamily.map((game) => game.igdb?.keywords)),
+        }
+      : undefined,
+  }
+}
+
+async function getPortFamilyGames(
+  game: IGDBGame
+): Promise<{ selected: Game; canonical: Game | null; family: Game[] }> {
+  const selected = mapIGDBGameToGame(game)
+  const canonicalRaw =
+    typeof game.parent_game === 'number' ? await getRawIGDBGameDetails(game.parent_game) : game
+  const canonical = canonicalRaw ? mapIGDBGameToGame(canonicalRaw) : null
+  const parentId =
+    canonicalRaw?.id ??
+    (game.game_type === 11 && typeof game.parent_game === 'number' ? game.parent_game : null)
+
+  if (!parentId) {
+    return { selected, canonical, family: [selected] }
+  }
+
+  const childQuery = [
+    IGDB_GAME_FIELDS,
+    `where ${buildSupplementalPortFamilyWhereClause(parentId)};`,
+    'limit 100;',
+  ].join(' ')
+
+  const childPorts = (await queryIGDB<IGDBGame>('games', childQuery)).filter(
+    isSupplementalPortFamilyGame
+  )
+  const familyRawGames = uniqueByKey(
+    [game, ...(canonicalRaw ? [canonicalRaw] : []), ...childPorts],
+    (entry) => entry.id
+  )
+
+  return {
+    selected,
+    canonical,
+    family: familyRawGames.map(mapIGDBGameToGame),
+  }
+}
+
 export async function searchIGDBGames(query: string): Promise<Game[]> {
   if (!query.trim()) {
     return []
@@ -946,7 +1171,7 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
 
   const runSearch = async (searchTerm: string, limit = 30) => {
     const searchQuery = [
-      'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.name;',
+      IGDB_GAME_FIELDS,
       `where ${buildSearchGameWhereClause()};`,
       `search "${escapeIGDBSearch(searchTerm)}";`,
       `limit ${limit};`,
@@ -971,11 +1196,13 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
 
   const filteredResults = Array.from(
     new Map(mergedResults.map((result) => [result.id, result])).values()
+  ).filter(isOfficialCatalogGame)
+  const visibleResults = await hideSameNamePortResults(filteredResults)
+  const rankedResults = visibleResults.sort(
+    (left, right) => scoreSearchCandidate(right, query) - scoreSearchCandidate(left, query)
   )
-    .filter(isOfficialCatalogGame)
-    .sort((left, right) => scoreSearchCandidate(right, query) - scoreSearchCandidate(left, query))
 
-  return filteredResults.slice(0, 15).map(mapIGDBGameToGame)
+  return rankedResults.slice(0, 15).map(mapIGDBGameToGame)
 }
 
 export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
@@ -983,19 +1210,8 @@ export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
     return igdbGameCache.get(gameId) ?? null
   }
 
-  const query = [
-    'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.name;',
-    `where id = ${gameId} & ${buildOfficialGameWhereClause()};`,
-    'limit 1;',
-  ].join(' ')
-
-  const [result] = await queryIGDB<IGDBGame>('games', query)
+  const result = await getRawIGDBGameDetails(gameId)
   if (!result) {
-    igdbGameCache.set(gameId, null)
-    return null
-  }
-
-  if (!isOfficialCatalogGame(result)) {
     igdbGameCache.set(gameId, null)
     return null
   }
@@ -1005,12 +1221,29 @@ export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
   return mapped
 }
 
+async function getResolvedIGDBGameDetails(gameId: number): Promise<Game | null> {
+  if (igdbResolvedPortFamilyCache.has(gameId)) {
+    return igdbResolvedPortFamilyCache.get(gameId) ?? null
+  }
+
+  const rawGame = await getRawIGDBGameDetails(gameId)
+  if (!rawGame) {
+    igdbResolvedPortFamilyCache.set(gameId, null)
+    return null
+  }
+
+  const { selected, canonical, family } = await getPortFamilyGames(rawGame)
+  const merged = mergePortFamilyGameDetails(selected, family, canonical)
+  igdbResolvedPortFamilyCache.set(gameId, merged)
+  return merged
+}
+
 export async function validateIGDBGameForCell(
   gameId: number,
   rowCategory: Category,
   colCategory: Category
 ): Promise<{ valid: boolean; game: Game | null; matchesRow: boolean; matchesCol: boolean }> {
-  const game = await getIGDBGameDetails(gameId)
+  const game = await getResolvedIGDBGameDetails(gameId)
   if (!game) {
     return { valid: false, game: null, matchesRow: false, matchesCol: false }
   }

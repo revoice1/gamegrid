@@ -461,12 +461,21 @@ export function igdbGameMatchesCategory(game: Game, category: Category): boolean
         false
       )
     case 'decade': {
-      if (!game.released) {
+      const releaseDates =
+        game.releaseDates && game.releaseDates.length > 0
+          ? game.releaseDates
+          : game.released
+            ? [game.released]
+            : []
+
+      if (releaseDates.length === 0) {
         return false
       }
-      const year = Number(game.released.split('-')[0])
       const decadeStart = Number(category.id)
-      return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
+      return releaseDates.some((releaseDate) => {
+        const year = Number(releaseDate.split('-')[0])
+        return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
+      })
     }
     case 'company':
       return (

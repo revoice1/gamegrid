@@ -136,6 +136,21 @@ function getPlayerLabel(player: TicTacToePlayer): string {
   return player === 'x' ? 'X' : 'O'
 }
 
+function getClaimCounts(guesses: Array<CellGuess | null>) {
+  return guesses.reduce(
+    (counts, guess) => {
+      if (guess?.owner === 'x') {
+        counts.x += 1
+      } else if (guess?.owner === 'o') {
+        counts.o += 1
+      }
+
+      return counts
+    },
+    { x: 0, o: 0 }
+  )
+}
+
 function detectAnimationQuality(): AnimationQuality {
   if (typeof window === 'undefined') {
     return 'high'
@@ -1632,6 +1647,8 @@ export function GameClient() {
     setVersusStealRule,
     versusTimerOption,
     setVersusTimerOption,
+    versusDisableDraws,
+    setVersusDisableDraws,
     showVersusSetup,
     setShowVersusSetup,
     showVersusStartOptions,
@@ -1684,6 +1701,7 @@ export function GameClient() {
   const { toast } = useToast()
   const versusStealRuleRef = useRef(versusStealRule)
   const versusTimerOptionRef = useRef(versusTimerOption)
+  const versusDisableDrawsRef = useRef(versusDisableDraws)
   const didMountFinalStealCueRef = useRef(false)
   const lastFinalStealCueKeyRef = useRef<string | null>(null)
 
@@ -1694,6 +1712,10 @@ export function GameClient() {
   useEffect(() => {
     versusTimerOptionRef.current = versusTimerOption
   }, [versusTimerOption])
+
+  useEffect(() => {
+    versusDisableDrawsRef.current = versusDisableDraws
+  }, [versusDisableDraws])
 
   useEffect(() => {
     const cueKey = pendingFinalSteal
@@ -2110,6 +2132,7 @@ export function GameClient() {
         setVersusCategoryFilters((savedState.versusCategoryFilters as VersusCategoryFilters) ?? {})
         setVersusStealRule(savedState.versusStealRule ?? 'lower')
         setVersusTimerOption(savedState.versusTimerOption ?? 'none')
+        setVersusDisableDraws(savedState.versusDisableDraws ?? false)
         setTurnTimeLeft(savedState.turnTimeLeft ?? null)
         setLockImpactCell(null)
         setSelectedCell(null)
@@ -2295,6 +2318,7 @@ export function GameClient() {
                     versusCategoryFilters: effectiveFilters ?? {},
                     versusStealRule: versusStealRuleRef.current,
                     versusTimerOption: versusTimerOptionRef.current,
+                    versusDisableDraws: versusDisableDrawsRef.current,
                     turnTimeLeft:
                       versusTimerOptionRef.current === 'none' ? null : versusTimerOptionRef.current,
                   }
@@ -2368,6 +2392,7 @@ export function GameClient() {
         versusCategoryFilters,
         versusStealRule,
         versusTimerOption,
+        versusDisableDraws,
         turnTimeLeft,
       },
       'versus'
@@ -2386,6 +2411,7 @@ export function GameClient() {
     versusCategoryFilters,
     versusStealRule,
     versusTimerOption,
+    versusDisableDraws,
     winner,
   ])
 
@@ -2480,10 +2506,12 @@ export function GameClient() {
   const handleApplyPracticeFilters = (
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
-    timerOption: VersusTurnTimerOption
+    timerOption: VersusTurnTimerOption,
+    disableDraws: boolean
   ) => {
     void stealRule
     void timerOption
+    void disableDraws
     setPracticeCategoryFilters(filters)
     setPracticeSetupError(null)
     setShowPracticeSetup(false)
@@ -2496,12 +2524,14 @@ export function GameClient() {
   const handleApplyVersusFilters = (
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
-    timerOption: VersusTurnTimerOption
+    timerOption: VersusTurnTimerOption,
+    disableDraws: boolean
   ) => {
     setVersusCategoryFilters(filters)
     setVersusSetupError(null)
     setVersusStealRule(stealRule)
     setVersusTimerOption(timerOption)
+    setVersusDisableDraws(disableDraws)
     setShowVersusSetup(false)
     setShowVersusStartOptions(false)
     skipNextVersusAutoLoadRef.current = true
@@ -2875,6 +2905,19 @@ export function GameClient() {
         }
 
         if (newGuesses.every((guess) => guess !== null)) {
+          if (versusDisableDraws) {
+            const claimCounts = getClaimCounts(newGuesses)
+            const winnerByClaims = claimCounts.x > claimCounts.o ? 'x' : 'o'
+
+            setWinner(winnerByClaims)
+            setStealableCell(null)
+            toast({
+              title: `${getPlayerLabel(winnerByClaims)} wins on cells!`,
+              description: `${getPlayerLabel(winnerByClaims)} claimed ${Math.max(claimCounts.x, claimCounts.o)} squares to ${Math.min(claimCounts.x, claimCounts.o)}.`,
+            })
+            return
+          }
+
           setActiveDoubleKoSplash({
             burstId: Date.now(),
             durationMs: 1400,
@@ -3181,6 +3224,7 @@ export function GameClient() {
 
                   setVersusCategoryFilters({})
                   setVersusSetupError(null)
+                  setVersusDisableDraws(false)
                   setShowVersusStartOptions(false)
                   skipNextVersusAutoLoadRef.current = true
                   clearGameState('versus')
@@ -3223,6 +3267,7 @@ export function GameClient() {
             filters={practiceCategoryFilters}
             stealRule="lower"
             timerOption="none"
+            disableDraws={false}
             onApply={handleApplyPracticeFilters}
           />
 
@@ -3234,6 +3279,7 @@ export function GameClient() {
             filters={versusCategoryFilters}
             stealRule={versusStealRule}
             timerOption={versusTimerOption}
+            disableDraws={versusDisableDraws}
             onApply={handleApplyVersusFilters}
           />
 
@@ -3429,6 +3475,7 @@ export function GameClient() {
         filters={practiceCategoryFilters}
         stealRule="lower"
         timerOption="none"
+        disableDraws={false}
         onApply={handleApplyPracticeFilters}
       />
 
@@ -3440,6 +3487,7 @@ export function GameClient() {
         filters={versusCategoryFilters}
         stealRule={versusStealRule}
         timerOption={versusTimerOption}
+        disableDraws={versusDisableDraws}
         onApply={handleApplyVersusFilters}
       />
 

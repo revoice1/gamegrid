@@ -36,10 +36,12 @@ interface VersusSetupModalProps {
   filters: VersusCategoryFilters
   stealRule: VersusStealRule
   timerOption: VersusTurnTimerOption
+  disableDraws: boolean
   onApply: (
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
-    timerOption: VersusTurnTimerOption
+    timerOption: VersusTurnTimerOption,
+    disableDraws: boolean
   ) => void
 }
 
@@ -59,11 +61,13 @@ export function VersusSetupModal({
   filters,
   stealRule,
   timerOption,
+  disableDraws,
   onApply,
 }: VersusSetupModalProps) {
   const [draftFilters, setDraftFilters] = useState<VersusCategoryFilters>(filters)
   const [draftStealRule, setDraftStealRule] = useState<VersusStealRule>(stealRule)
   const [draftTimerOption, setDraftTimerOption] = useState<VersusTurnTimerOption>(timerOption)
+  const [draftDisableDraws, setDraftDisableDraws] = useState(disableDraws)
   const [expandedFamilies, setExpandedFamilies] = useState<
     Partial<Record<VersusFamilyKey, boolean>>
   >({})
@@ -76,7 +80,7 @@ export function VersusSetupModal({
       return
     }
 
-    const nextConfigKey = `${filtersKey}::${stealRule}::${timerOption}`
+    const nextConfigKey = `${filtersKey}::${stealRule}::${timerOption}::${disableDraws}`
     if (lastSyncedConfigRef.current === nextConfigKey) {
       return
     }
@@ -85,7 +89,8 @@ export function VersusSetupModal({
     setDraftFilters(filters)
     setDraftStealRule(stealRule)
     setDraftTimerOption(timerOption)
-  }, [filters, filtersKey, isOpen, stealRule, timerOption])
+    setDraftDisableDraws(disableDraws)
+  }, [disableDraws, filters, filtersKey, isOpen, stealRule, timerOption])
 
   useEffect(() => {
     if (!isOpen) {
@@ -187,6 +192,7 @@ export function VersusSetupModal({
     setDraftFilters({})
     setDraftStealRule('lower')
     setDraftTimerOption('none')
+    setDraftDisableDraws(false)
   }
 
   const canApply = enabledFamilyCount >= 4 && totalSelectedCategories >= 6
@@ -255,6 +261,36 @@ export function VersusSetupModal({
                   className={`text-xs font-medium ${draftStealRule === 'higher' ? 'text-foreground' : 'text-muted-foreground'}`}
                 >
                   Higher wins
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {isVersusMode && (
+          <section className="rounded-2xl border border-border bg-secondary/20 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Disable draws</h3>
+                <p className="text-xs text-muted-foreground">
+                  Resolves draws and picks a winner based on cell counts.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/50 px-3 py-2">
+                <span
+                  className={`text-xs font-medium ${!draftDisableDraws ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
+                  Off
+                </span>
+                <Switch
+                  checked={draftDisableDraws}
+                  onCheckedChange={setDraftDisableDraws}
+                  aria-label="Toggle draw resolution"
+                />
+                <span
+                  className={`text-xs font-medium ${draftDisableDraws ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
+                  On
                 </span>
               </div>
             </div>
@@ -377,7 +413,9 @@ export function VersusSetupModal({
               Cancel
             </Button>
             <Button
-              onClick={() => onApply(buildAppliedFilters(), draftStealRule, draftTimerOption)}
+              onClick={() =>
+                onApply(buildAppliedFilters(), draftStealRule, draftTimerOption, draftDisableDraws)
+              }
               disabled={!canApply}
               title={applyDisabledReason ?? undefined}
             >

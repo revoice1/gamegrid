@@ -6,6 +6,7 @@ type FamilyKey = Extract<
 >
 
 const PLATFORM_SHORT_LABELS: Record<string, string> = {
+  Arcade: 'ARC',
   'Family Computer': 'FC',
   'Family Computer Disk System': 'FDS',
   'Nintendo Entertainment System': 'NES',

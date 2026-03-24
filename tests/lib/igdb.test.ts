@@ -6,8 +6,13 @@ import {
   getPairRejectionReason,
   igdbGameMatchesCategory,
 } from '@/lib/igdb-validation'
-import { resolveGenerationCategoryFamilies } from '@/lib/igdb'
+import {
+  mergePortFamilyGameDetails,
+  resolveGenerationCategoryFamilies,
+  shouldHideSameNamePortResult,
+} from '@/lib/igdb'
 import { buildGenerationPlans } from '@/lib/puzzle-generation-plans'
+import type { IGDBGame } from '@/lib/igdb'
 import type { Category, Game } from '@/lib/types'
 
 const baseGame: Game = {
@@ -39,6 +44,21 @@ const sonyGame: Game = {
     companies: ['Sony Computer Entertainment'],
     keywords: [],
   },
+}
+
+const marioOriginalRaw: IGDBGame = {
+  id: 48135,
+  name: 'Mario Is Missing!',
+  game_type: 0,
+  first_release_date: 724377600,
+}
+
+const marioPortRaw: IGDBGame = {
+  id: 210223,
+  name: 'Mario Is Missing!',
+  game_type: 11,
+  parent_game: 48135,
+  first_release_date: 749260800,
 }
 
 describe('buildGenerationPlans', () => {
@@ -220,6 +240,15 @@ describe('igdbGameMatchesCategory', () => {
     ).toBe(true)
   })
 
+  it('matches decades across merged family release dates', () => {
+    expect(
+      igdbGameMatchesCategory(
+        { ...baseGame, released: '1993-10-01', releaseDates: ['1992-01-01', '1993-10-01'] },
+        { type: 'decade', id: '1990', name: '1990s' }
+      )
+    ).toBe(true)
+  })
+
   it('matches merged company buckets by alias group', () => {
     expect(
       igdbGameMatchesCategory(sonyGame, { type: 'company', id: 'sony', name: 'Sony', slug: 'sony' })
@@ -228,6 +257,83 @@ describe('igdbGameMatchesCategory', () => {
 
   it('rejects categories the game does not satisfy', () => {
     expect(igdbGameMatchesCategory(baseGame, { type: 'theme', id: 1, name: 'Action' })).toBe(false)
+  })
+})
+
+describe('shouldHideSameNamePortResult', () => {
+  it('hides same-name ports when the parent has the same title', () => {
+    expect(shouldHideSameNamePortResult(marioPortRaw, marioOriginalRaw)).toBe(true)
+  })
+
+  it('keeps ports with distinct titles visible', () => {
+    expect(
+      shouldHideSameNamePortResult(
+        { ...marioPortRaw, name: 'Super Mario All-Stars + Super Mario World' },
+        marioOriginalRaw
+      )
+    ).toBe(false)
+  })
+})
+
+describe('mergePortFamilyGameDetails', () => {
+  it('unions family metadata while preserving the selected game identity', () => {
+    const selectedGame: Game = {
+      ...baseGame,
+      id: 210223,
+      name: 'Mario Is Missing!',
+      slug: 'mario-is-missing-snes',
+      released: '1993-10-01',
+      releaseDates: ['1993-10-01'],
+      platforms: [
+        { platform: { id: 19, name: 'Super Nintendo Entertainment System', slug: 'snes' } },
+      ],
+      developers: [{ id: 1, name: 'Software Toolworks', slug: 'software-toolworks' }],
+      publishers: [{ id: 2, name: 'Nintendo', slug: 'nintendo' }],
+      igdb: {
+        ...baseGame.igdb!,
+        game_modes: ['Single player'],
+        themes: ['Educational'],
+        player_perspectives: ['Side view'],
+        companies: ['Nintendo'],
+        keywords: ['Mario'],
+      },
+    }
+
+    const originalGame: Game = {
+      ...selectedGame,
+      id: 48135,
+      slug: 'mario-is-missing',
+      gameUrl: 'https://www.igdb.com/games/mario-is-missing',
+      released: '1992-01-01',
+      releaseDates: ['1992-01-01'],
+      platforms: [{ platform: { id: 13, name: 'DOS', slug: 'dos' } }],
+      genres: [{ id: 10, name: 'Puzzle', slug: 'puzzle' }],
+      developers: [{ id: 3, name: 'The Software Toolworks', slug: 'the-software-toolworks' }],
+      publishers: [{ id: 4, name: 'Mindscape', slug: 'mindscape' }],
+      igdb: {
+        ...selectedGame.igdb!,
+        themes: ['Comedy'],
+        companies: ['Mindscape'],
+        keywords: ['Missing person'],
+      },
+    }
+
+    const merged = mergePortFamilyGameDetails(
+      selectedGame,
+      [selectedGame, originalGame],
+      originalGame
+    )
+
+    expect(merged.id).toBe(selectedGame.id)
+    expect(merged.slug).toBe(selectedGame.slug)
+    expect(merged.gameUrl).toBe(originalGame.gameUrl)
+    expect(merged.releaseDates).toEqual(['1993-10-01', '1992-01-01'])
+    expect(merged.platforms.map((platform) => platform.platform.name)).toEqual([
+      'Super Nintendo Entertainment System',
+      'DOS',
+    ])
+    expect(merged.publishers?.map((publisher) => publisher.name)).toEqual(['Nintendo', 'Mindscape'])
+    expect(merged.igdb?.themes).toEqual(['Educational', 'Comedy'])
   })
 })
 

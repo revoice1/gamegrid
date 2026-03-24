@@ -26,6 +26,7 @@ interface GameGridProps {
   alarmsEnabled?: boolean
   animationsEnabled?: boolean
   stealableCell?: number | null
+  finalStealCell?: number | null
   lockImpactCell?: number | null
   onCellClick: (index: number) => void
 }
@@ -92,10 +93,12 @@ export function GameGrid({
   alarmsEnabled = true,
   animationsEnabled = true,
   stealableCell = null,
+  finalStealCell = null,
   lockImpactCell = null,
   onCellClick,
 }: GameGridProps) {
   const isStealPossible = alarmsEnabled && !isGameOver && stealableCell !== null
+  const hasFinalStealFocus = !isGameOver && finalStealCell !== null
 
   const gamePointCells =
     currentPlayer === null || isGameOver
@@ -297,7 +300,11 @@ export function GameGrid({
               const isAvailable =
                 !isGameOver &&
                 currentPlayer !== null &&
-                (guess === null || stealableCell === cellIndex)
+                (!hasFinalStealFocus
+                  ? guess === null || stealableCell === cellIndex
+                  : cellIndex === finalStealCell)
+              const isFinalStealTarget = hasFinalStealFocus && cellIndex === finalStealCell
+              const isFinalStealDimmed = hasFinalStealFocus && cellIndex !== finalStealCell
 
               return (
                 <GridCell
@@ -310,10 +317,13 @@ export function GameGrid({
                   availableTone={currentPlayer}
                   isGamePoint={gamePointCells.has(cellIndex)}
                   activeAlarmKey={cellAlarmKey}
+                  alarmsEnabled={alarmsEnabled}
                   animationsEnabled={animationsEnabled}
                   isStealable={stealableCell === cellIndex}
                   isLocked={Boolean(guess?.owner) && stealableCell !== cellIndex && !isGameOver}
                   isLockImpact={lockImpactCell === cellIndex}
+                  isFinalStealTarget={isFinalStealTarget}
+                  isFinalStealDimmed={isFinalStealDimmed}
                   isDisabled={isGameOver}
                   onClick={() => onCellClick(cellIndex)}
                 />

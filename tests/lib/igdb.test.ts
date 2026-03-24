@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildIGDBWhereClause,
   buildPuzzleCellMetadata,
+  getIntrinsicPairRejectionReason,
   getPairRejectionReason,
   igdbGameMatchesCategory,
-} from '@/lib/igdb'
+} from '@/lib/igdb-validation'
+import { resolveGenerationCategoryFamilies } from '@/lib/igdb'
 import { buildGenerationPlans } from '@/lib/puzzle-generation-plans'
 import type { Category, Game } from '@/lib/types'
 
@@ -17,14 +19,25 @@ const baseGame: Game = {
   metacritic: 90,
   genres: [{ id: 5, name: 'Shooter', slug: 'shooter' }],
   platforms: [{ platform: { id: 11, name: 'Xbox (Original)', slug: 'xbox' } }],
-  tags: [{ id: 2071, name: 'Sequel', slug: 'sequel' }],
   igdb: {
     id: 1,
     game_modes: ['Single player'],
     themes: ['Horror'],
     player_perspectives: ['First person'],
     companies: ['Bungie'],
-    keywords: ['Sequel'],
+    keywords: [],
+  },
+}
+
+const sonyGame: Game = {
+  ...baseGame,
+  id: 2,
+  name: 'Sony Game',
+  slug: 'sony-game',
+  igdb: {
+    ...baseGame.igdb!,
+    companies: ['Sony Computer Entertainment'],
+    keywords: [],
   },
 }
 
@@ -41,20 +54,68 @@ describe('buildGenerationPlans', () => {
   })
 })
 
+describe('resolveGenerationCategoryFamilies', () => {
+  it('uses versus default selections for untouched families when custom filters are present', () => {
+    const families = resolveGenerationCategoryFamilies({
+      company: ['nintendo', 'sega'],
+    })
+
+    const companyFamily = families.find((family) => family.key === 'company')
+    const perspectiveFamily = families.find((family) => family.key === 'perspective')
+
+    expect(companyFamily?.categories.map((category) => String(category.id))).toEqual([
+      'nintendo',
+      'sega',
+    ])
+    expect(perspectiveFamily?.categories.map((category) => String(category.id))).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+    ])
+    expect(perspectiveFamily?.categories.some((category) => String(category.id) === '5')).toBe(
+      false
+    )
+  })
+
+  it('uses the tighter standard curated families when no custom filters are provided', () => {
+    const families = resolveGenerationCategoryFamilies()
+    const companyFamily = families.find((family) => family.key === 'company')
+
+    expect(companyFamily?.categories.map((category) => category.name)).toContain('Microsoft')
+    expect(companyFamily?.categories.map((category) => category.name)).not.toContain('Atlus')
+  })
+})
+
 describe('buildIGDBWhereClause', () => {
   it('builds native where clauses for direct IGDB categories', () => {
     expect(buildIGDBWhereClause({ type: 'genre', id: 5, name: 'Shooter' })).toBe('genres = (5)')
     expect(buildIGDBWhereClause({ type: 'theme', id: 19, name: 'Horror' })).toBe('themes = (19)')
   })
 
-  it('returns null for platform aliases that need post-filtering', () => {
+  it('builds native where clauses for merged platform buckets', () => {
     expect(
       buildIGDBWhereClause({
         type: 'platform',
         id: 18,
         name: 'Nintendo Entertainment System',
+        platformIds: [18, 99, 51],
       })
-    ).toBeNull()
+    ).toBe('platforms = (18,99,51)')
+  })
+
+  it('builds native where clauses for merged company buckets', () => {
+    expect(
+      buildIGDBWhereClause({
+        type: 'company',
+        id: 'sony',
+        name: 'Sony',
+        slug: 'sony',
+        companyIds: [10100, 13634],
+      })
+    ).toBe(
+      '(involved_companies.company = (10100,13634)) & (involved_companies.developer = true | involved_companies.publisher = true)'
+    )
   })
 
   it('builds a decade release-date clause', () => {
@@ -65,6 +126,26 @@ describe('buildIGDBWhereClause', () => {
 })
 
 describe('getPairRejectionReason', () => {
+  it('keeps intrinsic rejection separate from curated bans', () => {
+    const sony = {
+      type: 'company' as const,
+      id: 'sony',
+      name: 'Sony',
+      slug: 'sony',
+      companyIds: [10100],
+    }
+    const nes = {
+      type: 'platform' as const,
+      id: 18,
+      name: 'Nintendo Entertainment System',
+      slug: 'nes',
+      platformIds: [18, 99, 51],
+    }
+
+    expect(getIntrinsicPairRejectionReason(sony, nes)).toBeNull()
+    expect(getPairRejectionReason(sony, nes)).toBe('no catalog matches in curated pair table')
+  })
+
   it('rejects conflicting solo and multiplayer pairings', () => {
     expect(
       getPairRejectionReason(
@@ -91,6 +172,34 @@ describe('getPairRejectionReason', () => {
       )
     ).toBeNull()
   })
+
+  it('uses curated zero-pair bans symmetrically', () => {
+    const left = {
+      type: 'company' as const,
+      id: 'sony',
+      name: 'Sony',
+      slug: 'sony',
+      companyIds: [10100],
+    }
+    const right = {
+      type: 'platform' as const,
+      id: 18,
+      name: 'Nintendo Entertainment System',
+      slug: 'nes',
+    }
+
+    expect(getPairRejectionReason(left, right)).toBe('no catalog matches in curated pair table')
+    expect(getPairRejectionReason(right, left)).toBe('no catalog matches in curated pair table')
+  })
+
+  it('uses curated structural bans for known empty platform-theme pairs', () => {
+    expect(
+      getPairRejectionReason(
+        { type: 'platform', id: 59, name: 'Atari 2600', slug: 'atari2600' },
+        { type: 'theme', id: 38, name: 'Open world', slug: 'open-world' }
+      )
+    ).toBe('no catalog matches in curated pair table')
+  })
 })
 
 describe('igdbGameMatchesCategory', () => {
@@ -111,14 +220,9 @@ describe('igdbGameMatchesCategory', () => {
     ).toBe(true)
   })
 
-  it('matches curated tag categories by keyword id', () => {
+  it('matches merged company buckets by alias group', () => {
     expect(
-      igdbGameMatchesCategory(baseGame, {
-        type: 'tag',
-        id: 'tag-sequel',
-        name: 'Sequel',
-        slug: 'sequel',
-      })
+      igdbGameMatchesCategory(sonyGame, { type: 'company', id: 'sony', name: 'Sony', slug: 'sony' })
     ).toBe(true)
   })
 

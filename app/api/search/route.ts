@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { searchIGDBGames } from '@/lib/igdb'
+import { LOG_PREFIX } from '@/lib/logging'
 import { createClient } from '@/lib/supabase/server'
 import type { Category } from '@/lib/types'
 
@@ -14,6 +15,10 @@ function parseCategoryTypes(rawValue: string | null): Set<Category['type']> {
       .map((value) => value.trim())
       .filter((value): value is Category['type'] => value.length > 0)
   )
+}
+
+function normalizeSearchResultTitle(name: string): string {
+  return name.trim().toLocaleLowerCase()
 }
 
 async function getPuzzleCategoryTypes(puzzleId: string | null): Promise<Set<Category['type']>> {
@@ -55,25 +60,42 @@ export async function GET(request: NextRequest) {
         ? explicitCategoryTypes
         : await getPuzzleCategoryTypes(puzzleId)
     const games = await searchIGDBGames(query)
+    const duplicateTitleKeys = new Set(
+      Object.entries(
+        games.reduce<Record<string, number>>((counts, game) => {
+          const key = normalizeSearchResultTitle(game.name)
+          counts[key] = (counts[key] ?? 0) + 1
+          return counts
+        }, {})
+      )
+        .filter(([, count]) => count > 1)
+        .map(([key]) => key)
+    )
     const shouldScrub = (type: Category['type']) => categoryTypes.has(type)
 
     // Return lightweight display metadata, scrubbing any families that overlap
     // with active puzzle categories for this search session.
-    const safeResults = games.map((g) => ({
-      id: g.id,
-      name: g.name,
-      background_image: g.background_image,
-      metacritic: g.metacritic,
-      gameTypeLabel: g.gameTypeLabel ?? null,
-      originalPlatformName: shouldScrub('platform') ? null : (g.originalPlatformName ?? null),
-      released: shouldScrub('decade') ? null : g.released,
-      genres: shouldScrub('genre') ? [] : g.genres,
-      platforms: shouldScrub('platform') ? [] : g.platforms,
-    }))
+    const safeResults = games.map((g) => {
+      const isDuplicateTitle = duplicateTitleKeys.has(normalizeSearchResultTitle(g.name))
+
+      return {
+        id: g.id,
+        name: g.name,
+        background_image: g.background_image,
+        metacritic: g.metacritic,
+        gameTypeLabel: g.gameTypeLabel ?? null,
+        originalPlatformName: shouldScrub('platform') ? null : (g.originalPlatformName ?? null),
+        released: shouldScrub('decade') ? null : g.released,
+        genres: shouldScrub('genre') ? [] : g.genres,
+        platforms: shouldScrub('platform') ? [] : g.platforms,
+        disambiguationPlatform: isDuplicateTitle ? (g.originalPlatformName ?? null) : null,
+        disambiguationYear: isDuplicateTitle && g.released ? g.released.slice(0, 4) : null,
+      }
+    })
 
     return NextResponse.json({ results: safeResults })
   } catch (error) {
-    console.error('Search error:', error)
+    console.error(`${LOG_PREFIX} Search error:`, error)
     return NextResponse.json({ results: [] })
   }
 }

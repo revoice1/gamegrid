@@ -333,31 +333,6 @@ test('versus mode shows start options and opens setup controls', async ({ page }
   await expect(page.getByRole('button', { name: 'Reset to Default' })).toBeVisible()
 })
 
-test('practice setup tag family supports label toggles, check all, and reset to default', async ({
-  page,
-}) => {
-  await resetStorage(page)
-  await page.goto('/')
-
-  await page.getByRole('button', { name: 'Practice' }).click()
-  await page.getByRole('button', { name: 'Custom Puzzle' }).click()
-
-  await expect(page.getByRole('heading', { name: 'Practice Setup' })).toBeVisible()
-
-  const tagsSection = page.locator('section').filter({ hasText: 'Tags' }).first()
-  await tagsSection.getByRole('button', { name: /show/i }).click()
-  await expect(tagsSection.getByText('0 of 5 enabled')).toBeVisible()
-
-  await tagsSection.getByText('Metroidvania').click()
-  await expect(tagsSection.getByText('1 of 5 enabled')).toBeVisible()
-
-  await tagsSection.getByRole('button', { name: 'Check All', exact: true }).click()
-  await expect(tagsSection.getByText('All 5 enabled')).toBeVisible()
-
-  await page.getByRole('button', { name: 'Reset to Default' }).click()
-  await expect(tagsSection.getByText('0 of 5 enabled')).toBeVisible()
-})
-
 test('mode switching across daily practice and versus stays responsive', async ({ page }) => {
   await resetStorage(page)
   await page.goto('/')
@@ -658,6 +633,52 @@ test('versus failed steal shows the destructive toast path', async ({ page }) =>
 
   await expect(page.getByTestId('steal-showdown-overlay')).toBeVisible()
   await expect(page.getByTestId('steal-miss-splash')).toBeVisible()
+})
+
+test('final steal locks interaction to the target cell and dims the rest of the board', async ({
+  page,
+}) => {
+  await resetStorage(page)
+  await seedStorageValue(page, 'gamegrid_versus_state', {
+    puzzleId: 'versus-final-steal-focus',
+    puzzle: { ...fakePuzzle, id: 'versus-final-steal-focus', is_daily: false, date: null },
+    guesses: [
+      { gameId: 1, gameName: 'X1', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 2, gameName: 'X2', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 3, gameName: 'X3', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 4, gameName: 'O4', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 5, gameName: 'X5', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 6, gameName: 'O6', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 7, gameName: 'X7', gameImage: null, isCorrect: true, owner: 'x' },
+      { gameId: 8, gameName: 'O8', gameImage: null, isCorrect: true, owner: 'o' },
+      { gameId: 9, gameName: 'X9', gameImage: null, isCorrect: true, owner: 'x' },
+    ],
+    guessesRemaining: 9,
+    isComplete: false,
+    currentPlayer: 'o',
+    stealableCell: 2,
+    winner: null,
+    pendingFinalSteal: { defender: 'x', cellIndex: 2 },
+    versusCategoryFilters: {},
+    versusStealRule: 'lower',
+    versusTimerOption: 'none',
+    turnTimeLeft: null,
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Versus' }).click()
+
+  const nonTargetCell = page.getByTestId('grid-cell-0')
+  const targetCell = page.getByTestId('grid-cell-2')
+
+  await expect(nonTargetCell).toHaveClass(/opacity-35/)
+  await expect(targetCell).toHaveClass(/final-steal-focus/)
+
+  await nonTargetCell.click()
+  await expect(page.getByPlaceholder('Search for a video game...')).toHaveCount(0)
+
+  await targetCell.click({ force: true })
+  await expect(page.getByPlaceholder('Search for a video game...')).toBeVisible()
 })
 
 test('toast appears for duplicate guess rejection', async ({ page }) => {

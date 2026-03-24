@@ -79,6 +79,37 @@ const GAME_MODE_DESCRIPTIONS: Partial<Record<string, string>> = {
     'A competitive mode where many players enter the same match and play until one player or team remains.',
 }
 
+const COMPANY_DESCRIPTIONS: Partial<Record<string, string>> = {
+  nintendo:
+    'A company category for games developed or published by Nintendo across its long history in console, handheld, and software development.',
+  sega: 'A company category for games developed or published by Sega, from arcade-era classics through its console and publishing history.',
+  'electronic-arts':
+    'A company category for games developed or published by Electronic Arts, including its sports, shooter, racing, and major-label publishing output.',
+  konami:
+    'A company category for games developed or published by Konami, spanning action, horror, arcade, sports, and long-running franchise work.',
+  activision:
+    'A company category for games developed or published by Activision, covering both its publishing catalog and Activision-branded studio output.',
+  capcom:
+    'A company category for games developed or published by Capcom, including its action, arcade, fighting, survival horror, and adventure catalog.',
+  'square-enix':
+    'A company category for games developed or published by Square Enix, including the broader Square and Enix lineage behind many classic and modern RPGs.',
+  ubisoft:
+    'A company category for games developed or published by Ubisoft, covering its internal studios as well as Ubisoft-led publishing releases.',
+  thq: 'A company category for games developed or published by THQ across its historical publishing catalog and associated studio output.',
+  'microsoft-xbox':
+    'A company category for games developed or published under the broader Microsoft label, including Microsoft Game Studios, Microsoft Studios, and Xbox Game Studios.',
+  sony: 'A company category for games developed or published under the broader Sony label, especially the Sony Computer Entertainment and Sony Interactive Entertainment lineage.',
+  'bandai-namco':
+    'A company category for games developed or published by Bandai Namco, including the broader Namco lineage behind many arcade and console franchises.',
+  atlus:
+    'A company category for games developed or published by Atlus, especially RPGs, dungeon crawlers, and other character-driven Japanese releases.',
+  taito:
+    'A company category for games developed or published by Taito, with deep roots in arcade history and classic Japanese game publishing.',
+  snk: 'A company category for games developed or published by SNK, especially arcade, fighting, and action-oriented releases.',
+  'koei-tecmo':
+    'A company category for games developed or published by Koei Tecmo, including the broader Koei and Tecmo lineage behind strategy, action, and historical franchises.',
+}
+
 const TAG_DESCRIPTIONS: Partial<Record<string, string>> = {
   'female-protagonist':
     'A tag for games whose primary playable lead is a female protagonist. It is about the central player character, not just the broader cast.',
@@ -225,7 +256,11 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
   if (category.type === 'company') {
     return {
-      description: `${category.name} is a company category. A game can qualify through its credited relationship to that company, most commonly as a developer or publisher.`,
+      description: getMappedDescription(
+        COMPANY_DESCRIPTIONS,
+        category,
+        `${category.name} is a company category. A game can qualify through its credited relationship to that company, most commonly as a developer or publisher.`
+      ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }

@@ -7,6 +7,7 @@ GameGrid includes:
 - a daily puzzle
 - unlimited practice boards
 - local versus play
+- curated category pools for standard play
 - customizable category pools for practice and versus
 - search metadata, easter eggs, and local achievements
 
@@ -24,6 +25,12 @@ In practice that means the project has been shaped by:
 
 The goal is not to spray features onto the page. The goal is to make a trivia game that feels good
 to play, is easy to read, and has enough personality to be worth returning to.
+
+## Product Docs
+
+For rules, category behavior, UX intent, and open alignment questions, see:
+
+- [docs/README.md](./docs/README.md)
 
 ## Design Philosophy
 
@@ -76,7 +83,6 @@ scripts/004_add_cell_metadata.sql      - adds cell metadata to puzzles
 | --------------------------------------------- | ------------------------------------------------------------------ |
 | `GET /api/puzzle?mode=daily\|practice`        | Returns the current puzzle as JSON.                                |
 | `GET /api/puzzle-stream?mode=daily\|practice` | Streams puzzle generation progress.                                |
-| `GET /api/versus-options`                     | Returns category pools for practice and versus customization.      |
 | `GET /api/search?q=...`                       | Searches IGDB for games matching a query.                          |
 | `POST /api/guess`                             | Validates a game guess against a cell's row and column categories. |
 | `POST /api/stats`                             | Records a completed daily game session.                            |
@@ -86,7 +92,13 @@ scripts/004_add_cell_metadata.sql      - adds cell metadata to puzzles
 - Daily puzzles are stored and reused after generation.
 - Practice puzzles are generated fresh and are not stored in the database.
 - Versus matches are local-only and restored from local storage.
-- Game data and category validation are powered by IGDB.
+- Standard puzzle generation uses curated category families and prevalidated banned pairs to avoid
+  dead intersections.
+- Practice and versus custom setup start from curated defaults and let players opt into additional
+  categories.
+- Game data and guess validation are powered by IGDB.
+- Search results hide metadata that would directly overlap with active puzzle categories, while
+  still disambiguating exact duplicate titles.
 
 ## Testing
 
@@ -120,6 +132,31 @@ Git hooks are set up with Husky. On commit, `lint-staged` runs:
 - `eslint --fix` on staged JS/TS files
 
 GitHub Actions CI validates format, lint, typecheck, unit tests, and Playwright end-to-end tests on every PR.
+
+## Category Model
+
+The board pulls from curated category families rather than a live IGDB category scrape.
+
+Standard generation currently uses these families:
+
+- Platform
+- Genre
+- Decade
+- Company
+- Game Mode
+- Theme
+- Perspective
+
+Practice and versus custom setup reuse the same curated base, with a few extra categories exposed as
+opt-in custom-only choices.
+
+Notable category behavior:
+
+- `Company` is a player-facing combined bucket: a game counts if the company developed it or
+  published it.
+- Merged platform buckets such as `NES`, `SNES`, and `PC (Windows/DOS)` use native platform ID
+  groups for validation/counting.
+- Standard generation uses a curated symmetric ban table for impossible inter-family pairings.
 
 ## Feedback
 

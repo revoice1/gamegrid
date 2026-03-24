@@ -219,7 +219,7 @@ export function GameHeader({
                   <span className="tracking-[0.12em]">{versusTurnLabel}</span>
                   <span
                     className={cn(
-                      'text-sm font-black leading-none',
+                      'text-base font-black leading-none sm:text-[1.1rem]',
                       winner === 'draw'
                         ? 'text-foreground'
                         : winner === 'x'

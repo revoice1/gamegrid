@@ -47,9 +47,9 @@ export interface Category {
   id: string | number
   name: string
   slug?: string
-  // Legacy company identifiers retained for older stored puzzles and local fallbacks
-  developerId?: number
-  publisherId?: number
+  platformIds?: number[]
+  companyIds?: number[]
+  companyNamePatterns?: string[]
 }
 
 // Puzzle types

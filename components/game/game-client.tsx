@@ -166,6 +166,62 @@ function detectAnimationQuality(): AnimationQuality {
   return 'high'
 }
 
+function playFinalStealHeartbeatCue() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const AudioContextCtor =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
+  if (!AudioContextCtor) {
+    return
+  }
+
+  try {
+    const context = new AudioContextCtor()
+    const startTime = context.currentTime + 0.02
+    const pulseOffsets = [0, 0.18]
+    const baseFrequencies = [58, 50]
+
+    void context.resume().catch(() => undefined)
+
+    const masterGain = context.createGain()
+    masterGain.gain.setValueAtTime(0.06, startTime)
+    masterGain.connect(context.destination)
+
+    pulseOffsets.forEach((offset, index) => {
+      const pulseStart = startTime + offset
+      const pulseEnd = pulseStart + 0.11
+      const oscillator = context.createOscillator()
+      const gainNode = context.createGain()
+
+      oscillator.type = 'triangle'
+      oscillator.frequency.setValueAtTime(baseFrequencies[index] ?? 52, pulseStart)
+      oscillator.frequency.exponentialRampToValueAtTime(
+        (baseFrequencies[index] ?? 52) * 0.78,
+        pulseEnd
+      )
+
+      gainNode.gain.setValueAtTime(0.0001, pulseStart)
+      gainNode.gain.exponentialRampToValueAtTime(index === 0 ? 0.12 : 0.09, pulseStart + 0.016)
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, pulseEnd)
+
+      oscillator.connect(gainNode)
+      gainNode.connect(masterGain)
+      oscillator.start(pulseStart)
+      oscillator.stop(pulseEnd + 0.02)
+    })
+
+    window.setTimeout(() => {
+      void context.close().catch(() => undefined)
+    }, 900)
+  } catch {
+    // Audio is optional here; silently skip if the environment blocks it.
+  }
+}
+
 function scaleParticleDensity(density: number, quality: AnimationQuality): number {
   if (quality === 'low') {
     return Math.max(10, Math.round(density * 0.45))
@@ -976,6 +1032,43 @@ const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
     },
   },
   {
+    ...requireEasterEgg('rub-rabbit-fever'),
+    renderPiece: (particle) => {
+      if (particle.kind === 'bow') {
+        return (
+          <div
+            className="relative"
+            style={{
+              width: particle.size,
+              height: `calc(${particle.size} * 0.8)`,
+            }}
+          >
+            <div className="absolute left-[8%] top-[18%] h-[56%] w-[34%] rounded-full bg-[#FF7AB8] shadow-[0_8px_18px_rgba(255,122,184,0.32)]" />
+            <div className="absolute right-[8%] top-[18%] h-[56%] w-[34%] rounded-full bg-[#FF7AB8] shadow-[0_8px_18px_rgba(255,122,184,0.32)]" />
+            <div className="absolute left-1/2 top-1/2 h-[34%] w-[24%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#FDE68A]" />
+          </div>
+        )
+      }
+
+      return (
+        <div
+          className="relative"
+          style={{
+            width: particle.size,
+            height: particle.size,
+          }}
+        >
+          <div className="absolute left-1/2 top-1/2 h-[26%] w-[26%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#FFF7ED] shadow-[0_0_18px_rgba(255,247,237,0.45)]" />
+          <div className="absolute left-1/2 top-[6%] h-[26%] w-[10%] -translate-x-1/2 rounded-full bg-[#F59E0B] blur-[0.5px]" />
+          <div className="absolute left-[18%] top-[18%] h-[8%] w-[8%] rounded-full bg-[#FDE68A]" />
+          <div className="absolute right-[18%] top-[18%] h-[8%] w-[8%] rounded-full bg-[#FDE68A]" />
+          <div className="absolute left-[18%] bottom-[18%] h-[8%] w-[8%] rounded-full bg-[#FDE68A]" />
+          <div className="absolute right-[18%] bottom-[18%] h-[8%] w-[8%] rounded-full bg-[#FDE68A]" />
+        </div>
+      )
+    },
+  },
+  {
     ...requireEasterEgg('second-round'),
     renderPiece: (particle) => {
       if (particle.kind === 'die') {
@@ -1591,6 +1684,8 @@ export function GameClient() {
   const { toast } = useToast()
   const versusStealRuleRef = useRef(versusStealRule)
   const versusTimerOptionRef = useRef(versusTimerOption)
+  const didMountFinalStealCueRef = useRef(false)
+  const lastFinalStealCueKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     versusStealRuleRef.current = versusStealRule
@@ -1599,6 +1694,35 @@ export function GameClient() {
   useEffect(() => {
     versusTimerOptionRef.current = versusTimerOption
   }, [versusTimerOption])
+
+  useEffect(() => {
+    const cueKey = pendingFinalSteal
+      ? `${pendingFinalSteal.defender}:${pendingFinalSteal.cellIndex}`
+      : null
+
+    if (!didMountFinalStealCueRef.current) {
+      didMountFinalStealCueRef.current = true
+      lastFinalStealCueKeyRef.current = cueKey
+      return
+    }
+
+    if (!cueKey) {
+      lastFinalStealCueKeyRef.current = null
+      return
+    }
+
+    if (lastFinalStealCueKeyRef.current === cueKey) {
+      return
+    }
+
+    lastFinalStealCueKeyRef.current = cueKey
+
+    if (!animationsEnabled || !versusAlarmsEnabled) {
+      return
+    }
+
+    playFinalStealHeartbeatCue()
+  }, [animationsEnabled, pendingFinalSteal, versusAlarmsEnabled])
 
   const score = guesses.filter((g) => g?.isCorrect).length
   const isVersusMode = mode === 'versus'
@@ -2094,6 +2218,31 @@ export function GameClient() {
                             status: (event.passed
                               ? 'passed'
                               : 'failed') as LoadingIntersection['status'],
+                            validOptionCount: event.passed ? undefined : event.validOptionCount,
+                          }
+                        : intersection
+                    )
+
+                    return { ...entry, intersections }
+                  })
+                )
+              }
+              if (
+                event.stage === 'metadata' &&
+                typeof event.attempt === 'number' &&
+                typeof event.cellIndex === 'number'
+              ) {
+                setLoadingAttempts((current) =>
+                  current.map((entry) => {
+                    if (entry.attempt !== event.attempt) {
+                      return entry
+                    }
+
+                    const intersections = entry.intersections.map((intersection, index) =>
+                      index === event.cellIndex
+                        ? {
+                            ...intersection,
+                            status: 'passed' as LoadingIntersection['status'],
                             validOptionCount: event.validOptionCount,
                           }
                         : intersection
@@ -2446,6 +2595,9 @@ export function GameClient() {
 
     if (mode === 'versus') {
       if (isComplete) return
+      if (pendingFinalSteal && index !== pendingFinalSteal.cellIndex) {
+        return
+      }
 
       const existingGuess = guesses[index]
       const canSteal =
@@ -2655,6 +2807,11 @@ export function GameClient() {
             imageUrl: game.background_image,
           })
         }
+      }
+
+      const metacriticScore = game.metacritic
+      if (metacriticScore !== null && metacriticScore < 50) {
+        unlockAchievementWithToast('real-stinker')
       }
 
       const newGuessesRemaining = mode === 'versus' ? guessesRemaining : guessesRemaining - 1
@@ -2943,7 +3100,10 @@ export function GameClient() {
                           {intersection.label}
                         </span>
                         <span className="shrink-0 text-muted-foreground">
-                          {intersection.status === 'passed' && 'OK'}
+                          {intersection.status === 'passed' &&
+                            (typeof intersection.validOptionCount === 'number'
+                              ? `${intersection.validOptionCount}`
+                              : 'OK')}
                           {intersection.status === 'failed' &&
                             `X${typeof intersection.validOptionCount === 'number' ? ` ${intersection.validOptionCount}` : ''}`}
                           {intersection.status === 'pending' && '...'}
@@ -3160,6 +3320,7 @@ export function GameClient() {
           cellMetadata={puzzle.cell_metadata}
           selectedCell={selectedCell}
           stealableCell={isVersusMode ? stealableCell : null}
+          finalStealCell={isVersusMode ? (pendingFinalSteal?.cellIndex ?? null) : null}
           currentPlayer={isVersusMode ? currentPlayer : null}
           score={!isVersusMode ? score : undefined}
           guessesRemaining={!isVersusMode ? guessesRemaining : undefined}

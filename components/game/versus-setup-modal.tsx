@@ -12,23 +12,17 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { IndexBadge } from '@/components/index-badge'
+import { getFamilyDisplayLabel } from '@/lib/category-display'
 import type { CategoryType } from '@/lib/types'
+import {
+  CURATED_VERSUS_CATEGORY_FAMILIES,
+  type VersusCategoryFamilyOption,
+} from '@/lib/versus-category-options'
 
 type VersusFamilyKey = Extract<
   CategoryType,
-  'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective' | 'tag'
+  'platform' | 'genre' | 'decade' | 'company' | 'game_mode' | 'theme' | 'perspective'
 >
-
-export interface VersusCategoryFamilyOption {
-  key: VersusFamilyKey
-  source: 'dynamic' | 'fallback'
-  categories: Array<{
-    id: string
-    name: string
-    type: CategoryType
-    defaultChecked?: boolean
-  }>
-}
 
 export type VersusCategoryFilters = Partial<Record<VersusFamilyKey, string[]>>
 export type VersusStealRule = 'lower' | 'higher'
@@ -57,16 +51,6 @@ const TIMER_OPTIONS: Array<{ value: VersusTurnTimerOption; label: string }> = [
   { value: 300, label: '5 min' },
 ]
 
-const FAMILY_LABELS: Record<VersusFamilyKey, string> = {
-  platform: 'Platforms',
-  genre: 'Genres',
-  decade: 'Decades',
-  game_mode: 'Modes',
-  theme: 'Themes',
-  perspective: 'Perspectives',
-  tag: 'Tags',
-}
-
 export function VersusSetupModal({
   isOpen,
   onClose,
@@ -77,11 +61,9 @@ export function VersusSetupModal({
   timerOption,
   onApply,
 }: VersusSetupModalProps) {
-  const [families, setFamilies] = useState<VersusCategoryFamilyOption[]>([])
   const [draftFilters, setDraftFilters] = useState<VersusCategoryFilters>(filters)
   const [draftStealRule, setDraftStealRule] = useState<VersusStealRule>(stealRule)
   const [draftTimerOption, setDraftTimerOption] = useState<VersusTurnTimerOption>(timerOption)
-  const [isLoading, setIsLoading] = useState(false)
   const [expandedFamilies, setExpandedFamilies] = useState<
     Partial<Record<VersusFamilyKey, boolean>>
   >({})
@@ -111,21 +93,7 @@ export function VersusSetupModal({
     }
   }, [isOpen])
 
-  useEffect(() => {
-    if (!isOpen || families.length > 0) {
-      return
-    }
-
-    setIsLoading(true)
-    fetch('/api/versus-options')
-      .then((response) => response.json())
-      .then((data) => setFamilies(data.families ?? []))
-      .catch((error) => {
-        console.error('Failed to load versus options:', error)
-        setFamilies([])
-      })
-      .finally(() => setIsLoading(false))
-  }, [families.length, isOpen])
+  const families = useMemo<VersusCategoryFamilyOption[]>(() => CURATED_VERSUS_CATEGORY_FAMILIES, [])
 
   const getDefaultSelection = (family: VersusCategoryFamilyOption) => {
     return family.categories
@@ -322,79 +290,73 @@ export function VersusSetupModal({
           </section>
         )}
 
-        {isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            Loading category pools...
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {families.map((family) => {
-              const selected = new Set(getEffectiveSelection(family))
-              const isCustom = selected.size < family.categories.length
-              const isExpanded = expandedFamilies[family.key] === true
+        <div className="space-y-5">
+          {families.map((family) => {
+            const selected = new Set(getEffectiveSelection(family))
+            const isCustom = selected.size < family.categories.length
+            const isExpanded = expandedFamilies[family.key] === true
 
-              return (
-                <section
-                  key={family.key}
-                  className="rounded-2xl border border-border bg-secondary/20 p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleFamilyExpanded(family.key)}
-                      className="flex flex-1 items-center justify-between gap-3 text-left"
-                    >
-                      <div>
-                        <h3 className="text-sm font-semibold text-foreground">
-                          {FAMILY_LABELS[family.key]}
-                        </h3>
-                        <p className="text-xs text-muted-foreground">
-                          {isCustom
-                            ? `${selected.size} of ${family.categories.length} enabled`
-                            : `All ${family.categories.length} enabled`}
-                        </p>
-                      </div>
-                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        {isExpanded ? 'Hide' : 'Show'}
-                      </span>
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => uncheckFamily(family.key)}>
-                        Uncheck All
+            return (
+              <section
+                key={family.key}
+                className="rounded-2xl border border-border bg-secondary/20 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleFamilyExpanded(family.key)}
+                    className="flex flex-1 items-center justify-between gap-3 text-left"
+                  >
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {getFamilyDisplayLabel(family.key)}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {isCustom
+                          ? `${selected.size} of ${family.categories.length} enabled`
+                          : `All ${family.categories.length} enabled`}
+                      </p>
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {isExpanded ? 'Hide' : 'Show'}
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => uncheckFamily(family.key)}>
+                      Uncheck All
+                    </Button>
+                    {isCustom && (
+                      <Button variant="ghost" size="sm" onClick={() => checkFamily(family.key)}>
+                        Check All
                       </Button>
-                      {isCustom && (
-                        <Button variant="ghost" size="sm" onClick={() => checkFamily(family.key)}>
-                          Check All
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
+                </div>
 
-                  {isExpanded && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {family.categories.map((category) => (
-                        <label
-                          key={`${family.key}-${category.id}`}
-                          htmlFor={`${family.key}-${category.id}`}
-                          className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/90 bg-background/65 px-3 py-2 text-sm transition-colors hover:bg-background/85"
-                        >
-                          <Checkbox
-                            id={`${family.key}-${category.id}`}
-                            checked={selected.has(category.id)}
-                            onCheckedChange={(checked) =>
-                              toggleCategory(family.key, category.id, checked === true)
-                            }
-                          />
-                          <span className="text-foreground">{category.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )
-            })}
-          </div>
-        )}
+                {isExpanded && (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {family.categories.map((category) => (
+                      <label
+                        key={`${family.key}-${category.id}`}
+                        htmlFor={`${family.key}-${category.id}`}
+                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/90 bg-background/65 px-3 py-2 text-sm transition-colors hover:bg-background/85"
+                      >
+                        <Checkbox
+                          id={`${family.key}-${category.id}`}
+                          checked={selected.has(category.id)}
+                          onCheckedChange={(checked) =>
+                            toggleCategory(family.key, category.id, checked === true)
+                          }
+                        />
+                        <span className="text-foreground">{category.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )
+          })}
+        </div>
 
         <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
           <div className="space-y-1">

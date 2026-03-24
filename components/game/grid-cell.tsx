@@ -1,5 +1,6 @@
 'use client'
 
+import { Armchair } from 'lucide-react'
 import { usePulse } from '@/hooks/use-pulse'
 import { cn } from '@/lib/utils'
 import type { CellGuess, PuzzleCellMetadata } from '@/lib/types'
@@ -15,9 +16,12 @@ interface GridCellProps {
   isGamePoint?: boolean
   isStealable?: boolean
   activeAlarmKey?: 'game-point' | 'steal' | null
+  alarmsEnabled?: boolean
   animationsEnabled?: boolean
   isLocked?: boolean
   isLockImpact?: boolean
+  isFinalStealTarget?: boolean
+  isFinalStealDimmed?: boolean
   isDisabled: boolean
   onClick: () => void
 }
@@ -36,7 +40,7 @@ const difficultyEmoji: Record<NonNullable<PuzzleCellMetadata['difficulty']>, str
   spicy: '\u{1F525}',
   tricky: '\u{1F9E9}',
   fair: '\u{1F3AF}',
-  cozy: '\u{1F6CB}',
+  cozy: '',
   feast: '\u{1F3C6}',
 }
 
@@ -50,22 +54,26 @@ export function GridCell({
   isGamePoint = false,
   isStealable = false,
   activeAlarmKey = null,
+  alarmsEnabled = true,
   animationsEnabled = true,
   isLocked = false,
   isLockImpact = false,
+  isFinalStealTarget = false,
+  isFinalStealDimmed = false,
   isDisabled,
   onClick,
 }: GridCellProps) {
   const hasGuess = guess !== null
   const isButtonDisabled = isDisabled && !hasGuess
-  const cellAlarmState =
-    isGamePoint && isStealable
+  const cellAlarmState = alarmsEnabled
+    ? isGamePoint && isStealable
       ? activeAlarmKey
       : isGamePoint
         ? 'game-point'
         : isStealable
           ? 'steal'
           : null
+    : null
   const showGamePointState = cellAlarmState === 'game-point'
   const alarmPulseOn = usePulse(
     Boolean(cellAlarmState) && animationsEnabled,
@@ -131,6 +139,14 @@ export function GridCell({
           !isDisabled &&
           !isAvailable &&
           (animationsEnabled ? 'cursor-pointer hover:border-primary/30' : 'cursor-pointer'),
+        isFinalStealDimmed &&
+          (animationsEnabled
+            ? 'final-steal-dim-heart opacity-35 saturate-50'
+            : 'opacity-35 saturate-50'),
+        isFinalStealTarget &&
+          (animationsEnabled
+            ? 'final-steal-focus border-primary/70 shadow-[0_0_0_1px_rgba(34,197,94,0.32),0_0_22px_rgba(34,197,94,0.2),0_0_40px_rgba(34,197,94,0.12)]'
+            : 'border-primary/70'),
         isDisabled && !hasGuess && 'opacity-50 cursor-not-allowed'
       )}
       style={alarmStyle}
@@ -237,8 +253,12 @@ export function GridCell({
                 )}
                 title={possibleTitle ?? undefined}
               >
-                {difficultyMarker && (
-                  <span className="text-[11px] leading-none">{difficultyMarker}</span>
+                {metadata.difficulty === 'cozy' ? (
+                  <Armchair className="h-3 w-3" />
+                ) : (
+                  difficultyMarker && (
+                    <span className="text-[11px] leading-none">{difficultyMarker}</span>
+                  )
                 )}
                 {metadata.difficultyLabel}
               </span>
@@ -253,6 +273,77 @@ export function GridCell({
         </div>
       )}
       <style jsx>{`
+        .final-steal-focus {
+          animation: final-steal-heartbeat 1.5s cubic-bezier(0.22, 0.68, 0.2, 1) infinite;
+        }
+
+        .final-steal-dim-heart {
+          animation: final-steal-dim-heartbeat 1.5s cubic-bezier(0.22, 0.68, 0.2, 1) infinite;
+        }
+
+        @keyframes final-steal-heartbeat {
+          0%,
+          100% {
+            box-shadow:
+              0 0 0 1px rgba(34, 197, 94, 0.26),
+              0 0 14px rgba(34, 197, 94, 0.1),
+              0 0 24px rgba(34, 197, 94, 0.05);
+            transform: scale(1);
+          }
+          14% {
+            box-shadow:
+              0 0 0 1px rgba(34, 197, 94, 0.44),
+              0 0 28px rgba(34, 197, 94, 0.24),
+              0 0 50px rgba(34, 197, 94, 0.14);
+            transform: scale(1.018);
+          }
+          26% {
+            box-shadow:
+              0 0 0 1px rgba(34, 197, 94, 0.34),
+              0 0 18px rgba(34, 197, 94, 0.16),
+              0 0 34px rgba(34, 197, 94, 0.08);
+            transform: scale(1.004);
+          }
+          38% {
+            box-shadow:
+              0 0 0 1px rgba(34, 197, 94, 0.56),
+              0 0 34px rgba(34, 197, 94, 0.3),
+              0 0 60px rgba(34, 197, 94, 0.2);
+            transform: scale(1.032);
+          }
+          52% {
+            box-shadow:
+              0 0 0 1px rgba(34, 197, 94, 0.32),
+              0 0 16px rgba(34, 197, 94, 0.12),
+              0 0 28px rgba(34, 197, 94, 0.07);
+            transform: scale(1.002);
+          }
+        }
+
+        @keyframes final-steal-dim-heartbeat {
+          0%,
+          100% {
+            opacity: 0.35;
+            filter: saturate(0.5) brightness(0.94);
+          }
+          14% {
+            opacity: 0.26;
+            filter: saturate(0.42) brightness(0.88);
+          }
+          26% {
+            opacity: 0.32;
+            filter: saturate(0.46) brightness(0.91);
+          }
+          38% {
+            opacity: 0.22;
+            filter: saturate(0.38) brightness(0.84);
+          }
+          52% {
+            opacity: 0.34;
+            filter: saturate(0.48) brightness(0.92);
+          }
+        }
+
         .lock-impact {
           animation: lock-slam 620ms var(--ease-spring);
         }
@@ -279,6 +370,8 @@ export function GridCell({
         }
 
         @media (prefers-reduced-motion: reduce) {
+          .final-steal-focus,
+          .final-steal-dim-heart,
           .lock-impact {
             animation: none;
           }

@@ -118,6 +118,15 @@ export const EASTER_EGGS: EasterEggConfig[] = [
     pieceKinds: ['bow', 'smash'],
   },
   {
+    achievementId: 'rub-rabbit-fever',
+    achievementTitle: 'Rub It!',
+    achievementDescription: 'Unlocked by using its hidden trigger game as a correct answer.',
+    triggerGameIds: [20488],
+    durationMs: 5000,
+    density: 36,
+    pieceKinds: ['bow', 'spark'],
+  },
+  {
     achievementId: 'second-round',
     achievementTitle: 'ZA PARTY GAAAAME! 2',
     achievementDescription: 'Unlocked by using its hidden trigger game as a correct answer.',

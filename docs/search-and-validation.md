@@ -1,5 +1,16 @@
 # Search And Validation
 
+## Table Of Contents
+
+- [Search Goals](#search-goals)
+- [Search Metadata Scrubbing](#search-metadata-scrubbing)
+- [Duplicate-Title Disambiguation](#duplicate-title-disambiguation)
+- [Guess Validation](#guess-validation)
+- [Original Plus Port Families](#original-plus-port-families)
+- [Company Validation](#company-validation)
+- [Count Paths](#count-paths)
+- [Generation Feedback](#generation-feedback)
+
 ## Search Goals
 
 - Make it easy to find the intended game quickly.
@@ -37,6 +48,23 @@ Examples:
 - Search results are suggestions.
 - Correctness is decided by backend validation against the selected cell categories.
 - Validation is based on structured game data plus curated category rules.
+
+```mermaid
+flowchart TD
+    A[User types search query] --> B[IGDB search results]
+    B --> C{Same-name port?}
+    C -->|Yes, same parent title| D[Hide duplicate port result]
+    C -->|No| E[Keep visible result]
+    D --> E
+    E --> F[User selects a result]
+    F --> G{Has parent/original?}
+    G -->|No| H[Validate selected game]
+    G -->|Yes| I[Resolve parent/original plus official Port children]
+    I --> J[Merge family metadata]
+    J --> K[Validate row and column categories]
+    H --> K
+    K --> L[Return correctness and guess details]
+```
 
 ## Original Plus Port Families
 

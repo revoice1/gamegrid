@@ -1,5 +1,16 @@
 # Category Model
 
+## Table Of Contents
+
+- [Philosophy](#philosophy)
+- [Standard Families](#standard-families)
+- [Custom / Versus Families](#custom--versus-families)
+- [Company](#company)
+- [Company Alias Buckets](#company-alias-buckets)
+- [Platform Amalgams](#platform-amalgams)
+- [Banned Pair Philosophy](#banned-pair-philosophy)
+- [Tag Status](#tag-status)
+
 ## Philosophy
 
 - Standard generation should be curated and reliable.

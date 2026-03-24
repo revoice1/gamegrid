@@ -2,6 +2,14 @@
 
 These are the main places where product intent and implementation may still want another pass.
 
+## Table Of Contents
+
+- [Platform Count Paths](#platform-count-paths)
+- [Pair Smoothing](#pair-smoothing)
+- [Tag Cleanup](#tag-cleanup)
+- [Daily Midnight Efficiency](#daily-midnight-efficiency)
+- [Documentation Maintenance](#documentation-maintenance)
+
 ## Platform Count Paths
 
 - Some merged platform handling is much better now.

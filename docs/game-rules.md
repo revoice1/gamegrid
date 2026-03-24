@@ -1,5 +1,14 @@
 # Game Rules
 
+## Table Of Contents
+
+- [Modes](#modes)
+- [Guess Rules](#guess-rules)
+- [Daily Timing](#daily-timing)
+- [Versus Rules](#versus-rules)
+- [Completion States](#completion-states)
+- [Achievements And Easter Eggs](#achievements-and-easter-eggs)
+
 ## Modes
 
 ### Daily
@@ -46,6 +55,25 @@
 - One player is active at a time.
 - The turn pill should show the active player clearly without overpowering the rest of the header.
 - Optional timer pressure applies only when versus timers are enabled.
+
+```mermaid
+flowchart TD
+    A[Player turn begins] --> B[Claim blank or challenge stealable cell]
+    B --> C{Valid answer?}
+    C -->|No| D[Turn ends or steal fails]
+    C -->|Yes| E[Square is claimed]
+    E --> F{Completed line?}
+    F -->|Yes| G[Winner declared]
+    F -->|No| H{Board full?}
+    H -->|No| I[Pass turn]
+    H -->|Yes| J{Disable draws enabled?}
+    J -->|No| K[Draw]
+    J -->|Yes| L[Count claimed cells]
+    L --> M[Higher cell count wins]
+    D --> N{Final steal window?}
+    N -->|Yes| O[Only target cell is interactable]
+    N -->|No| I
+```
 
 ### Steals
 

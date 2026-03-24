@@ -1,4 +1,5 @@
 import type { Category, Game, PuzzleCellMetadata } from './types'
+import { getCuratedStandardPairBanReason } from './curated-standard-pair-bans'
 
 const CURATED_TAG_KEYWORD_IDS: Partial<Record<string, number[]>> = {
   metroidvania: [477],
@@ -121,6 +122,41 @@ const PLATFORM_ALIAS_GROUPS: Record<string, string[]> = {
   'super famicom': ['super nintendo entertainment system', 'super famicom'],
   'pc microsoft windows': ['pc microsoft windows', 'dos'],
   'pc windows dos': ['pc microsoft windows', 'dos'],
+  'playstation original': ['playstation original', 'playstation'],
+  playstation: ['playstation original', 'playstation'],
+  'xbox original': ['xbox original', 'xbox'],
+  xbox: ['xbox original', 'xbox'],
+}
+
+const COMPANY_ALIAS_GROUPS: Record<string, { aliases?: string[]; prefixes?: string[] }> = {
+  nintendo: { aliases: ['Nintendo'], prefixes: ['nintendo'] },
+  sega: { aliases: ['Sega'], prefixes: ['sega'] },
+  'electronic-arts': { aliases: ['Electronic Arts'] },
+  konami: { aliases: ['Konami'], prefixes: ['konami'] },
+  activision: { aliases: ['Activision'], prefixes: ['activision'] },
+  capcom: { aliases: ['Capcom'], prefixes: ['capcom'] },
+  'square-enix': { aliases: ['Square Enix', 'Square', 'Enix'] },
+  ubisoft: { aliases: ['Ubisoft'], prefixes: ['ubisoft'] },
+  thq: { aliases: ['THQ'] },
+  'bandai-namco': { aliases: ['Bandai Namco', 'Namco'] },
+  'microsoft-xbox': {
+    aliases: ['Microsoft', 'Microsoft Game Studios', 'Microsoft Studios', 'Xbox Game Studios'],
+    prefixes: ['xbox'],
+  },
+  atlus: { aliases: ['Atlus'] },
+  sony: {
+    aliases: [
+      'Sony Interactive Entertainment',
+      'Sony Computer Entertainment',
+      'Sony Computer Entertainment America',
+      'Sony Computer Entertainment Europe',
+      'Sony Computer Entertainment Inc.',
+    ],
+    prefixes: ['sony'],
+  },
+  taito: { aliases: ['Taito'] },
+  snk: { aliases: ['SNK'] },
+  'koei-tecmo': { aliases: ['Koei Tecmo', 'Koei', 'Tecmo'] },
 }
 
 function normalizeName(value: string): string {
@@ -145,6 +181,14 @@ function normalizeCompanyName(value: string): string {
     .trim()
 }
 
+function getCategoryIdentity(category: Category): string {
+  return `${category.type}:${String(category.slug ?? category.id)}`
+}
+
+function getCanonicalCategoryPairKey(left: Category, right: Category): string {
+  return [getCategoryIdentity(left), getCategoryIdentity(right)].sort().join('|')
+}
+
 function getTagAliases(name: string): Set<string> {
   const normalized = normalizeName(name)
   const aliases = TAG_ALIAS_GROUPS[normalized] ?? [normalized]
@@ -155,6 +199,30 @@ function getPlatformAliases(name: string): Set<string> {
   const normalized = normalizeName(name)
   const aliases = PLATFORM_ALIAS_GROUPS[normalized] ?? [normalized]
   return new Set(aliases.map(normalizeName))
+}
+
+function getPlatformIds(category: Category): number[] {
+  const explicitIds = (category.platformIds ?? []).filter((id): id is number => Number.isFinite(id))
+  if (explicitIds.length > 0) {
+    return explicitIds
+  }
+
+  return typeof category.id === 'number' && Number.isFinite(category.id) ? [category.id] : []
+}
+
+function getCompanyAliases(category: Category): Set<string> {
+  const normalized = normalizeName(category.slug ?? category.name)
+  const aliases = COMPANY_ALIAS_GROUPS[normalized]?.aliases ?? [category.name]
+  return new Set(aliases.map(normalizeCompanyName))
+}
+
+function getCompanyPrefixes(category: Category): string[] {
+  const normalized = normalizeName(category.slug ?? category.name)
+  return (COMPANY_ALIAS_GROUPS[normalized]?.prefixes ?? []).map(normalizeName)
+}
+
+function getCompanyIds(category: Category): number[] {
+  return (category.companyIds ?? []).filter((id): id is number => Number.isFinite(id))
 }
 
 function buildDifficultyMetadata(validOptionCount: number) {
@@ -198,6 +266,16 @@ function matchesGameMode(values: string[] | undefined, target: string): boolean 
   return false
 }
 
+function getNormalizedTagSources(game: Game): string[] {
+  return [
+    ...(game.tags?.flatMap((tag) => [tag.name, tag.slug.replace(/-/g, ' ')]) ?? []),
+    ...(game.igdb?.game_modes ?? []),
+    ...(game.igdb?.themes ?? []),
+    ...(game.igdb?.player_perspectives ?? []),
+    ...(game.igdb?.keywords ?? []),
+  ].map(normalizeName)
+}
+
 function matchesTagBucket(game: Game, category: Category): boolean {
   const keywordIds = CURATED_TAG_KEYWORD_IDS[category.slug ?? '']
   if (keywordIds?.length) {
@@ -207,14 +285,14 @@ function matchesTagBucket(game: Game, category: Category): boolean {
     }
   }
 
-  const aliases = getTagAliases(category.name)
-  const sources = [
-    ...(game.igdb?.game_modes ?? []),
-    ...(game.igdb?.themes ?? []),
-    ...(game.igdb?.player_perspectives ?? []),
-    ...(game.igdb?.keywords ?? []),
-  ].map(normalizeName)
+  const normalizedCategorySlug = normalizeName(category.slug ?? category.name)
+  const sources = getNormalizedTagSources(game)
 
+  if (normalizedCategorySlug === 'sequel') {
+    return sources.some((source) => /\bsequel\b/.test(source))
+  }
+
+  const aliases = getTagAliases(category.name)
   return sources.some((source) => aliases.has(source))
 }
 
@@ -248,7 +326,7 @@ export function buildPuzzleCellMetadata(
 export function buildIGDBWhereClause(category: Category): string | null {
   switch (category.type) {
     case 'platform':
-      return getPlatformAliases(category.name).size > 1 ? null : `platforms = (${category.id})`
+      return `platforms = (${getPlatformIds(category).join(',')})`
     case 'genre':
       return `genres = (${category.id})`
     case 'game_mode':
@@ -268,12 +346,27 @@ export function buildIGDBWhereClause(category: Category): string | null {
         Date.parse(start) / 1000
       )} & first_release_date <= ${Math.floor(Date.parse(end) / 1000)}`
     }
+    case 'company': {
+      const clauses: string[] = []
+      const companyIds = getCompanyIds(category)
+      if (companyIds.length > 0) {
+        clauses.push(`involved_companies.company = (${companyIds.join(',')})`)
+      }
+      for (const pattern of category.companyNamePatterns ?? []) {
+        const escapedPattern = pattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        clauses.push(`involved_companies.company.name ~ *"${escapedPattern}"*`)
+      }
+      if (clauses.length === 0) {
+        return null
+      }
+      return `(${clauses.join(' | ')}) & (involved_companies.developer = true | involved_companies.publisher = true)`
+    }
     default:
       return null
   }
 }
 
-export function getPairRejectionReason(
+export function getIntrinsicPairRejectionReason(
   rowCategory: Category,
   colCategory: Category
 ): string | null {
@@ -333,12 +426,33 @@ export function getPairRejectionReason(
   return null
 }
 
+export function getPairRejectionReason(
+  rowCategory: Category,
+  colCategory: Category
+): string | null {
+  const intrinsicReason = getIntrinsicPairRejectionReason(rowCategory, colCategory)
+  if (intrinsicReason) {
+    return intrinsicReason
+  }
+
+  const curatedBanReason = getCuratedStandardPairBanReason(
+    getCanonicalCategoryPairKey(rowCategory, colCategory)
+  )
+  if (curatedBanReason) {
+    return curatedBanReason
+  }
+
+  return null
+}
+
 export function igdbGameMatchesCategory(game: Game, category: Category): boolean {
   switch (category.type) {
     case 'platform':
       return (
-        game.platforms?.some((platform) =>
-          getPlatformAliases(category.name).has(normalizeName(platform.platform.name))
+        game.platforms?.some(
+          (platform) =>
+            getPlatformIds(category).includes(platform.platform.id) ||
+            getPlatformAliases(category.name).has(normalizeName(platform.platform.name))
         ) || false
       )
     case 'genre':
@@ -347,18 +461,35 @@ export function igdbGameMatchesCategory(game: Game, category: Category): boolean
         false
       )
     case 'decade': {
-      if (!game.released) {
+      const releaseDates =
+        game.releaseDates && game.releaseDates.length > 0
+          ? game.releaseDates
+          : game.released
+            ? [game.released]
+            : []
+
+      if (releaseDates.length === 0) {
         return false
       }
-      const year = Number(game.released.split('-')[0])
       const decadeStart = Number(category.id)
-      return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
+      return releaseDates.some((releaseDate) => {
+        const year = Number(releaseDate.split('-')[0])
+        return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
+      })
     }
     case 'company':
       return (
-        game.igdb?.companies?.some(
-          (company) => normalizeCompanyName(company) === normalizeCompanyName(category.name)
-        ) || false
+        game.developers?.some((company) => getCompanyIds(category).includes(company.id)) ||
+        game.publishers?.some((company) => getCompanyIds(category).includes(company.id)) ||
+        game.igdb?.companies?.some((company) => {
+          const normalizedCompany = normalizeCompanyName(company)
+          const fullNormalizedCompany = normalizeName(company)
+          return (
+            getCompanyAliases(category).has(normalizedCompany) ||
+            getCompanyPrefixes(category).some((prefix) => fullNormalizedCompany.startsWith(prefix))
+          )
+        }) ||
+        false
       )
     case 'game_mode':
       return matchesGameMode(game.igdb?.game_modes, category.name)

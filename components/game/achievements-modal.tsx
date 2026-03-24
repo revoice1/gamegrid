@@ -100,6 +100,7 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
               const isUnlocked = unlockedAchievementSet.has(achievement.id)
               const imageUrl = achievementImageMap.get(achievement.id)
               const isPerfectGrid = achievement.id === 'perfect-grid'
+              const isRealStinker = achievement.id === 'real-stinker'
               const isSecretRouteAchievement = achievement.id === ROUTE_ACHIEVEMENT_ID
               const isHiddenLocked = achievement.hidden && !isUnlocked
               const displayTitle = isHiddenLocked ? '???' : achievement.title
@@ -180,6 +181,18 @@ export function AchievementsModal({ isOpen, onClose }: AchievementsModalProps) {
                             <path d="M10 13h4v3h-4z" />
                             <path d="M8 19h8" />
                           </svg>
+                        ) : isRealStinker && isUnlocked ? (
+                          <div
+                            className={cn(
+                              'flex h-10 w-10 items-center justify-center rounded-md border text-2xl shadow-sm',
+                              isUnlocked
+                                ? 'border-amber-300/35 bg-amber-400/12'
+                                : 'border-border/80 bg-background/75 grayscale-[0.35]'
+                            )}
+                            aria-label="Real Stinker trophy"
+                          >
+                            💩
+                          </div>
                         ) : (
                           <span
                             className={cn(

@@ -12,6 +12,7 @@ import {
   getCategoryTypeLabel,
   getFallbackCategoryDefinition,
 } from '@/lib/category-definition-content'
+import { getCategoryDisplayName } from '@/lib/category-display'
 import { IndexBadge } from '@/components/index-badge'
 import type { IndexBadgeSlot } from '@/lib/route-index'
 import { cn } from '@/lib/utils'
@@ -21,18 +22,6 @@ interface CategoryHeaderProps {
   category: Category
   orientation: 'row' | 'col'
   clueSlot?: IndexBadgeSlot
-}
-
-function getCategoryDisplayName(category: Category) {
-  if (category.type === 'game_mode' && category.name === 'Massively Multiplayer Online (MMO)') {
-    return 'MMO'
-  }
-
-  if (category.type === 'genre' && category.name === 'Role-playing (RPG)') {
-    return 'RPG'
-  }
-
-  return category.name
 }
 
 interface CategoryDefinitionResponse {

@@ -6,10 +6,12 @@ export interface Game {
   gameUrl?: string | null
   background_image: string | null
   released: string | null
+  releaseDates?: string[]
   metacritic: number | null
   stealRating?: number | null
   gameTypeLabel?: string | null
   originalPlatformName?: string | null
+  hasSameNamePortFamily?: boolean
   genres: { id: number; name: string; slug: string }[]
   platforms: { platform: { id: number; name: string; slug: string } }[]
   developers?: { id: number; name: string; slug: string }[]
@@ -47,9 +49,9 @@ export interface Category {
   id: string | number
   name: string
   slug?: string
-  // Legacy company identifiers retained for older stored puzzles and local fallbacks
-  developerId?: number
-  publisherId?: number
+  platformIds?: number[]
+  companyIds?: number[]
+  companyNamePatterns?: string[]
 }
 
 // Puzzle types
@@ -82,6 +84,7 @@ export interface CellGuess {
   gameImage: string | null
   isCorrect: boolean
   released?: string | null
+  releaseDates?: string[]
   metacritic?: number | null
   stealRating?: number | null
   genres?: string[]

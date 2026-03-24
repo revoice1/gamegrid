@@ -125,6 +125,20 @@ function StandardHowToPlay({
             <span className="font-bold text-primary">8</span>
           </div>
           <div>
+            <p className="font-medium">Originals And Ports</p>
+            <p className="text-sm text-muted-foreground">
+              Same-name ports are often hidden from search to reduce clutter, but a selected game
+              can still validate as its original-plus-official-ports family when that helps with
+              platform or release-history correctness.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20">
+            <span className="font-bold text-primary">9</span>
+          </div>
+          <div>
             <p className="font-medium">Rarity Score</p>
             <p className="text-sm text-muted-foreground">
               After completing, see how unique your answers were compared to other players!
@@ -223,9 +237,23 @@ function VersusHowToPlay() {
             <span className="font-bold text-primary">7</span>
           </div>
           <div>
+            <p className="font-medium">Disable Draws</p>
+            <p className="text-sm text-muted-foreground">
+              Custom versus matches can disable draws. When that toggle is on, a filled board with
+              no line resolves in favor of the player who claimed more cells.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20">
+            <span className="font-bold text-primary">8</span>
+          </div>
+          <div>
             <p className="font-medium">Win Condition</p>
             <p className="text-sm text-muted-foreground">
-              First to complete any row, column, or diagonal wins the match.
+              First to complete any row, column, or diagonal wins the match. If no line appears, the
+              match is either a draw or a cell-count tiebreak depending on your custom rules.
             </p>
           </div>
         </div>

@@ -22,6 +22,11 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     description: 'Finish a board with a flawless 9/9.',
   },
   {
+    id: 'real-stinker',
+    title: 'Real Stinker',
+    description: 'Correctly place a game with a Metacritic score under 50.',
+  },
+  {
     id: ROUTE_ACHIEVEMENT_ID,
     title: ROUTE_SLUG,
     description: 'Found the hidden route and slipped back out through the glitch.',

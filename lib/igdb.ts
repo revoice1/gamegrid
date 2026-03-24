@@ -5,6 +5,12 @@ import {
   getPairRejectionReason,
   igdbGameMatchesCategory,
 } from './igdb-validation'
+import {
+  CURATED_STANDARD_CATEGORY_FAMILIES,
+  CURATED_VERSUS_DEFAULT_SELECTIONS,
+  CURATED_VERSUS_GENERATION_CATEGORY_FAMILIES,
+} from './versus-category-options'
+import { LOG_PREFIX } from './logging'
 export {
   buildIGDBWhereClause,
   buildPuzzleCellMetadata,
@@ -52,6 +58,8 @@ interface IGDBCompany {
 interface IGDBInvolvedCompany {
   id: number
   company?: IGDBCompany | null
+  developer?: boolean | null
+  publisher?: boolean | null
 }
 
 export interface IGDBGame {
@@ -76,6 +84,7 @@ export interface IGDBGame {
   player_perspectives?: IGDBNamedEntity[]
   involved_companies?: IGDBInvolvedCompany[]
   keywords?: IGDBNamedEntity[]
+  hasSameNamePortFamily?: boolean
 }
 
 interface IGDBTokenCache {
@@ -87,19 +96,13 @@ interface IGDBTokenCache {
 // but are not shared across serverless cold starts or between regions.
 let tokenCache: IGDBTokenCache | null = null
 const igdbGameCache = new Map<number, Game | null>()
-let categoryFamiliesCache: {
-  expiresAt: number
-  families: CategoryFamily[]
-} | null = null
-let versusCategoryFamiliesCache: {
-  expiresAt: number
-  families: CategoryFamily[]
-} | null = null
+const igdbRawGameCache = new Map<number, IGDBGame | null>()
+const igdbResolvedPortFamilyCache = new Map<number, Game | null>()
 const DEFAULT_CELL_SAMPLE_SIZE = 40
 const DEFAULT_MIN_VALID_OPTIONS = 3
 const DEFAULT_MAX_GENERATION_ATTEMPTS = 12
 const DEFAULT_CELL_VALIDATION_CACHE_TTL_MS = 1000 * 60 * 60 * 6
-const DEFAULT_CATEGORY_FAMILY_CACHE_TTL_MS = 1000 * 60 * 60 * 12
+const DEFAULT_PLATFORM_SUMMARY_CACHE_TTL_MS = 1000 * 60 * 60 * 12
 const DEFAULT_IGDB_MIN_REQUEST_INTERVAL_MS = 350
 const DEFAULT_IGDB_MAX_RETRIES = 3
 const ALLOWED_GAME_TYPES = [0, 8, 9, 10, 11] as const
@@ -127,8 +130,8 @@ const DISQUALIFYING_KEYWORDS = new Set([
 ])
 
 export interface CategoryFamily {
-  key: 'platform' | 'genre' | 'decade' | 'game_mode' | 'theme' | 'perspective' | 'tag'
-  source: 'dynamic' | 'fallback'
+  key: 'platform' | 'genre' | 'decade' | 'company' | 'game_mode' | 'theme' | 'perspective'
+  source: 'curated'
   categories: Category[]
 }
 
@@ -194,123 +197,18 @@ export interface PuzzleGenerationResult {
 const CELL_VALIDATION_CACHE_TTL_MS = Number(
   process.env.PUZZLE_VALIDATION_CACHE_TTL_MS ?? DEFAULT_CELL_VALIDATION_CACHE_TTL_MS
 )
-const CATEGORY_FAMILY_CACHE_TTL_MS = Number(
-  process.env.PUZZLE_CATEGORY_FAMILY_CACHE_TTL_MS ?? DEFAULT_CATEGORY_FAMILY_CACHE_TTL_MS
-)
 const IGDB_MIN_REQUEST_INTERVAL_MS = Number(
   process.env.IGDB_MIN_REQUEST_INTERVAL_MS ?? DEFAULT_IGDB_MIN_REQUEST_INTERVAL_MS
 )
 const IGDB_MAX_RETRIES = Number(process.env.IGDB_MAX_RETRIES ?? DEFAULT_IGDB_MAX_RETRIES)
+const PLATFORM_SUMMARY_CACHE_TTL_MS = Number(
+  process.env.IGDB_PLATFORM_SUMMARY_CACHE_TTL_MS ?? DEFAULT_PLATFORM_SUMMARY_CACHE_TTL_MS
+)
 const cellValidationCache = new Map<string, CellValidationCacheEntry>()
 const cellCountCache = new Map<string, CellCountCacheEntry>()
 const platformSummaryCache = new Map<number, { expiresAt: number; summary: string | null }>()
 let igdbRequestQueue = Promise.resolve()
 let igdbNextRequestAt = 0
-
-const FALLBACK_DECADES: Category[] = [
-  { type: 'decade', id: '1980', name: '1980s', slug: '1980-01-01,1989-12-31' },
-  { type: 'decade', id: '1990', name: '1990s', slug: '1990-01-01,1999-12-31' },
-  { type: 'decade', id: '2000', name: '2000s', slug: '2000-01-01,2009-12-31' },
-  { type: 'decade', id: '2010', name: '2010s', slug: '2010-01-01,2019-12-31' },
-  { type: 'decade', id: '2020', name: '2020s', slug: '2020-01-01,2029-12-31' },
-]
-
-const FALLBACK_GAME_MODES: Category[] = [
-  { type: 'game_mode', id: 1, name: 'Single player', slug: 'single-player' },
-  { type: 'game_mode', id: 2, name: 'Multiplayer', slug: 'multiplayer' },
-  { type: 'game_mode', id: 3, name: 'Co-operative', slug: 'co-operative' },
-  { type: 'game_mode', id: 4, name: 'Split screen', slug: 'split-screen' },
-  { type: 'game_mode', id: 5, name: 'Massively Multiplayer Online (MMO)', slug: 'mmo' },
-  { type: 'game_mode', id: 6, name: 'Battle Royale', slug: 'battle-royale' },
-]
-
-const FALLBACK_THEMES: Category[] = [
-  { type: 'theme', id: 1, name: 'Action', slug: 'action' },
-  { type: 'theme', id: 17, name: 'Fantasy', slug: 'fantasy' },
-  { type: 'theme', id: 18, name: 'Science fiction', slug: 'science-fiction' },
-  { type: 'theme', id: 19, name: 'Horror', slug: 'horror' },
-  { type: 'theme', id: 21, name: 'Survival', slug: 'survival' },
-  { type: 'theme', id: 38, name: 'Open world', slug: 'open-world' },
-  { type: 'theme', id: 39, name: 'Warfare', slug: 'warfare' },
-  { type: 'theme', id: 43, name: 'Mystery', slug: 'mystery' },
-]
-
-const FALLBACK_PERSPECTIVES: Category[] = [
-  { type: 'perspective', id: 1, name: 'First person', slug: 'first-person' },
-  { type: 'perspective', id: 2, name: 'Third person', slug: 'third-person' },
-  { type: 'perspective', id: 3, name: 'Bird view / Isometric', slug: 'isometric' },
-  { type: 'perspective', id: 4, name: 'Side view', slug: 'side-view' },
-]
-
-const CUSTOM_FALLBACK_PERSPECTIVES: Category[] = [
-  ...FALLBACK_PERSPECTIVES,
-  { type: 'perspective', id: 5, name: 'Text', slug: 'text' },
-  { type: 'perspective', id: 6, name: 'Auditory', slug: 'auditory' },
-  { type: 'perspective', id: 7, name: 'Virtual Reality', slug: 'virtual-reality' },
-]
-
-const CUSTOM_FALLBACK_TAGS: Category[] = [
-  { type: 'tag', id: 'tag-metroidvania', name: 'Metroidvania', slug: 'metroidvania' },
-  {
-    type: 'tag',
-    id: 'tag-female-protagonist',
-    name: 'Female Protagonist',
-    slug: 'female-protagonist',
-  },
-  {
-    type: 'tag',
-    id: 'tag-platform-exclusive',
-    name: 'Platform Exclusive',
-    slug: 'platform-exclusive',
-  },
-  { type: 'tag', id: 'tag-roguex', name: 'Rogue-Like/Lite', slug: 'roguex' },
-  { type: 'tag', id: 'tag-sequel', name: 'Sequel', slug: 'sequel' },
-]
-
-const FALLBACK_PLATFORMS: Category[] = [
-  { type: 'platform', id: 59, name: 'Atari 2600', slug: 'atari2600' },
-  { type: 'platform', id: 18, name: 'Nintendo Entertainment System', slug: 'nes' },
-  { type: 'platform', id: 19, name: 'Super Nintendo Entertainment System', slug: 'snes' },
-  { type: 'platform', id: 29, name: 'Sega Mega Drive/Genesis', slug: 'genesis-slash-megadrive' },
-  { type: 'platform', id: 32, name: 'Sega Saturn', slug: 'saturn' },
-  { type: 'platform', id: 23, name: 'Dreamcast', slug: 'dc' },
-  { type: 'platform', id: 33, name: 'Game Boy', slug: 'gb' },
-  { type: 'platform', id: 24, name: 'Game Boy Advance', slug: 'gba' },
-  { type: 'platform', id: 20, name: 'Nintendo DS', slug: 'nds' },
-  { type: 'platform', id: 37, name: 'Nintendo 3DS', slug: '3ds' },
-  { type: 'platform', id: 4, name: 'Nintendo 64', slug: 'n64' },
-  { type: 'platform', id: 21, name: 'Nintendo GameCube', slug: 'ngc' },
-  { type: 'platform', id: 5, name: 'Wii', slug: 'wii' },
-  { type: 'platform', id: 41, name: 'Wii U', slug: 'wiiu' },
-  { type: 'platform', id: 130, name: 'Nintendo Switch', slug: 'switch' },
-  { type: 'platform', id: 508, name: 'Nintendo Switch 2', slug: 'switch-2' },
-  { type: 'platform', id: 7, name: 'PlayStation (Original)', slug: 'ps' },
-  { type: 'platform', id: 8, name: 'PlayStation 2', slug: 'ps2' },
-  { type: 'platform', id: 9, name: 'PlayStation 3', slug: 'ps3' },
-  { type: 'platform', id: 6, name: 'PC (Windows/DOS)', slug: 'pc' },
-  { type: 'platform', id: 48, name: 'PlayStation 4', slug: 'ps4--1' },
-  { type: 'platform', id: 167, name: 'PlayStation 5', slug: 'ps5' },
-  { type: 'platform', id: 38, name: 'PlayStation Portable', slug: 'psp' },
-  { type: 'platform', id: 46, name: 'PlayStation Vita', slug: 'psvita' },
-  { type: 'platform', id: 11, name: 'Xbox (Original)', slug: 'xbox' },
-  { type: 'platform', id: 12, name: 'Xbox 360', slug: 'xbox360' },
-  { type: 'platform', id: 49, name: 'Xbox One', slug: 'xboxone' },
-  { type: 'platform', id: 169, name: 'Xbox Series X|S', slug: 'series-x-s' },
-]
-
-const FALLBACK_GENRES: Category[] = [
-  { type: 'genre', id: 4, name: 'Fighting', slug: 'fighting' },
-  { type: 'genre', id: 5, name: 'Shooter', slug: 'shooter' },
-  { type: 'genre', id: 8, name: 'Platform', slug: 'platform' },
-  { type: 'genre', id: 9, name: 'Puzzle', slug: 'puzzle' },
-  { type: 'genre', id: 10, name: 'Racing', slug: 'racing' },
-  { type: 'genre', id: 12, name: 'Role-playing (RPG)', slug: 'rpg' },
-  { type: 'genre', id: 13, name: 'Simulator', slug: 'simulator' },
-  { type: 'genre', id: 14, name: 'Sport', slug: 'sport' },
-  { type: 'genre', id: 15, name: 'Strategy', slug: 'strategy' },
-  { type: 'genre', id: 24, name: 'Tactical', slug: 'tactical' },
-  { type: 'genre', id: 31, name: 'Adventure', slug: 'adventure' },
-]
 
 const GAME_TYPE_LABELS: Record<number, string> = {
   0: 'Original',
@@ -319,6 +217,9 @@ const GAME_TYPE_LABELS: Record<number, string> = {
   10: 'Expanded Game',
   11: 'Port',
 }
+
+const IGDB_GAME_FIELDS =
+  'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.id,release_dates.platform.name,release_dates.platform.slug,genres.id,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.id,keywords.name;'
 
 function normalizeName(value: string): string {
   return value
@@ -345,6 +246,10 @@ function pickRandomItems<T>(items: T[], count: number): T[] {
   return shuffle(items).slice(0, count)
 }
 
+function uniqueByKey<T>(items: T[], getKey: (item: T) => string | number): T[] {
+  return Array.from(new Map(items.map((item) => [getKey(item), item])).values())
+}
+
 function getCategoryCacheKey(category: Category): string {
   return [
     category.type,
@@ -361,6 +266,17 @@ function getCellCacheKey(rowCategory: Category, colCategory: Category, sampleSiz
 
 function escapeIGDBSearch(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+export function shouldHideSameNamePortResult(
+  portGame: IGDBGame,
+  parentGame: IGDBGame | null
+): boolean {
+  if (portGame.game_type !== 11 || !parentGame) {
+    return false
+  }
+
+  return normalizeName(portGame.name) === normalizeName(parentGame.name)
 }
 
 function formatIGDBDate(timestamp?: number | null): string | null {
@@ -446,7 +362,7 @@ async function getIGDBAccessToken(): Promise<string | null> {
   })
 
   if (!response.ok) {
-    console.error(`[v0] Failed to get IGDB token: ${response.status}`)
+    console.error(`${LOG_PREFIX} Failed to get IGDB token: ${response.status}`)
     return null
   }
 
@@ -470,32 +386,47 @@ async function queryIGDB<T>(endpoint: string, body: string): Promise<T[]> {
   }
 
   for (let attempt = 1; attempt <= IGDB_MAX_RETRIES; attempt += 1) {
-    await scheduleIGDBRequest()
+    try {
+      await scheduleIGDBRequest()
 
-    const response = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Client-ID': TWITCH_IGDB_CLIENT_ID,
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-      },
-      body,
-      next: { revalidate: 86400 },
-    })
+      const response = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Client-ID': TWITCH_IGDB_CLIENT_ID,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+        body,
+        next: { revalidate: 86400 },
+      })
 
-    if (response.ok) {
-      return (await response.json()) as T[]
+      if (response.ok) {
+        return (await response.json()) as T[]
+      }
+
+      if (response.status === 429 && attempt < IGDB_MAX_RETRIES) {
+        const retryDelayMs = 1000 * attempt
+        console.warn(
+          `${LOG_PREFIX} IGDB rate limited on ${endpoint}, retrying in ${retryDelayMs}ms`
+        )
+        await sleep(retryDelayMs)
+        continue
+      }
+
+      console.error(`${LOG_PREFIX} IGDB query failed (${endpoint}): ${response.status}`)
+      return []
+    } catch (error) {
+      if (attempt < IGDB_MAX_RETRIES) {
+        const retryDelayMs = 1000 * attempt
+        console.warn(
+          `${LOG_PREFIX} IGDB query transport error on ${endpoint}, retrying in ${retryDelayMs}ms`
+        )
+        await sleep(retryDelayMs)
+        continue
+      }
+
+      throw error
     }
-
-    if (response.status === 429 && attempt < IGDB_MAX_RETRIES) {
-      const retryDelayMs = 1000 * attempt
-      console.warn(`[v0] IGDB rate limited on ${endpoint}, retrying in ${retryDelayMs}ms`)
-      await sleep(retryDelayMs)
-      continue
-    }
-
-    console.error(`[v0] IGDB query failed (${endpoint}): ${response.status}`)
-    return []
   }
 
   return []
@@ -518,7 +449,7 @@ export async function getIGDBPlatformSummary(platformId: number): Promise<string
   const summary = platform?.summary?.trim() || null
 
   platformSummaryCache.set(platformId, {
-    expiresAt: Date.now() + CATEGORY_FAMILY_CACHE_TTL_MS,
+    expiresAt: Date.now() + PLATFORM_SUMMARY_CACHE_TTL_MS,
     summary,
   })
 
@@ -530,99 +461,90 @@ async function queryIGDBCount(endpoint: string, whereClause: string): Promise<nu
   if (!accessToken || !TWITCH_IGDB_CLIENT_ID) return null
 
   for (let attempt = 1; attempt <= IGDB_MAX_RETRIES; attempt += 1) {
-    await scheduleIGDBRequest()
+    try {
+      await scheduleIGDBRequest()
 
-    const response = await fetch(`https://api.igdb.com/v4/${endpoint}/count`, {
-      method: 'POST',
-      headers: {
-        'Client-ID': TWITCH_IGDB_CLIENT_ID,
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-      },
-      body: `where ${whereClause};`,
-      next: { revalidate: 86400 },
-    })
+      const response = await fetch(`https://api.igdb.com/v4/${endpoint}/count`, {
+        method: 'POST',
+        headers: {
+          'Client-ID': TWITCH_IGDB_CLIENT_ID,
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+        body: `where ${whereClause};`,
+        next: { revalidate: 86400 },
+      })
 
-    if (response.ok) {
-      const data = (await response.json()) as { count: number }
-      return data.count
+      if (response.ok) {
+        const data = (await response.json()) as { count: number }
+        return data.count
+      }
+
+      if (response.status === 429 && attempt < IGDB_MAX_RETRIES) {
+        await sleep(1000 * attempt)
+        continue
+      }
+
+      console.error(`${LOG_PREFIX} IGDB count query failed (${endpoint}): ${response.status}`)
+      return null
+    } catch (error) {
+      if (attempt < IGDB_MAX_RETRIES) {
+        await sleep(1000 * attempt)
+        continue
+      }
+
+      throw error
     }
-
-    if (response.status === 429 && attempt < IGDB_MAX_RETRIES) {
-      await sleep(1000 * attempt)
-      continue
-    }
-
-    console.error(`[v0] IGDB count query failed (${endpoint}): ${response.status}`)
-    return null
   }
 
   return null
 }
 
-async function fetchIGDBCategories(
-  endpoint: 'platforms' | 'genres' | 'game_modes' | 'themes' | 'player_perspectives',
-  allowedNames?: Set<string>
-): Promise<Category[]> {
-  const pageSize = 500
-  const results: Array<{ id: number; name: string; slug?: string }> = []
-  let offset = 0
-
-  while (true) {
-    const query = ['fields id,name,slug;', `limit ${pageSize};`, `offset ${offset};`].join(' ')
-
-    const page = await queryIGDB<{ id: number; name: string; slug?: string }>(endpoint, query)
-    results.push(...page)
-
-    if (page.length < pageSize) {
-      break
-    }
-
-    offset += pageSize
-  }
-
-  return results
-    .filter((item) => !allowedNames || allowedNames.has(item.name))
-    .map(
-      (item): Category => ({
-        type:
-          endpoint === 'game_modes'
-            ? 'game_mode'
-            : endpoint === 'player_perspectives'
-              ? 'perspective'
-              : endpoint === 'themes'
-                ? 'theme'
-                : endpoint === 'genres'
-                  ? 'genre'
-                  : 'platform',
-        id: item.id,
-        name: item.name,
-        slug: item.slug ?? normalizeName(item.name).replace(/\s+/g, '-'),
-      })
-    )
-    .sort((left, right) => left.name.localeCompare(right.name))
+function cloneCategoryFamilies(families: ReadonlyArray<CategoryFamily>): CategoryFamily[] {
+  return families.map((family) => ({
+    key: family.key,
+    source: family.source,
+    categories: family.categories.map((category) => ({ ...category })),
+  }))
 }
 
-function buildFamily(
-  key: CategoryFamily['key'],
-  dynamic: Category[],
-  fallback: Category[],
-  minimumDynamic = 4
-): CategoryFamily {
-  return {
-    key,
-    source: dynamic.length >= minimumDynamic ? 'dynamic' : 'fallback',
-    categories: dynamic.length >= minimumDynamic ? dynamic : fallback,
-  }
+export function resolveGenerationCategoryFamilies(
+  allowedCategoryIds?: PuzzleCategoryFilters
+): CategoryFamily[] {
+  const familySource = cloneCategoryFamilies(
+    allowedCategoryIds
+      ? CURATED_VERSUS_GENERATION_CATEGORY_FAMILIES
+      : CURATED_STANDARD_CATEGORY_FAMILIES
+  )
+
+  return familySource
+    .map((family) => {
+      const allowedIds = allowedCategoryIds?.[family.key]
+
+      if (!allowedCategoryIds) {
+        return family
+      }
+
+      const effectiveIds = allowedIds ?? CURATED_VERSUS_DEFAULT_SELECTIONS[family.key] ?? []
+
+      return {
+        ...family,
+        categories: family.categories.filter((category) =>
+          effectiveIds.includes(String(category.id))
+        ),
+      }
+    })
+    .filter((family) => family.categories.length > 0)
 }
 
-async function queryValidGamesForCell(
+async function queryCellGamesPage(
   rowCategory: Category,
   colCategory: Category,
   limit: number,
   offset = 0,
-  fields = 'name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.name,keywords.name'
-): Promise<Game[]> {
+  fields = 'name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.name',
+  overfetchMultiplier = 3
+): Promise<{ games: Game[]; rawCount: number; fetchLimit: number }> {
   const rowClause = buildIGDBWhereClause(rowCategory)
   const colClause = buildIGDBWhereClause(colCategory)
   const needsPostFilter = !rowClause || !colClause
@@ -635,10 +557,11 @@ async function queryValidGamesForCell(
     baseWhereParts.push(colClause)
   }
 
+  const fetchLimit = needsPostFilter ? Math.min(limit * overfetchMultiplier, 500) : limit
   const query = [
     `fields ${fields};`,
     `where ${baseWhereParts.join(' & ')};`,
-    `limit ${needsPostFilter ? limit * 3 : limit};`,
+    `limit ${fetchLimit};`,
     `offset ${offset};`,
   ].join(' ')
 
@@ -651,82 +574,11 @@ async function queryValidGamesForCell(
       )
     : mappedGames
 
-  return Array.from(new Map(filteredGames.map((game) => [game.id, game])).values())
-}
-
-export async function getCategoryFamilies(): Promise<CategoryFamily[]> {
-  if (categoryFamiliesCache && categoryFamiliesCache.expiresAt > Date.now()) {
-    return categoryFamiliesCache.families
+  return {
+    games: Array.from(new Map(filteredGames.map((game) => [game.id, game])).values()),
+    rawCount: results.length,
+    fetchLimit,
   }
-
-  const allowedGameModes = new Set(FALLBACK_GAME_MODES.map((category) => category.name))
-  const allowedThemes = new Set(FALLBACK_THEMES.map((category) => category.name))
-  const allowedPerspectives = new Set(FALLBACK_PERSPECTIVES.map((category) => category.name))
-  const allowedPlatforms = new Set(FALLBACK_PLATFORMS.map((category) => category.name))
-  const allowedGenres = new Set(FALLBACK_GENRES.map((category) => category.name))
-
-  const [platforms, genres, gameModes, themes, perspectives] = await Promise.all([
-    fetchIGDBCategories('platforms', allowedPlatforms),
-    fetchIGDBCategories('genres', allowedGenres),
-    fetchIGDBCategories('game_modes', allowedGameModes),
-    fetchIGDBCategories('themes', allowedThemes),
-    fetchIGDBCategories('player_perspectives', allowedPerspectives),
-  ])
-
-  const families: CategoryFamily[] = [
-    buildFamily('platform', platforms, FALLBACK_PLATFORMS),
-    buildFamily('genre', genres, FALLBACK_GENRES),
-    { key: 'decade', source: 'fallback', categories: FALLBACK_DECADES },
-    buildFamily('game_mode', gameModes, FALLBACK_GAME_MODES, 3),
-    buildFamily('theme', themes, FALLBACK_THEMES, 4),
-    buildFamily('perspective', perspectives, FALLBACK_PERSPECTIVES, 3),
-  ]
-
-  categoryFamiliesCache = {
-    expiresAt: Date.now() + CATEGORY_FAMILY_CACHE_TTL_MS,
-    families,
-  }
-
-  return families
-}
-
-export async function getVersusCategoryFamilies(): Promise<CategoryFamily[]> {
-  if (versusCategoryFamiliesCache && versusCategoryFamiliesCache.expiresAt > Date.now()) {
-    return versusCategoryFamiliesCache.families
-  }
-
-  const baseFamilies = await getCategoryFamilies()
-  const families: CategoryFamily[] = baseFamilies.map((family) => {
-    if (family.key === 'perspective') {
-      return {
-        key: 'perspective',
-        source: 'fallback',
-        categories: [...CUSTOM_FALLBACK_PERSPECTIVES].sort((left, right) =>
-          left.name.localeCompare(right.name)
-        ),
-      }
-    }
-
-    return {
-      ...family,
-      categories: [...family.categories].sort((left, right) => left.name.localeCompare(right.name)),
-    }
-  })
-
-  families.push({
-    key: 'tag',
-    source: 'fallback',
-    categories: [...CUSTOM_FALLBACK_TAGS].sort((left, right) =>
-      left.name.localeCompare(right.name)
-    ),
-  })
-
-  versusCategoryFamiliesCache = {
-    expiresAt: Date.now() + CATEGORY_FAMILY_CACHE_TTL_MS,
-    families,
-  }
-
-  return families
 }
 
 function buildAxisCategories(
@@ -821,9 +673,27 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
     slug: genre.slug ?? normalizeName(genre.name).replace(/\s+/g, '-'),
   }))
 
-  const companies = (game.involved_companies ?? [])
+  const involvedCompanies = (game.involved_companies ?? []).filter(
+    (entry): entry is IGDBInvolvedCompany & { company: IGDBCompany } => Boolean(entry.company)
+  )
+  const companies = involvedCompanies.map((entry) => entry.company)
+  const developers = involvedCompanies
+    .filter((entry) => entry.developer)
     .map((entry) => entry.company)
-    .filter((company): company is IGDBCompany => Boolean(company))
+  const publishers = involvedCompanies
+    .filter((entry) => entry.publisher)
+    .map((entry) => entry.company)
+  const getCompanyKey = (company: IGDBCompany) => company.id ?? normalizeName(company.name)
+  const uniqueCompanies = uniqueByKey(companies, getCompanyKey)
+  const uniqueDevelopers = uniqueByKey(developers, getCompanyKey)
+  const uniquePublishers = uniqueByKey(publishers, getCompanyKey)
+  const releaseDates = uniqueByKey(
+    [
+      formatIGDBDate(game.first_release_date),
+      ...(game.release_dates ?? []).map((entry) => formatIGDBDate(entry.date)),
+    ].filter((date): date is string => Boolean(date)),
+    (date) => date
+  )
   const averagedSplitRating = [game.rating, game.aggregated_rating].filter(
     (value): value is number => typeof value === 'number'
   )
@@ -843,18 +713,20 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
     gameUrl: game.url ?? null,
     background_image: buildCoverUrl(game.cover?.image_id),
     released: formatIGDBDate(game.first_release_date),
+    releaseDates,
     metacritic: getMetacriticScore(game.total_rating),
     stealRating,
     gameTypeLabel: getGameTypeLabel(game.game_type),
     originalPlatformName: getOriginalPlatformName(game),
+    hasSameNamePortFamily: game.hasSameNamePortFamily === true,
     genres,
     platforms,
-    developers: companies.map((company) => ({
+    developers: uniqueDevelopers.map((company) => ({
       id: company.id,
       name: company.name,
       slug: normalizeName(company.name).replace(/\s+/g, '-'),
     })),
-    publishers: companies.map((company) => ({
+    publishers: uniquePublishers.map((company) => ({
       id: company.id,
       name: company.name,
       slug: normalizeName(company.name).replace(/\s+/g, '-'),
@@ -873,7 +745,7 @@ function mapIGDBGameToGame(game: IGDBGame): Game {
       game_modes: game.game_modes?.map((mode) => mode.name) ?? [],
       themes: game.themes?.map((theme) => theme.name) ?? [],
       player_perspectives: game.player_perspectives?.map((perspective) => perspective.name) ?? [],
-      companies: companies.map((company) => company.name),
+      companies: uniqueCompanies.map((company) => company.name),
       keywords: game.keywords?.map((keyword) => keyword.name) ?? [],
     },
   }
@@ -921,6 +793,26 @@ function isOfficialCatalogGame(game: IGDBGame): boolean {
   return !UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(game.name))
 }
 
+function isSupplementalPortFamilyGame(game: IGDBGame): boolean {
+  if (!game.first_release_date) {
+    return false
+  }
+
+  if (game.game_type !== 11) {
+    return false
+  }
+
+  if (!hasOfficialCompanyData(game)) {
+    return false
+  }
+
+  if (hasDisqualifyingKeywords(game)) {
+    return false
+  }
+
+  return !UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(game.name))
+}
+
 function buildOfficialGameWhereClause(): string {
   return [
     'version_parent = null',
@@ -937,6 +829,16 @@ function buildSearchGameWhereClause(): string {
     'first_release_date != null',
     'involved_companies != null',
     '(rating != null | aggregated_rating != null)',
+  ].join(' & ')
+}
+
+function buildSupplementalPortFamilyWhereClause(parentId: number): string {
+  return [
+    `parent_game = ${parentId}`,
+    'version_parent = null',
+    'first_release_date != null',
+    'involved_companies != null',
+    'game_type = 11',
   ].join(' & ')
 }
 
@@ -1091,6 +993,177 @@ function scoreSearchCandidate(candidate: IGDBGame, query: string): number {
   return score
 }
 
+async function queryIGDBGamesByIds(gameIds: number[]): Promise<IGDBGame[]> {
+  const uniqueIds = Array.from(new Set(gameIds.filter((id) => Number.isFinite(id))))
+  if (uniqueIds.length === 0) {
+    return []
+  }
+
+  const query = [
+    IGDB_GAME_FIELDS,
+    `where id = (${uniqueIds.join(',')}) & ${buildOfficialGameWhereClause()};`,
+    `limit ${Math.max(uniqueIds.length, 1)};`,
+  ].join(' ')
+
+  const results = await queryIGDB<IGDBGame>('games', query)
+  const officialResults = results.filter(isOfficialCatalogGame)
+  const resultMap = new Map(officialResults.map((game) => [game.id, game]))
+
+  for (const gameId of uniqueIds) {
+    igdbRawGameCache.set(gameId, resultMap.get(gameId) ?? null)
+  }
+
+  return officialResults
+}
+
+async function getRawIGDBGameDetails(gameId: number): Promise<IGDBGame | null> {
+  if (igdbRawGameCache.has(gameId)) {
+    return igdbRawGameCache.get(gameId) ?? null
+  }
+
+  const [result] = await queryIGDBGamesByIds([gameId])
+  const cachedResult = result ?? null
+  igdbRawGameCache.set(gameId, cachedResult)
+  return cachedResult
+}
+
+async function getParentLookupMap(gameIds: number[]): Promise<Map<number, IGDBGame>> {
+  const parentGames = await queryIGDBGamesByIds(gameIds)
+  return new Map(parentGames.map((game) => [game.id, game]))
+}
+
+async function hideSameNamePortResults(results: IGDBGame[]): Promise<IGDBGame[]> {
+  const parentIds = Array.from(
+    new Set(
+      results
+        .filter((result) => result.game_type === 11 && typeof result.parent_game === 'number')
+        .map((result) => result.parent_game as number)
+    )
+  )
+
+  if (parentIds.length === 0) {
+    return results
+  }
+
+  const parentLookup = await getParentLookupMap(parentIds)
+  const hiddenParentIds = new Set<number>()
+  const visibleResults = results.filter((result) => {
+    if (result.game_type !== 11 || typeof result.parent_game !== 'number') {
+      return true
+    }
+
+    const shouldHide = shouldHideSameNamePortResult(
+      result,
+      parentLookup.get(result.parent_game) ?? null
+    )
+    if (shouldHide) {
+      hiddenParentIds.add(result.parent_game)
+    }
+    return !shouldHide
+  })
+
+  return visibleResults.map((result) =>
+    hiddenParentIds.has(result.id) ? { ...result, hasSameNamePortFamily: true } : result
+  )
+}
+
+function mergeNamedItems<T extends { id: number; name: string; slug?: string }>(
+  groups: Array<T[] | undefined>
+): T[] {
+  return uniqueByKey(
+    groups.flatMap((group) => group ?? []),
+    (item) => item.id ?? `${normalizeName(item.name)}:${item.slug ?? ''}`
+  )
+}
+
+function mergeStringArrays(groups: Array<string[] | undefined>): string[] {
+  return uniqueByKey(
+    groups.flatMap((group) => group ?? []),
+    (value) => normalizeName(value)
+  )
+}
+
+export function mergePortFamilyGameDetails(
+  selectedGame: Game,
+  familyGames: Game[],
+  canonicalGame: Game | null
+): Game {
+  const mergedFamily = uniqueByKey([selectedGame, ...familyGames], (game) => game.id)
+  const mergedPlatforms = uniqueByKey(
+    mergedFamily.flatMap((game) => game.platforms ?? []),
+    (platform) => platform.platform.id
+  )
+  const mergedReleaseDates = uniqueByKey(
+    mergedFamily.flatMap((game) =>
+      game.releaseDates && game.releaseDates.length > 0
+        ? game.releaseDates
+        : game.released
+          ? [game.released]
+          : []
+    ),
+    (date) => date
+  )
+
+  return {
+    ...selectedGame,
+    gameUrl: canonicalGame?.gameUrl ?? selectedGame.gameUrl,
+    releaseDates: mergedReleaseDates,
+    genres: mergeNamedItems(mergedFamily.map((game) => game.genres)),
+    platforms: mergedPlatforms,
+    developers: mergeNamedItems(mergedFamily.map((game) => game.developers)),
+    publishers: mergeNamedItems(mergedFamily.map((game) => game.publishers)),
+    tags: mergeNamedItems(mergedFamily.map((game) => game.tags)),
+    igdb: selectedGame.igdb
+      ? {
+          ...selectedGame.igdb,
+          game_modes: mergeStringArrays(mergedFamily.map((game) => game.igdb?.game_modes)),
+          themes: mergeStringArrays(mergedFamily.map((game) => game.igdb?.themes)),
+          player_perspectives: mergeStringArrays(
+            mergedFamily.map((game) => game.igdb?.player_perspectives)
+          ),
+          companies: mergeStringArrays(mergedFamily.map((game) => game.igdb?.companies)),
+          keywords: mergeStringArrays(mergedFamily.map((game) => game.igdb?.keywords)),
+        }
+      : undefined,
+  }
+}
+
+async function getPortFamilyGames(
+  game: IGDBGame
+): Promise<{ selected: Game; canonical: Game | null; family: Game[] }> {
+  const selected = mapIGDBGameToGame(game)
+  const canonicalRaw =
+    typeof game.parent_game === 'number' ? await getRawIGDBGameDetails(game.parent_game) : game
+  const canonical = canonicalRaw ? mapIGDBGameToGame(canonicalRaw) : null
+  const parentId =
+    canonicalRaw?.id ??
+    (game.game_type === 11 && typeof game.parent_game === 'number' ? game.parent_game : null)
+
+  if (!parentId) {
+    return { selected, canonical, family: [selected] }
+  }
+
+  const childQuery = [
+    IGDB_GAME_FIELDS,
+    `where ${buildSupplementalPortFamilyWhereClause(parentId)};`,
+    'limit 100;',
+  ].join(' ')
+
+  const childPorts = (await queryIGDB<IGDBGame>('games', childQuery)).filter(
+    isSupplementalPortFamilyGame
+  )
+  const familyRawGames = uniqueByKey(
+    [game, ...(canonicalRaw ? [canonicalRaw] : []), ...childPorts],
+    (entry) => entry.id
+  )
+
+  return {
+    selected,
+    canonical,
+    family: familyRawGames.map(mapIGDBGameToGame),
+  }
+}
+
 export async function searchIGDBGames(query: string): Promise<Game[]> {
   if (!query.trim()) {
     return []
@@ -1098,7 +1171,7 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
 
   const runSearch = async (searchTerm: string, limit = 30) => {
     const searchQuery = [
-      'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.name,keywords.name;',
+      IGDB_GAME_FIELDS,
       `where ${buildSearchGameWhereClause()};`,
       `search "${escapeIGDBSearch(searchTerm)}";`,
       `limit ${limit};`,
@@ -1123,11 +1196,13 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
 
   const filteredResults = Array.from(
     new Map(mergedResults.map((result) => [result.id, result])).values()
+  ).filter(isOfficialCatalogGame)
+  const visibleResults = await hideSameNamePortResults(filteredResults)
+  const rankedResults = visibleResults.sort(
+    (left, right) => scoreSearchCandidate(right, query) - scoreSearchCandidate(left, query)
   )
-    .filter(isOfficialCatalogGame)
-    .sort((left, right) => scoreSearchCandidate(right, query) - scoreSearchCandidate(left, query))
 
-  return filteredResults.slice(0, 15).map(mapIGDBGameToGame)
+  return rankedResults.slice(0, 15).map(mapIGDBGameToGame)
 }
 
 export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
@@ -1135,19 +1210,8 @@ export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
     return igdbGameCache.get(gameId) ?? null
   }
 
-  const query = [
-    'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.name,keywords.name;',
-    `where id = ${gameId} & ${buildOfficialGameWhereClause()};`,
-    'limit 1;',
-  ].join(' ')
-
-  const [result] = await queryIGDB<IGDBGame>('games', query)
+  const result = await getRawIGDBGameDetails(gameId)
   if (!result) {
-    igdbGameCache.set(gameId, null)
-    return null
-  }
-
-  if (!isOfficialCatalogGame(result)) {
     igdbGameCache.set(gameId, null)
     return null
   }
@@ -1157,12 +1221,29 @@ export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
   return mapped
 }
 
+async function getResolvedIGDBGameDetails(gameId: number): Promise<Game | null> {
+  if (igdbResolvedPortFamilyCache.has(gameId)) {
+    return igdbResolvedPortFamilyCache.get(gameId) ?? null
+  }
+
+  const rawGame = await getRawIGDBGameDetails(gameId)
+  if (!rawGame) {
+    igdbResolvedPortFamilyCache.set(gameId, null)
+    return null
+  }
+
+  const { selected, canonical, family } = await getPortFamilyGames(rawGame)
+  const merged = mergePortFamilyGameDetails(selected, family, canonical)
+  igdbResolvedPortFamilyCache.set(gameId, merged)
+  return merged
+}
+
 export async function validateIGDBGameForCell(
   gameId: number,
   rowCategory: Category,
   colCategory: Category
 ): Promise<{ valid: boolean; game: Game | null; matchesRow: boolean; matchesCol: boolean }> {
-  const game = await getIGDBGameDetails(gameId)
+  const game = await getResolvedIGDBGameDetails(gameId)
   if (!game) {
     return { valid: false, game: null, matchesRow: false, matchesCol: false }
   }
@@ -1199,22 +1280,47 @@ export async function getValidGamesForCell(
   }
 
   try {
-    const games = (await queryValidGamesForCell(rowCategory, colCategory, sampleSize, 0)).slice(
-      0,
-      sampleSize
-    )
+    const seenGameIds = new Set<number>()
+    const collectedGames: Game[] = []
+    let offset = 0
+    let hasMore = true
+
+    while (hasMore && collectedGames.length < sampleSize) {
+      const { games, rawCount, fetchLimit } = await queryCellGamesPage(
+        rowCategory,
+        colCategory,
+        sampleSize,
+        offset
+      )
+
+      for (const game of games) {
+        if (seenGameIds.has(game.id)) {
+          continue
+        }
+
+        seenGameIds.add(game.id)
+        collectedGames.push(game)
+        if (collectedGames.length >= sampleSize) {
+          break
+        }
+      }
+
+      hasMore = rawCount === fetchLimit
+      offset += fetchLimit
+    }
+
+    const games = collectedGames.slice(0, sampleSize)
     cellValidationCache.set(cacheKey, {
       expiresAt: Date.now() + CELL_VALIDATION_CACHE_TTL_MS,
       games,
     })
     return games
   } catch (error) {
-    console.error('[v0] Error getting IGDB valid games:', error)
-    cellValidationCache.set(cacheKey, {
-      expiresAt: Date.now() + Math.min(CELL_VALIDATION_CACHE_TTL_MS, 1000 * 60 * 5),
-      games: [],
-    })
-    return []
+    console.error(`${LOG_PREFIX} Error getting IGDB valid games:`, error)
+    if (cachedEntry) {
+      return cachedEntry.games
+    }
+    throw error
   }
 }
 
@@ -1260,18 +1366,20 @@ export async function getValidGameCountForCell(
     const pageSize = 500
     const seenGameIds = new Set<number>()
     let offset = 0
+    let hasMore = true
 
-    while (true) {
-      const games = await queryValidGamesForCell(
+    while (hasMore) {
+      const { games, rawCount, fetchLimit } = await queryCellGamesPage(
         rowCategory,
         colCategory,
         pageSize,
         offset,
-        'id,name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.name,keywords.name'
+        'id,name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.name,release_dates.platform.slug,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.name',
+        1
       )
       for (const game of games) seenGameIds.add(game.id)
-      if (games.length < pageSize) break
-      offset += pageSize
+      hasMore = rawCount === fetchLimit
+      offset += fetchLimit
     }
 
     const count = seenGameIds.size
@@ -1281,15 +1389,11 @@ export async function getValidGameCountForCell(
     })
     return count
   } catch (error) {
-    console.error('[v0] Error getting IGDB valid game count:', error)
-    const fallbackCount = (
-      await getValidGamesForCell(rowCategory, colCategory, DEFAULT_CELL_SAMPLE_SIZE)
-    ).length
-    cellCountCache.set(cacheKey, {
-      expiresAt: Date.now() + Math.min(CELL_VALIDATION_CACHE_TTL_MS, 1000 * 60 * 5),
-      count: fallbackCount,
-    })
-    return fallbackCount
+    console.error(`${LOG_PREFIX} Error getting IGDB valid game count:`, error)
+    if (cachedEntry) {
+      return cachedEntry.count
+    }
+    throw error
   }
 }
 
@@ -1361,25 +1465,7 @@ export async function generatePuzzleCategories(
 
   onProgress?.({ stage: 'families', message: 'Loading category data...' })
   const allowedCategoryIds = options.allowedCategoryIds
-  const familySource = options.allowedCategoryIds
-    ? await getVersusCategoryFamilies()
-    : await getCategoryFamilies()
-  const families = familySource
-    .map((family) => {
-      const allowedIds = allowedCategoryIds?.[family.key]
-
-      if (!allowedIds) {
-        return family
-      }
-
-      return {
-        ...family,
-        categories: family.categories.filter((category) =>
-          allowedIds.includes(String(category.id))
-        ),
-      }
-    })
-    .filter((family) => family.categories.length > 0)
+  const families = resolveGenerationCategoryFamilies(allowedCategoryIds)
   if (families.length < 4) {
     throw new Error('Custom setup needs at least 4 enabled category families to generate a board')
   }
@@ -1504,10 +1590,10 @@ export async function generatePuzzleCategories(
       )
 
       console.log(
-        `[v0] Generated validated IGDB puzzle on attempt ${attempt} with min ${validation.minValidOptionCount} valid options per cell`
+        `${LOG_PREFIX} Generated validated IGDB puzzle on attempt ${attempt} with min ${validation.minValidOptionCount} valid options per cell`
       )
       console.log(
-        `[v0] Family sources - rows: ${rowFamilies[0].key}:${rowFamilies[0].source}, ${rowFamilies[1].key}:${rowFamilies[1].source}; cols: ${colFamilies[0].key}:${colFamilies[0].source}, ${colFamilies[1].key}:${colFamilies[1].source}`
+        `${LOG_PREFIX} Family sources - rows: ${rowFamilies[0].key}:${rowFamilies[0].source}, ${rowFamilies[1].key}:${rowFamilies[1].source}; cols: ${colFamilies[0].key}:${colFamilies[0].source}, ${colFamilies[1].key}:${colFamilies[1].source}`
       )
       return {
         rows,
@@ -1520,7 +1606,7 @@ export async function generatePuzzleCategories(
     }
 
     console.log(
-      `[v0] Rejected IGDB puzzle attempt ${attempt}: ` +
+      `${LOG_PREFIX} Rejected IGDB puzzle attempt ${attempt}: ` +
         validation.failedCells
           .map(
             (cell) =>

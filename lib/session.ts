@@ -90,6 +90,7 @@ export interface SavedGameState {
   versusCategoryFilters?: Record<string, string[]>
   versusStealRule?: 'lower' | 'higher'
   versusTimerOption?: 'none' | 20 | 60 | 120 | 300
+  versusDisableDraws?: boolean
   turnTimeLeft?: number | null
 }
 

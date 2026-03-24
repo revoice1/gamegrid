@@ -1,12 +1,17 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import {
-  buildPuzzleCellMetadata,
   generatePuzzleCategories,
-  getValidGameCountForCell,
   type PuzzleCategoryFilters,
   type PuzzleProgressCallback,
 } from '@/lib/igdb'
+import { LOG_PREFIX } from '@/lib/logging'
+import {
+  computePuzzleCellMetadata,
+  getExistingDailyPuzzle,
+  getTodayDate,
+  sanitizeCategories,
+} from '@/lib/puzzle-api'
 import { buildGenerationPlans } from '@/lib/puzzle-generation-plans'
 import type { Category, PuzzleCellMetadata } from '@/lib/types'
 
@@ -14,64 +19,8 @@ const MIN_VALID_OPTIONS_PER_CELL = Number(process.env.PUZZLE_MIN_VALID_OPTIONS ?
 const MAX_GENERATION_ATTEMPTS = Number(process.env.PUZZLE_GENERATION_MAX_ATTEMPTS ?? '12')
 const VALIDATION_SAMPLE_SIZE = Number(process.env.PUZZLE_VALIDATION_SAMPLE_SIZE ?? '40')
 
-function sanitizeCategories(
-  categories: Category[]
-): Omit<Category, 'developerId' | 'publisherId'>[] {
-  return categories.map(({ developerId, publisherId, ...safe }) => {
-    void developerId
-    void publisherId
-    return safe
-  })
-}
-
-function getTodayDate(): string {
-  return new Date().toISOString().split('T')[0]
-}
-
 function createEphemeralPuzzleId(): string {
   return `practice-${crypto.randomUUID()}`
-}
-
-async function getExistingDailyPuzzle(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  today: string
-) {
-  const { data } = await supabase
-    .from('puzzles')
-    .select('*')
-    .eq('date', today)
-    .eq('is_daily', true)
-    .single()
-  return data
-}
-
-async function computePuzzleCellMetadata(
-  rows: Category[],
-  cols: Category[],
-  minValidOptionsPerCell: number,
-  onCell?: (cellIndex: number, total: number) => void
-): Promise<PuzzleCellMetadata[]> {
-  const total = rows.length * cols.length
-  const exactCellResults = await Promise.all(
-    rows.flatMap((rowCategory, rowIndex) =>
-      cols.map(async (colCategory, colIndex) => {
-        const cellIndex = rowIndex * 3 + colIndex
-        const validOptionCount = await getValidGameCountForCell(rowCategory, colCategory)
-        onCell?.(cellIndex, total)
-        return { cellIndex, rowCategory, colCategory, validOptionCount }
-      })
-    )
-  )
-  const validation = {
-    valid: exactCellResults.every((c) => c.validOptionCount >= minValidOptionsPerCell),
-    minValidOptionCount: exactCellResults.reduce(
-      (low, c) => Math.min(low, c.validOptionCount),
-      Number.POSITIVE_INFINITY
-    ),
-    cellResults: exactCellResults,
-    failedCells: exactCellResults.filter((c) => c.validOptionCount < minValidOptionsPerCell),
-  }
-  return buildPuzzleCellMetadata(validation, minValidOptionsPerCell, VALIDATION_SAMPLE_SIZE, false)
 }
 
 function sseEvent(data: object): string {
@@ -171,6 +120,7 @@ export async function GET(request: NextRequest) {
               existingPuzzle.row_categories,
               existingPuzzle.col_categories,
               MIN_VALID_OPTIONS_PER_CELL,
+              VALIDATION_SAMPLE_SIZE,
               (cellIndex, total) =>
                 send({
                   type: 'progress',
@@ -332,7 +282,7 @@ export async function GET(request: NextRequest) {
         },
       })
     } catch (err) {
-      console.error('[v0] puzzle-stream error:', err)
+      console.error(`${LOG_PREFIX} puzzle-stream error:`, err)
       await send({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' })
     } finally {
       await writer.close()

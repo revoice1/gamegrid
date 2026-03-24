@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { validateIGDBGameForCell } from '@/lib/igdb'
+import { LOG_PREFIX } from '@/lib/logging'
 import { applyAnonymousSessionCookie, resolveAnonymousSession } from '@/lib/server-session'
 import type { Category } from '@/lib/types'
 
@@ -13,6 +14,7 @@ function serializeGameDetails(game: Awaited<ReturnType<typeof validateIGDBGameFo
         url: game.gameUrl,
         background_image: game.background_image,
         released: game.released,
+        releaseDates: game.releaseDates ?? [],
         metacritic: game.metacritic,
         stealRating: game.stealRating ?? null,
         genres: game.genres?.map((genre) => genre.name) ?? [],
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!valid && game) {
-      console.warn('[v0] Rejected guess details:', {
+      console.warn(`${LOG_PREFIX} Rejected guess details:`, {
         gameId,
         gameName,
         rowCategory,
@@ -137,7 +139,7 @@ export async function POST(request: NextRequest) {
 
       if (guessInsertError) {
         console.warn(
-          '[v0] Guess insert with correctness failed, falling back:',
+          `${LOG_PREFIX} Guess insert with correctness failed, falling back:`,
           guessInsertError.message
         )
 
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
       resolvedSession
     )
   } catch (error) {
-    console.error('Guess error:', error)
+    console.error(`${LOG_PREFIX} Guess error:`, error)
     return NextResponse.json({ error: 'Failed to process guess', valid: false }, { status: 500 })
   }
 }

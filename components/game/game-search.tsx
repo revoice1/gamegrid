@@ -3,41 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Check, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { getPlatformDisplayLabel } from '@/lib/category-display'
 import type { Game, Category } from '@/lib/types'
 import Image from 'next/image'
 
-const PLATFORM_LABELS: Record<string, string> = {
-  'Family Computer': 'NES',
-  'Family Computer Disk System': 'NES',
-  'Nintendo Entertainment System': 'NES',
-  'Super Famicom': 'SNES',
-  'Super Nintendo Entertainment System': 'SNES',
-  'Sega Mega Drive/Genesis': 'Genesis',
-  Dreamcast: 'Dreamcast',
-  'Game Boy': 'Game Boy',
-  'Game Boy Advance': 'GBA',
-  'Nintendo DS': 'DS',
-  'Nintendo 3DS': '3DS',
-  'Nintendo 64': 'N64',
-  'Nintendo GameCube': 'GameCube',
-  'Nintendo Switch': 'Switch',
-  'Nintendo Switch 2': 'Switch 2',
-  'PlayStation (Original)': 'PS1',
-  'PlayStation 2': 'PS2',
-  'PlayStation 3': 'PS3',
-  'PlayStation 4': 'PS4',
-  'PlayStation 5': 'PS5',
-  'PlayStation Portable': 'PSP',
-  'PlayStation Vita': 'Vita',
-  'Xbox (Original)': 'Xbox',
-  'Xbox 360': 'Xbox 360',
-  'Xbox One': 'Xbox One',
-  'Xbox Series X|S': 'Series X|S',
-  DOS: 'PC',
-  'PC (Windows/DOS)': 'PC',
-  'PC (Microsoft Windows)': 'PC',
+type SearchResultGame = Game & {
+  disambiguationPlatform?: string | null
+  disambiguationYear?: string | null
 }
 
 const PLATFORM_PREFERENCE = [
@@ -76,13 +50,9 @@ const PLATFORM_PREFERENCE = [
   'Xbox Series X|S',
 ]
 
-function getDisplayPlatformName(platformName: string): string {
-  return PLATFORM_LABELS[platformName] ?? platformName
-}
-
 function getPreferredPlatform(game: Game): string | null {
   if (game.originalPlatformName) {
-    return getDisplayPlatformName(game.originalPlatformName)
+    return getPlatformDisplayLabel(game.originalPlatformName)
   }
 
   if (!game.platforms?.length) {
@@ -94,7 +64,28 @@ function getPreferredPlatform(game: Game): string | null {
     platforms.includes(platformName)
   )
 
-  return getDisplayPlatformName(rankedPlatform ?? platforms[0])
+  return getPlatformDisplayLabel(rankedPlatform ?? platforms[0])
+}
+
+function normalizeSearchResultTitle(name: string): string {
+  return name.trim().toLocaleLowerCase()
+}
+
+function getDuplicateDisplayTitle(game: SearchResultGame, isDuplicateTitle: boolean): string {
+  if (!isDuplicateTitle) {
+    return game.name
+  }
+
+  const preferredPlatform = game.disambiguationPlatform
+    ? getPlatformDisplayLabel(game.disambiguationPlatform)
+    : getPreferredPlatform(game)
+
+  if (!preferredPlatform) {
+    return game.name
+  }
+
+  const suffix = game.hasSameNamePortFamily ? `${preferredPlatform}+Ports` : preferredPlatform
+  return `${game.name} (${suffix})`
 }
 
 interface GameSearchProps {
@@ -123,7 +114,7 @@ export function GameSearch({
   onClose,
 }: GameSearchProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<Game[]>([])
+  const [results, setResults] = useState<SearchResultGame[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [pendingConfirmationId, setPendingConfirmationId] = useState<number | null>(null)
@@ -136,6 +127,17 @@ export function GameSearch({
     pendingConfirmationId !== null
       ? (results.find((game) => game.id === pendingConfirmationId) ?? null)
       : null
+  const duplicateTitleKeys = new Set(
+    Object.entries(
+      results.reduce<Record<string, number>>((counts, game) => {
+        const key = normalizeSearchResultTitle(game.name)
+        counts[key] = (counts[key] ?? 0) + 1
+        return counts
+      }, {})
+    )
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key)
+  )
 
   // Focus input when opened
   useEffect(() => {
@@ -277,17 +279,21 @@ export function GameSearch({
 
   if (!isOpen) return null
 
-  const getResultMetadata = (game: Game) => {
+  const getResultMetadata = (game: SearchResultGame, isDuplicateTitle: boolean) => {
     const preferredPlatform = getPreferredPlatform(game)
 
     return [
-      game.released ? { label: 'Year', value: game.released.slice(0, 4) } : null,
+      game.released && !isDuplicateTitle
+        ? { label: 'Year', value: game.released.slice(0, 4) }
+        : null,
       !hideScores && game.metacritic !== null
         ? { label: 'Score', value: `${game.metacritic}` }
         : null,
       game.gameTypeLabel ? { label: 'Type', value: game.gameTypeLabel } : null,
       game.genres?.[0]?.name ? { label: 'Genre', value: game.genres[0].name } : null,
-      preferredPlatform ? { label: 'Platform', value: preferredPlatform } : null,
+      preferredPlatform && !isDuplicateTitle
+        ? { label: 'Platform', value: preferredPlatform }
+        : null,
     ].filter((item): item is { label: string; value: string } => item !== null)
   }
 
@@ -341,7 +347,10 @@ export function GameSearch({
           {!isLoading && results.length > 0 && (
             <div className="py-2">
               {results.map((game, index) => {
-                const metadata = getResultMetadata(game)
+                const isDuplicateTitle = duplicateTitleKeys.has(
+                  normalizeSearchResultTitle(game.name)
+                )
+                const metadata = getResultMetadata(game, isDuplicateTitle)
                 const isPendingConfirmation = pendingConfirmationId === game.id
                 const isDimmed = pendingConfirmationId !== null && !isPendingConfirmation
 
@@ -390,7 +399,9 @@ export function GameSearch({
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-foreground">{game.name}</p>
+                        <p className="truncate font-medium text-foreground">
+                          {getDuplicateDisplayTitle(game, isDuplicateTitle)}
+                        </p>
                         {metadata.length > 0 && (
                           <div className="relative mt-1">
                             {isPendingConfirmation && (
@@ -475,6 +486,11 @@ export function GameSearch({
           className="max-w-2xl overflow-hidden border-border bg-card p-3 sm:p-4"
           showCloseButton={true}
         >
+          <DialogHeader className="sr-only">
+            <DialogTitle>
+              {previewGame ? `Cover preview for ${previewGame.name}` : 'Cover preview'}
+            </DialogTitle>
+          </DialogHeader>
           {previewGame?.background_image ? (
             <div className="space-y-3">
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl bg-secondary">

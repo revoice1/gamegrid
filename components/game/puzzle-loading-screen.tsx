@@ -46,7 +46,7 @@ export function PuzzleLoadingScreen({
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-5xl md:flex md:items-start md:justify-center md:gap-4">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card/85 p-6 shadow-xl backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card/70 p-6 shadow-xl backdrop-blur-sm">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.24em] text-primary">
             {mode === 'daily'
               ? 'Daily Puzzle'

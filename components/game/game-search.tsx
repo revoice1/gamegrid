@@ -121,6 +121,8 @@ export function GameSearch({
   const [previewGame, setPreviewGame] = useState<Game | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
+  const searchRequestIdRef = useRef(0)
   const resultRefs = useRef<Array<HTMLDivElement | null>>([])
   const activeCategoryTypesKey = [...activeCategoryTypes].sort().join(',')
   const pendingConfirmationGame =
@@ -142,6 +144,7 @@ export function GameSearch({
   // Focus input when opened
   useEffect(() => {
     if (isOpen) {
+      searchAbortRef.current?.abort()
       setQuery('')
       setResults([])
       setSelectedIndex(0)
@@ -151,13 +154,26 @@ export function GameSearch({
     }
   }, [isOpen])
 
+  useEffect(() => {
+    return () => {
+      searchAbortRef.current?.abort()
+    }
+  }, [])
+
   // Search with debounce
   const search = useCallback(
     async (searchQuery: string) => {
       if (searchQuery.length < 2) {
+        searchAbortRef.current?.abort()
+        setIsLoading(false)
         setResults([])
         return
       }
+
+      searchAbortRef.current?.abort()
+      const controller = new AbortController()
+      searchAbortRef.current = controller
+      const requestId = ++searchRequestIdRef.current
 
       setIsLoading(true)
       try {
@@ -179,17 +195,34 @@ export function GameSearch({
           params.set('categoryTypes', categoryTypes.join(','))
         }
 
-        const response = await fetch(`/api/search?${params.toString()}`)
+        const response = await fetch(`/api/search?${params.toString()}`, {
+          signal: controller.signal,
+        })
         const data = await response.json()
+
+        if (requestId !== searchRequestIdRef.current) {
+          return
+        }
+
         setResults(data.results || [])
         setSelectedIndex(0)
         setPendingConfirmationId(null)
       } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          return
+        }
+
+        if (requestId !== searchRequestIdRef.current) {
+          return
+        }
+
         console.error('Search error:', error)
         setResults([])
         setPendingConfirmationId(null)
       } finally {
-        setIsLoading(false)
+        if (requestId === searchRequestIdRef.current) {
+          setIsLoading(false)
+        }
       }
     },
     [activeCategoryTypesKey, colCategory?.type, puzzleId, rowCategory?.type]

@@ -825,18 +825,13 @@ function buildOfficialGameWhereClause(): string {
   ].join(' & ')
 }
 
-function buildSearchGameWhereClause(options: { requireRecognizedRating?: boolean } = {}): string {
-  const clauses = [
+export function buildSearchGameWhereClause(): string {
+  return [
     'version_parent = null',
     'first_release_date != null',
     'involved_companies != null',
-  ]
-
-  if (options.requireRecognizedRating !== false) {
-    clauses.push('(rating != null | aggregated_rating != null)')
-  }
-
-  return clauses.join(' & ')
+    '(rating != null | aggregated_rating != null)',
+  ].join(' & ')
 }
 
 function buildSupplementalPortFamilyWhereClause(parentId: number): string {
@@ -1176,14 +1171,10 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
     return []
   }
 
-  const runSearch = async (
-    searchTerm: string,
-    limit = 30,
-    options: { requireRecognizedRating?: boolean } = {}
-  ) => {
+  const runSearch = async (searchTerm: string, limit = 30) => {
     const searchQuery = [
       IGDB_GAME_FIELDS,
-      `where ${buildSearchGameWhereClause(options)};`,
+      `where ${buildSearchGameWhereClause()};`,
       `search "${escapeIGDBSearch(searchTerm)}";`,
       `limit ${limit};`,
     ].join(' ')
@@ -1191,14 +1182,14 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
     return queryIGDB<IGDBGame>('games', searchQuery)
   }
 
-  const gatherVisibleResults = async (options: { requireRecognizedRating?: boolean } = {}) => {
-    const primaryResults = await runSearch(query, 30, options)
+  const gatherVisibleResults = async () => {
+    const primaryResults = await runSearch(query, 30)
     let mergedResults = [...primaryResults]
 
     if (primaryResults.length < 5) {
       const fallbackTerms = getFallbackSearchTerms(query)
       for (const fallbackTerm of fallbackTerms.slice(0, 2)) {
-        const fallbackResults = await runSearch(fallbackTerm, 40, options)
+        const fallbackResults = await runSearch(fallbackTerm, 40)
         mergedResults = [...mergedResults, ...fallbackResults]
         if (mergedResults.length >= 30) {
           break
@@ -1208,20 +1199,12 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
 
     const filteredResults = Array.from(
       new Map(mergedResults.map((result) => [result.id, result])).values()
-    ).filter((result) =>
-      options.requireRecognizedRating === false
-        ? hasOfficialCompanyData(result)
-        : isOfficialCatalogGame(result)
-    )
+    ).filter(isOfficialCatalogGame)
 
     return hideSameNamePortResults(filteredResults)
   }
 
-  let visibleResults = await gatherVisibleResults()
-  if (visibleResults.length === 0) {
-    visibleResults = await gatherVisibleResults({ requireRecognizedRating: false })
-  }
-
+  const visibleResults = await gatherVisibleResults()
   const rankedResults = visibleResults.sort(
     (left, right) => scoreSearchCandidate(right, query) - scoreSearchCandidate(left, query)
   )

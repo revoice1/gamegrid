@@ -33,7 +33,6 @@ interface GameHeaderProps {
   score: number
   currentPlayer?: 'x' | 'o' | null
   winner?: 'x' | 'o' | 'draw' | null
-  turnTimerLabel?: string | null
   versusRecord?: { xWins: number; oWins: number }
   dailyResetLabel?: string | null
   isHowToPlayOpen?: boolean
@@ -52,7 +51,6 @@ export function GameHeader({
   score,
   currentPlayer = null,
   winner = null,
-  turnTimerLabel = null,
   versusRecord = { xWins: 0, oWins: 0 },
   dailyResetLabel,
   isHowToPlayOpen = false,
@@ -233,11 +231,6 @@ export function GameHeader({
                   >
                     {versusTurnValue}
                   </span>
-                  {turnTimerLabel && (
-                    <span className="rounded-full border border-border/70 bg-background/65 px-1.5 py-0.5 text-[9px] tracking-[0.1em] text-foreground sm:px-2 sm:text-[10px] sm:tracking-[0.12em]">
-                      {turnTimerLabel.replace(/^Turn:\s*/, '')}
-                    </span>
-                  )}
                 </div>
               )}
 

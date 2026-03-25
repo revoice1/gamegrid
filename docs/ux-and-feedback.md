@@ -44,6 +44,7 @@
 - Locked achievements can use simple initials or abstract tiles.
 - Unlocked achievements can reveal more personality or custom art.
 - Surprise matters, but readability still wins once something is earned.
+- `Real Stinker` now has its own gross little falling celebration instead of only the unlock toast.
 
 ## Social / SEO Imagery
 

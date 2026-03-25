@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { GridCell } from './grid-cell'
 import { CategoryHeaderSimple } from './category-header'
 import type { IndexBadgeSlot } from '@/lib/route-index'
@@ -97,6 +97,10 @@ export function GameGrid({
   lockImpactCell = null,
   onCellClick,
 }: GameGridProps) {
+  const cellMetadataByIndex = useMemo(
+    () => new Map((cellMetadata ?? []).map((cell) => [cell.cellIndex, cell])),
+    [cellMetadata]
+  )
   const isStealPossible = alarmsEnabled && !isGameOver && stealableCell !== null
   const hasFinalStealFocus = !isGameOver && finalStealCell !== null
 
@@ -311,7 +315,7 @@ export function GameGrid({
                   key={`cell-${cellIndex}`}
                   index={cellIndex}
                   guess={guess}
-                  metadata={cellMetadata?.find((cell) => cell.cellIndex === cellIndex)}
+                  metadata={cellMetadataByIndex.get(cellIndex)}
                   isSelected={selectedCell === cellIndex}
                   isAvailable={isAvailable}
                   availableTone={currentPlayer}

@@ -7,6 +7,7 @@ import {
   igdbGameMatchesCategory,
 } from '@/lib/igdb-validation'
 import {
+  buildSearchGameWhereClause,
   mergePortFamilyGameDetails,
   resolveGenerationCategoryFamilies,
   shouldHideSameNamePortResult,
@@ -142,6 +143,13 @@ describe('buildIGDBWhereClause', () => {
     expect(buildIGDBWhereClause({ type: 'decade', id: '2000', name: '2000s' })).toContain(
       'first_release_date != null'
     )
+  })
+})
+
+describe('buildSearchGameWhereClause', () => {
+  it('requires recognized ratings by default', () => {
+    expect(buildSearchGameWhereClause()).toContain('(rating != null | aggregated_rating != null)')
+    expect(buildSearchGameWhereClause()).toContain('involved_companies != null')
   })
 })
 

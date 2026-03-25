@@ -25,3 +25,4 @@ Start here:
 - [Search And Validation](./search-and-validation.md)
 - [UX And Feedback](./ux-and-feedback.md)
 - [Open Questions](./open-questions.md)
+- [Refactor And Test Audit](./refactor-and-test-audit.md)

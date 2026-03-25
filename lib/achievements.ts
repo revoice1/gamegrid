@@ -24,7 +24,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   {
     id: 'real-stinker',
     title: 'Real Stinker',
-    description: 'Correctly place a game with a Metacritic score under 50.',
+    description: 'Correctly place a game with an average score under 50.',
   },
   {
     id: ROUTE_ACHIEVEMENT_ID,

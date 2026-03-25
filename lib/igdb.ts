@@ -2,6 +2,7 @@ import type { Category, Game, PuzzleCellMetadata } from './types'
 import {
   buildIGDBWhereClause,
   buildPuzzleCellMetadata,
+  getIntrinsicPairRejectionReason,
   getPairRejectionReason,
   igdbGameMatchesCategory,
 } from './igdb-validation'
@@ -10,7 +11,7 @@ import {
   CURATED_VERSUS_DEFAULT_SELECTIONS,
   CURATED_VERSUS_GENERATION_CATEGORY_FAMILIES,
 } from './versus-category-options'
-import { LOG_PREFIX } from './logging'
+import { logError, logInfo, logWarn } from './logging'
 export {
   buildIGDBWhereClause,
   buildPuzzleCellMetadata,
@@ -259,9 +260,14 @@ function getCategoryCacheKey(category: Category): string {
   ].join(':')
 }
 
-function getCellCacheKey(rowCategory: Category, colCategory: Category, sampleSize: number): string {
+function getCellCacheKey(
+  rowCategory: Category,
+  colCategory: Category,
+  sampleSize: number,
+  scope: 'default' | 'intrinsic-only' = 'default'
+): string {
   const [left, right] = [getCategoryCacheKey(rowCategory), getCategoryCacheKey(colCategory)].sort()
-  return `${left}|${right}|${sampleSize}`
+  return `${left}|${right}|${sampleSize}|${scope}`
 }
 
 function escapeIGDBSearch(value: string): string {
@@ -362,7 +368,7 @@ async function getIGDBAccessToken(): Promise<string | null> {
   })
 
   if (!response.ok) {
-    console.error(`${LOG_PREFIX} Failed to get IGDB token: ${response.status}`)
+    logError(`Failed to get IGDB token: ${response.status}`)
     return null
   }
 
@@ -406,21 +412,17 @@ async function queryIGDB<T>(endpoint: string, body: string): Promise<T[]> {
 
       if (response.status === 429 && attempt < IGDB_MAX_RETRIES) {
         const retryDelayMs = 1000 * attempt
-        console.warn(
-          `${LOG_PREFIX} IGDB rate limited on ${endpoint}, retrying in ${retryDelayMs}ms`
-        )
+        logWarn(`IGDB rate limited on ${endpoint}, retrying in ${retryDelayMs}ms`)
         await sleep(retryDelayMs)
         continue
       }
 
-      console.error(`${LOG_PREFIX} IGDB query failed (${endpoint}): ${response.status}`)
+      logError(`IGDB query failed (${endpoint}): ${response.status}`)
       return []
     } catch (error) {
       if (attempt < IGDB_MAX_RETRIES) {
         const retryDelayMs = 1000 * attempt
-        console.warn(
-          `${LOG_PREFIX} IGDB query transport error on ${endpoint}, retrying in ${retryDelayMs}ms`
-        )
+        logWarn(`IGDB query transport error on ${endpoint}, retrying in ${retryDelayMs}ms`)
         await sleep(retryDelayMs)
         continue
       }
@@ -485,7 +487,7 @@ async function queryIGDBCount(endpoint: string, whereClause: string): Promise<nu
         continue
       }
 
-      console.error(`${LOG_PREFIX} IGDB count query failed (${endpoint}): ${response.status}`)
+      logError(`IGDB count query failed (${endpoint}): ${response.status}`)
       return null
     } catch (error) {
       if (attempt < IGDB_MAX_RETRIES) {
@@ -1316,7 +1318,7 @@ export async function getValidGamesForCell(
     })
     return games
   } catch (error) {
-    console.error(`${LOG_PREFIX} Error getting IGDB valid games:`, error)
+    logError('Error getting IGDB valid games:', error)
     if (cachedEntry) {
       return cachedEntry.games
     }
@@ -1326,18 +1328,34 @@ export async function getValidGamesForCell(
 
 export async function getValidGameCountForCell(
   rowCategory: Category,
-  colCategory: Category
+  colCategory: Category,
+  options: { ignoreCuratedPairBans?: boolean } = {}
 ): Promise<number> {
-  const pairRejectionReason = getPairRejectionReason(rowCategory, colCategory)
+  const pairRejectionReason = options.ignoreCuratedPairBans
+    ? getIntrinsicPairRejectionReason(rowCategory, colCategory)
+    : getPairRejectionReason(rowCategory, colCategory)
   if (pairRejectionReason) {
-    cellCountCache.set(getCellCacheKey(rowCategory, colCategory, -1), {
-      expiresAt: Date.now() + CELL_VALIDATION_CACHE_TTL_MS,
-      count: 0,
-    })
+    cellCountCache.set(
+      getCellCacheKey(
+        rowCategory,
+        colCategory,
+        -1,
+        options.ignoreCuratedPairBans ? 'intrinsic-only' : 'default'
+      ),
+      {
+        expiresAt: Date.now() + CELL_VALIDATION_CACHE_TTL_MS,
+        count: 0,
+      }
+    )
     return 0
   }
 
-  const cacheKey = getCellCacheKey(rowCategory, colCategory, -1)
+  const cacheKey = getCellCacheKey(
+    rowCategory,
+    colCategory,
+    -1,
+    options.ignoreCuratedPairBans ? 'intrinsic-only' : 'default'
+  )
   const cachedEntry = cellCountCache.get(cacheKey)
   if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
     return cachedEntry.count
@@ -1389,7 +1407,7 @@ export async function getValidGameCountForCell(
     })
     return count
   } catch (error) {
-    console.error(`${LOG_PREFIX} Error getting IGDB valid game count:`, error)
+    logError('Error getting IGDB valid game count:', error)
     if (cachedEntry) {
       return cachedEntry.count
     }
@@ -1589,11 +1607,11 @@ export async function generatePuzzleCategories(
         false
       )
 
-      console.log(
-        `${LOG_PREFIX} Generated validated IGDB puzzle on attempt ${attempt} with min ${validation.minValidOptionCount} valid options per cell`
+      logInfo(
+        `Generated validated IGDB puzzle on attempt ${attempt} with min ${validation.minValidOptionCount} valid options per cell`
       )
-      console.log(
-        `${LOG_PREFIX} Family sources - rows: ${rowFamilies[0].key}:${rowFamilies[0].source}, ${rowFamilies[1].key}:${rowFamilies[1].source}; cols: ${colFamilies[0].key}:${colFamilies[0].source}, ${colFamilies[1].key}:${colFamilies[1].source}`
+      logInfo(
+        `Family sources - rows: ${rowFamilies[0].key}:${rowFamilies[0].source}, ${rowFamilies[1].key}:${rowFamilies[1].source}; cols: ${colFamilies[0].key}:${colFamilies[0].source}, ${colFamilies[1].key}:${colFamilies[1].source}`
       )
       return {
         rows,
@@ -1605,8 +1623,8 @@ export async function generatePuzzleCategories(
       }
     }
 
-    console.log(
-      `${LOG_PREFIX} Rejected IGDB puzzle attempt ${attempt}: ` +
+    logInfo(
+      `Rejected IGDB puzzle attempt ${attempt}: ` +
         validation.failedCells
           .map(
             (cell) =>

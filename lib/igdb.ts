@@ -19,6 +19,10 @@ export {
   igdbGameMatchesCategory,
 } from './igdb-validation'
 
+// These are read at module load. Inside Next/Vercel that is fine, but ad hoc
+// Node/tsx scripts must load the project env first (for example via
+// `@next/env`) or the helpers in this module will quietly behave like IGDB
+// credentials are missing and return empty results.
 const TWITCH_IGDB_CLIENT_ID = process.env.TWITCH_IGDB_CLIENT_ID
 const TWITCH_IGDB_CLIENT_SECRET = process.env.TWITCH_IGDB_CLIENT_SECRET
 const USING_TEST_IGDB_CREDENTIALS =

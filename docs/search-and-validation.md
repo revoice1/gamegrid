@@ -9,6 +9,7 @@
 - [Original Plus Port Families](#original-plus-port-families)
 - [Company Validation](#company-validation)
 - [Count Paths](#count-paths)
+- [Developer Debugging Note](#developer-debugging-note)
 - [Generation Feedback](#generation-feedback)
 
 ## Search Goals
@@ -93,6 +94,17 @@ flowchart TD
 - Company amalgams now use native OR-style count clauses.
 - Key merged platform buckets also use native ID-backed count clauses.
 - Falling back to post-filter counting is slower and should be reduced over time.
+
+## Developer Debugging Note
+
+- If you call IGDB helpers from an ad hoc `node` or `tsx` script, load the project env first.
+- Inside Next/Vercel this happens naturally, but standalone scripts can otherwise make the helpers look broken because they return empty results with no IGDB credentials loaded.
+- Example pattern:
+
+```ts
+const { loadEnvConfig } = require('@next/env')
+loadEnvConfig(process.cwd())
+```
 
 ## Generation Feedback
 

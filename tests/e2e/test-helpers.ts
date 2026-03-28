@@ -73,7 +73,10 @@ export async function resetStorage(page: Page) {
   await page.evaluate((dailyState) => {
     window.localStorage.clear()
     window.sessionStorage.clear()
-    window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(dailyState))
+    window.localStorage.setItem(
+      `gamegrid_daily_state:${dailyState.date ?? new Date().toISOString().slice(0, 10)}`,
+      JSON.stringify(dailyState)
+    )
   }, seededDailyState)
   await page.reload()
 }
@@ -89,7 +92,10 @@ export async function seedDailyPuzzle(page: Page) {
   }
 
   await page.addInitScript((state) => {
-    window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(state))
+    window.localStorage.setItem(
+      `gamegrid_daily_state:${state.date ?? new Date().toISOString().slice(0, 10)}`,
+      JSON.stringify(state)
+    )
   }, payload)
 }
 
@@ -102,6 +108,18 @@ export async function seedAchievements(page: Page, achievementIds: string[]) {
 export async function seedStorageValue(page: Page, key: string, value: unknown) {
   await page.addInitScript(
     ([storageKey, storageValue]) => {
+      if (
+        storageKey === 'gamegrid_daily_state' &&
+        storageValue &&
+        typeof storageValue === 'object' &&
+        'date' in (storageValue as Record<string, unknown>)
+      ) {
+        const date =
+          (storageValue as { date?: string | null }).date ?? new Date().toISOString().slice(0, 10)
+        window.localStorage.setItem(`gamegrid_daily_state:${date}`, JSON.stringify(storageValue))
+        return
+      }
+
       window.localStorage.setItem(storageKey, JSON.stringify(storageValue))
     },
     [key, value] as const

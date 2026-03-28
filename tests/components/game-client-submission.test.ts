@@ -3,6 +3,7 @@ import {
   buildDailyStatsPayload,
   buildGuessLookupRequest,
   buildGuessSubmissionRequest,
+  buildLegacySessionHeaders,
   getPostGuessCompletionEffects,
   getPostGuessState,
   lookupGuessDetails,
@@ -65,7 +66,6 @@ describe('game client submission helpers', () => {
         gameId: 7,
         gameName: 'Test Game',
         gameImage: 'https://example.com/cover.png',
-        sessionId: 'session-1',
         rowCategory,
         colCategory,
         isDaily: false,
@@ -76,11 +76,18 @@ describe('game client submission helpers', () => {
       gameId: 7,
       gameName: 'Test Game',
       gameImage: 'https://example.com/cover.png',
-      sessionId: 'session-1',
       rowCategory,
       colCategory,
       isDaily: false,
     })
+  })
+
+  it('builds the temporary legacy-session migration header only when a session id exists', () => {
+    expect(buildLegacySessionHeaders('session-1')).toEqual({
+      'x-gamegrid-legacy-session': 'session-1',
+    })
+    expect(buildLegacySessionHeaders('')).toBeUndefined()
+    expect(buildLegacySessionHeaders(undefined)).toBeUndefined()
   })
 
   it('posts lookup and submission requests through the shared guess transport', async () => {
@@ -101,7 +108,6 @@ describe('game client submission helpers', () => {
       gameId: 7,
       gameName: 'Test Game',
       gameImage: 'https://example.com/cover.png',
-      sessionId: 'session-1',
       rowCategory,
       colCategory,
       isDaily: true,
@@ -133,7 +139,6 @@ describe('game client submission helpers', () => {
           gameId: 7,
           gameName: 'Test Game',
           gameImage: 'https://example.com/cover.png',
-          sessionId: 'session-1',
           rowCategory,
           colCategory,
           isDaily: true,
@@ -224,13 +229,11 @@ describe('game client submission helpers', () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
     const payload = buildDailyStatsPayload({
       puzzleId: 'test-puzzle',
-      sessionId: 'session-1',
       score: 8,
     })
 
     expect(payload).toEqual({
       puzzleId: 'test-puzzle',
-      sessionId: 'session-1',
       score: 8,
       rarityScore: 0,
     })

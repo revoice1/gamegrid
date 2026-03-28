@@ -127,7 +127,10 @@ test('correct easter egg answer unlocks achievement toast and collection entry',
   await resetStorage(page)
   await page.addInitScript(
     (state) => {
-      window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(state))
+      window.localStorage.setItem(
+        `gamegrid_daily_state:${state.date ?? new Date().toISOString().slice(0, 10)}`,
+        JSON.stringify(state)
+      )
     },
     {
       puzzleId: fakePuzzle.id,
@@ -234,7 +237,10 @@ test('wrong easter egg answer does not unlock the hidden achievement', async ({ 
   await resetStorage(page)
   await page.addInitScript(
     (state) => {
-      window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(state))
+      window.localStorage.setItem(
+        `gamegrid_daily_state:${state.date ?? new Date().toISOString().slice(0, 10)}`,
+        JSON.stringify(state)
+      )
     },
     {
       puzzleId: fakePuzzle.id,
@@ -332,7 +338,10 @@ test('real stinker unlock plays the poop-fall celebration', async ({ page }) => 
   await resetStorage(page)
   await page.addInitScript(
     (state) => {
-      window.localStorage.setItem('gamegrid_daily_state', JSON.stringify(state))
+      window.localStorage.setItem(
+        `gamegrid_daily_state:${state.date ?? new Date().toISOString().slice(0, 10)}`,
+        JSON.stringify(state)
+      )
     },
     {
       puzzleId: fakePuzzle.id,

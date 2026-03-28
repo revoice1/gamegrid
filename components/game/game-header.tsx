@@ -40,10 +40,12 @@ interface GameHeaderProps {
   dailyResetLabel?: string | null
   isHowToPlayOpen?: boolean
   isAchievementsOpen?: boolean
+  isDailyHistoryOpen?: boolean
   hasActiveCustomSetup?: boolean
   onModeChange: (mode: 'daily' | 'practice' | 'versus') => void
   onHowToPlay: () => void
   onAchievements: () => void
+  onDailyHistory?: () => void
   onNewGame?: () => void
   onCustomizeGame?: () => void
 }
@@ -60,10 +62,12 @@ export function GameHeader({
   dailyResetLabel,
   isHowToPlayOpen = false,
   isAchievementsOpen = false,
+  isDailyHistoryOpen = false,
   hasActiveCustomSetup = false,
   onModeChange,
   onHowToPlay,
   onAchievements,
+  onDailyHistory,
   onNewGame,
   onCustomizeGame,
 }: GameHeaderProps) {
@@ -78,6 +82,30 @@ export function GameHeader({
     versusObjectionRule === 'three' ? 3 : versusObjectionRule === 'one' ? 1 : 0
   const utilityButtons = (
     <div className="flex items-center gap-2">
+      {mode === 'daily' && onDailyHistory && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onDailyHistory}
+          aria-label="Daily Archive"
+          title="Daily Archive"
+          className={cn(
+            'h-10 w-10 rounded-xl border transition-colors',
+            isDailyHistoryOpen
+              ? 'border-foreground bg-foreground text-background hover:bg-foreground/90 hover:text-background'
+              : 'border-border bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+          )}
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4l3 2m6-2a9 9 0 11-3.4-7.033"
+            />
+          </svg>
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"

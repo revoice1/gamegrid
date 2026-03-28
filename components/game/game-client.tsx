@@ -5,6 +5,7 @@ import { GameHeader } from './game-header'
 import { GameGrid } from './game-grid'
 import { GameSearch } from './game-search'
 import { ResultsModal } from './results-modal'
+import { DailyHistoryModal, type DailyArchiveEntry } from './daily-history-modal'
 import { HowToPlayModal } from './how-to-play-modal'
 import { GuessDetailsModal } from './guess-details-modal'
 import { VersusObjectionModal } from './versus-objection-modal'
@@ -39,6 +40,7 @@ import {
   isGuessHydrated,
 } from './game-client-helpers'
 import {
+  buildLegacySessionHeaders,
   buildDailyStatsPayload,
   getPostGuessCompletionEffects,
   getPostGuessState,
@@ -66,7 +68,7 @@ import {
   type VersusStealRule,
   type VersusTurnTimerOption,
 } from './versus-setup-modal'
-import { getSessionId, saveGameState, loadGameState, clearGameState } from '@/lib/session'
+import { clearGameState, loadGameState, saveGameState } from '@/lib/session'
 import {
   useAnimationPreference,
   useSearchConfirmPreference,
@@ -183,6 +185,18 @@ interface PendingVersusObjectionReview {
   rowCategory: Category
   colCategory: Category
   invalidGuessResolution: ReturnType<typeof getVersusInvalidGuessResolution>
+}
+
+interface DailyArchiveResponse {
+  entries?: Array<{
+    id: string
+    date: string
+    row_categories: Category[]
+    col_categories: Category[]
+    is_completed?: boolean
+    guess_count?: number
+  }>
+  error?: string
 }
 
 function scaleParticleDensity(density: number, quality: AnimationQuality): number {
@@ -1201,7 +1215,6 @@ export function GameClient() {
   } = useVersusSetupState()
   const {
     sessionId,
-    setSessionId,
     loadingProgress,
     setLoadingProgress,
     loadingStage,
@@ -1239,6 +1252,13 @@ export function GameClient() {
   const [pendingVersusObjectionReview, setPendingVersusObjectionReview] =
     useState<PendingVersusObjectionReview | null>(null)
   const [showVersusWinnerBanner, setShowVersusWinnerBanner] = useState(true)
+  const [showDailyHistory, setShowDailyHistory] = useState(false)
+  const [dailyArchiveEntries, setDailyArchiveEntries] = useState<DailyArchiveEntry[]>([])
+  const [dailyArchiveLoading, setDailyArchiveLoading] = useState(false)
+  const [dailyArchiveError, setDailyArchiveError] = useState<string | null>(null)
+  const [activeDailyDate, setActiveDailyDate] = useState(
+    () => new Date().toISOString().split('T')[0]
+  )
   const {
     turnTimeLeft,
     setTurnTimeLeft,
@@ -1304,6 +1324,41 @@ export function GameClient() {
       : mode === 'versus'
         ? hasActiveVersusCustomSetup
         : false
+
+  const fetchDailyArchive = useCallback(async () => {
+    setDailyArchiveLoading(true)
+    setDailyArchiveError(null)
+
+    try {
+      const response = await fetch('/api/daily-history', {
+        headers: buildLegacySessionHeaders(sessionId),
+      })
+      const data = (await response.json()) as DailyArchiveResponse
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Failed to load daily archive')
+      }
+
+      setDailyArchiveEntries(
+        (data.entries ?? []).map((entry) => ({
+          id: entry.id,
+          date: entry.date,
+          isCompleted: entry.is_completed ?? false,
+          guessCount: entry.guess_count ?? 0,
+        }))
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load daily archive'
+      setDailyArchiveError(message)
+    } finally {
+      setDailyArchiveLoading(false)
+    }
+  }, [sessionId])
+
+  const openDailyHistory = useCallback(() => {
+    setShowDailyHistory(true)
+    void fetchDailyArchive()
+  }, [fetchDailyArchive])
 
   useEffect(() => {
     if (!isVersusMode || !versusAudioEnabled) {
@@ -1461,7 +1516,6 @@ export function GameClient() {
 
   // Initialize session
   useEffect(() => {
-    setSessionId(getSessionId())
     setVersusRecord(getInitialVersusRecord())
   }, [])
 
@@ -2248,7 +2302,11 @@ export function GameClient() {
 
   // Load puzzle
   const loadPuzzle = useCallback(
-    async (gameMode: GameMode, customFilters?: VersusCategoryFilters) => {
+    async (
+      gameMode: GameMode,
+      customFilters?: VersusCategoryFilters,
+      requestedDailyDate?: string
+    ) => {
       if (isPuzzleLoadInFlightRef.current) {
         return
       }
@@ -2256,7 +2314,9 @@ export function GameClient() {
       isPuzzleLoadInFlightRef.current = true
       const shouldPersist = true
       const streamMode = gameMode === 'daily' ? 'daily' : 'practice'
-      const savedState = loadGameState(gameMode)
+      const resolvedDailyDate =
+        gameMode === 'daily' ? (requestedDailyDate ?? activeDailyDate) : undefined
+      const savedState = loadGameState(gameMode, resolvedDailyDate)
       const effectiveFilters =
         gameMode === 'versus'
           ? (customFilters ?? versusCategoryFilters)
@@ -2275,6 +2335,9 @@ export function GameClient() {
             : null
         setLoadedPuzzleMode(gameMode)
         setPuzzle(savedState.puzzle)
+        if (gameMode === 'daily' && savedState.puzzle?.date) {
+          setActiveDailyDate(savedState.puzzle.date)
+        }
         setGuesses(savedState.guesses as (CellGuess | null)[])
         setGuessesRemaining(savedState.guessesRemaining)
         setCurrentPlayer(savedState.currentPlayer ?? 'x')
@@ -2330,126 +2393,164 @@ export function GameClient() {
 
       try {
         let puzzleData: Puzzle | null = null
+        let archivedUserState: {
+          guesses: (CellGuess | null)[]
+          guessesRemaining: number
+          isComplete: boolean
+        } | null = null
 
-        const params = new URLSearchParams({ mode: streamMode })
-        if (gameMode === 'versus' || gameMode === 'practice') {
-          if (effectiveFilters && Object.keys(effectiveFilters).length > 0) {
-            params.set('filters', JSON.stringify(effectiveFilters))
+        const isArchivedDaily =
+          gameMode === 'daily' &&
+          typeof resolvedDailyDate === 'string' &&
+          resolvedDailyDate !== new Date().toISOString().split('T')[0]
+
+        if (isArchivedDaily) {
+          const archiveParams = new URLSearchParams({ mode: 'daily', date: resolvedDailyDate! })
+          const archiveResponse = await fetch(`/api/puzzle?${archiveParams.toString()}`, {
+            signal: controller.signal,
+            headers: buildLegacySessionHeaders(sessionId),
+          })
+          const archivePayload = await archiveResponse.json()
+
+          if (!archiveResponse.ok) {
+            throw new Error(archivePayload.error ?? 'Failed to load archived daily puzzle')
           }
-        }
 
-        const response = await fetch(`/api/puzzle-stream?${params.toString()}`, {
-          signal: controller.signal,
-        })
-        if (!response.ok || !response.body) {
-          throw new Error('Failed to open puzzle stream')
-        }
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        while (true) {
-          const { value, done } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const events = buffer.split('\n\n')
-          buffer = events.pop() ?? ''
-
-          for (const eventChunk of events) {
-            const dataLine = eventChunk.split('\n').find((line) => line.startsWith('data: '))
-
-            if (!dataLine) {
-              continue
+          setLoadingProgress(100)
+          setLoadingStage(`Loading archived board from ${resolvedDailyDate}...`)
+          puzzleData = archivePayload as Puzzle
+          if (archivePayload.user_state) {
+            archivedUserState = {
+              guesses: archivePayload.user_state.guesses ?? Array(9).fill(null),
+              guessesRemaining: archivePayload.user_state.guessesRemaining ?? MAX_GUESSES,
+              isComplete: Boolean(archivePayload.user_state.isComplete),
             }
+            setGuesses(archivedUserState.guesses)
+            setGuessesRemaining(archivedUserState.guessesRemaining)
+            setShowResults(archivedUserState.isComplete)
+          }
+        } else {
+          const params = new URLSearchParams({ mode: streamMode })
+          if (gameMode === 'versus' || gameMode === 'practice') {
+            if (effectiveFilters && Object.keys(effectiveFilters).length > 0) {
+              params.set('filters', JSON.stringify(effectiveFilters))
+            }
+          }
 
-            const event = JSON.parse(dataLine.slice(6)) as PuzzleStreamMessage
+          const response = await fetch(`/api/puzzle-stream?${params.toString()}`, {
+            signal: controller.signal,
+            headers: buildLegacySessionHeaders(sessionId),
+          })
+          if (!response.ok || !response.body) {
+            throw new Error('Failed to open puzzle stream')
+          }
 
-            if (event.type === 'progress') {
-              if (typeof event.pct === 'number') {
-                setLoadingProgress((current) => Math.max(current, event.pct!))
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+
+          while (true) {
+            const { value, done } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const events = buffer.split('\n\n')
+            buffer = events.pop() ?? ''
+
+            for (const eventChunk of events) {
+              const dataLine = eventChunk.split('\n').find((line) => line.startsWith('data: '))
+
+              if (!dataLine) {
+                continue
               }
-              if (event.message) {
-                setLoadingStage(event.message)
-              }
-              if (event.stage === 'attempt' && event.attempt && event.rows && event.cols) {
-                setLoadingAttempts((current) => {
-                  const nextAttempt: LoadingAttempt = {
-                    attempt: event.attempt!,
-                    rows: event.rows!,
-                    cols: event.cols!,
-                    intersections: buildAttemptIntersections(event.rows!, event.cols!),
-                  }
-                  const filtered = current.filter((entry) => entry.attempt !== event.attempt)
-                  return [...filtered, nextAttempt].slice(-4)
-                })
-              }
-              if (
-                event.stage === 'cell' &&
-                typeof event.attempt === 'number' &&
-                typeof event.cellIndex === 'number'
-              ) {
-                setLoadingAttempts((current) =>
-                  current.map((entry) => {
-                    if (entry.attempt !== event.attempt) {
-                      return entry
+
+              const event = JSON.parse(dataLine.slice(6)) as PuzzleStreamMessage
+
+              if (event.type === 'progress') {
+                if (typeof event.pct === 'number') {
+                  setLoadingProgress((current) => Math.max(current, event.pct!))
+                }
+                if (event.message) {
+                  setLoadingStage(event.message)
+                }
+                if (event.stage === 'attempt' && event.attempt && event.rows && event.cols) {
+                  setLoadingAttempts((current) => {
+                    const nextAttempt: LoadingAttempt = {
+                      attempt: event.attempt!,
+                      rows: event.rows!,
+                      cols: event.cols!,
+                      intersections: buildAttemptIntersections(event.rows!, event.cols!),
                     }
-
-                    const intersections = entry.intersections.map((intersection, index) =>
-                      index === event.cellIndex
-                        ? {
-                            ...intersection,
-                            status: (event.passed
-                              ? 'passed'
-                              : 'failed') as LoadingIntersection['status'],
-                            validOptionCount: event.passed ? undefined : event.validOptionCount,
-                          }
-                        : intersection
-                    )
-
-                    return { ...entry, intersections }
+                    const filtered = current.filter((entry) => entry.attempt !== event.attempt)
+                    return [...filtered, nextAttempt].slice(-4)
                   })
-                )
-              }
-              if (
-                event.stage === 'metadata' &&
-                typeof event.attempt === 'number' &&
-                typeof event.cellIndex === 'number'
-              ) {
-                setLoadingAttempts((current) =>
-                  current.map((entry) => {
-                    if (entry.attempt !== event.attempt) {
-                      return entry
-                    }
+                }
+                if (
+                  event.stage === 'cell' &&
+                  typeof event.attempt === 'number' &&
+                  typeof event.cellIndex === 'number'
+                ) {
+                  setLoadingAttempts((current) =>
+                    current.map((entry) => {
+                      if (entry.attempt !== event.attempt) {
+                        return entry
+                      }
 
-                    const intersections = entry.intersections.map((intersection, index) =>
-                      index === event.cellIndex
-                        ? {
-                            ...intersection,
-                            status: 'passed' as LoadingIntersection['status'],
-                            validOptionCount: event.validOptionCount,
-                          }
-                        : intersection
-                    )
+                      const intersections = entry.intersections.map((intersection, index) =>
+                        index === event.cellIndex
+                          ? {
+                              ...intersection,
+                              status: (event.passed
+                                ? 'passed'
+                                : 'failed') as LoadingIntersection['status'],
+                              validOptionCount: event.passed ? undefined : event.validOptionCount,
+                            }
+                          : intersection
+                      )
 
-                    return { ...entry, intersections }
-                  })
-                )
-              }
-              if (event.stage === 'rejected' && typeof event.attempt === 'number') {
-                setLoadingAttempts((current) =>
-                  current.map((entry) =>
-                    entry.attempt === event.attempt
-                      ? { ...entry, rejectedMessage: event.message ?? 'Rejected' }
-                      : entry
+                      return { ...entry, intersections }
+                    })
                   )
-                )
+                }
+                if (
+                  event.stage === 'metadata' &&
+                  typeof event.attempt === 'number' &&
+                  typeof event.cellIndex === 'number'
+                ) {
+                  setLoadingAttempts((current) =>
+                    current.map((entry) => {
+                      if (entry.attempt !== event.attempt) {
+                        return entry
+                      }
+
+                      const intersections = entry.intersections.map((intersection, index) =>
+                        index === event.cellIndex
+                          ? {
+                              ...intersection,
+                              status: 'passed' as LoadingIntersection['status'],
+                              validOptionCount: event.validOptionCount,
+                            }
+                          : intersection
+                      )
+
+                      return { ...entry, intersections }
+                    })
+                  )
+                }
+                if (event.stage === 'rejected' && typeof event.attempt === 'number') {
+                  setLoadingAttempts((current) =>
+                    current.map((entry) =>
+                      entry.attempt === event.attempt
+                        ? { ...entry, rejectedMessage: event.message ?? 'Rejected' }
+                        : entry
+                    )
+                  )
+                }
+              } else if (event.type === 'puzzle' && event.puzzle) {
+                puzzleData = event.puzzle
+              } else if (event.type === 'error') {
+                throw new Error(event.message ?? 'Failed to generate puzzle')
               }
-            } else if (event.type === 'puzzle' && event.puzzle) {
-              puzzleData = event.puzzle
-            } else if (event.type === 'error') {
-              throw new Error(event.message ?? 'Failed to generate puzzle')
             }
           }
         }
@@ -2462,15 +2563,18 @@ export function GameClient() {
         setLoadingStage('Board ready.')
         setLoadedPuzzleMode(gameMode)
         setPuzzle(puzzleData)
+        if (gameMode === 'daily' && puzzleData.date) {
+          setActiveDailyDate(puzzleData.date)
+        }
 
         if (shouldPersist) {
           saveGameState(
             {
               puzzleId: puzzleData.id,
               puzzle: puzzleData,
-              guesses: Array(9).fill(null),
-              guessesRemaining: MAX_GUESSES,
-              isComplete: false,
+              guesses: archivedUserState?.guesses ?? Array(9).fill(null),
+              guessesRemaining: archivedUserState?.guessesRemaining ?? MAX_GUESSES,
+              isComplete: archivedUserState?.isComplete ?? false,
               ...(gameMode === 'versus'
                 ? {
                     currentPlayer: 'x' as const,
@@ -2534,7 +2638,22 @@ export function GameClient() {
         setIsLoading(false)
       }
     },
-    [practiceCategoryFilters, toast, versusCategoryFilters]
+    [activeDailyDate, practiceCategoryFilters, toast, versusCategoryFilters]
+  )
+
+  const handleDailyArchiveSelect = useCallback(
+    (entry: DailyArchiveEntry) => {
+      setShowDailyHistory(false)
+      setActiveDailyDate(entry.date)
+      setLoadedPuzzleMode(null)
+      setPuzzle(null)
+      setGuesses(Array(9).fill(null))
+      setSelectedCell(null)
+      setShowResults(false)
+      setDetailCell(null)
+      void loadPuzzle('daily', undefined, entry.date)
+    },
+    [loadPuzzle]
   )
 
   useEffect(() => {
@@ -2608,12 +2727,24 @@ export function GameClient() {
       return
     }
 
-    if (loadedPuzzleMode === mode && puzzle) {
+    if (
+      loadedPuzzleMode === mode &&
+      puzzle &&
+      (mode !== 'daily' || puzzle.date === activeDailyDate)
+    ) {
       return
     }
 
-    loadPuzzle(mode)
-  }, [loadPuzzle, loadedPuzzleMode, mode, puzzle, showPracticeStartOptions, showVersusStartOptions])
+    loadPuzzle(mode, undefined, mode === 'daily' ? activeDailyDate : undefined)
+  }, [
+    activeDailyDate,
+    loadPuzzle,
+    loadedPuzzleMode,
+    mode,
+    puzzle,
+    showPracticeStartOptions,
+    showVersusStartOptions,
+  ])
 
   // Handle mode change
   const handleModeChange = (newMode: GameMode) => {
@@ -2666,6 +2797,7 @@ export function GameClient() {
         setShowVersusStartOptions(false)
         setShowVersusSetup(false)
         setVersusSetupError(null)
+        setActiveDailyDate(new Date().toISOString().split('T')[0])
       }
       setMode(newMode)
     }
@@ -2826,7 +2958,6 @@ export function GameClient() {
         gameId: game.id,
         gameName: game.name,
         gameImage: game.background_image,
-        sessionId,
         rowCategory,
         colCategory,
         isDaily: mode === 'daily',
@@ -3093,7 +3224,6 @@ export function GameClient() {
           fetch,
           buildDailyStatsPayload({
             puzzleId: puzzle.id,
-            sessionId,
             score: postGuessState.finalScore,
           })
         )
@@ -3277,10 +3407,12 @@ export function GameClient() {
           dailyResetLabel={mode === 'daily' ? dailyResetLabel : null}
           isHowToPlayOpen={showHowToPlay}
           isAchievementsOpen={showAchievements}
+          isDailyHistoryOpen={showDailyHistory}
           hasActiveCustomSetup={hasActiveCustomSetup}
           onModeChange={handleModeChange}
           onAchievements={() => setShowAchievements(true)}
           onHowToPlay={() => setShowHowToPlay(true)}
+          onDailyHistory={mode === 'daily' ? openDailyHistory : undefined}
           onNewGame={mode === 'practice' || mode === 'versus' ? handleNewGame : undefined}
           onCustomizeGame={
             mode === 'practice'
@@ -3416,6 +3548,16 @@ export function GameClient() {
           onPlayAgain={handleNewGame}
         />
       )}
+
+      <DailyHistoryModal
+        isOpen={mode === 'daily' && showDailyHistory}
+        onClose={() => setShowDailyHistory(false)}
+        entries={dailyArchiveEntries}
+        isLoading={dailyArchiveLoading}
+        errorMessage={dailyArchiveError}
+        currentDate={puzzle.date}
+        onSelect={handleDailyArchiveSelect}
+      />
 
       <HowToPlayModal
         isOpen={showHowToPlay}

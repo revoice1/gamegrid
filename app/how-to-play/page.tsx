@@ -109,8 +109,19 @@ export default function HowToPlayPage() {
             <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4">
               <h3 className="font-medium text-foreground">Can I play old daily boards?</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Right now the easiest way to keep playing is practice mode. A fuller archive is a
-                natural future expansion for the site.
+                Yes. GameGrid now surfaces a daily archive so you can jump back into stored boards
+                you missed, and if you already started one in this browser your saved progress can
+                come back with it. Practice mode remains the faster endless-play option.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4">
+              <h3 className="font-medium text-foreground">
+                How does GameGrid know which daily progress is mine?
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Daily progress is anonymous and tied to this browser through a server-managed
+                session cookie. There is no account login yet, so progress follows the browser
+                session rather than a cross-device profile.
               </p>
             </div>
           </div>

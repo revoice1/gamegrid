@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
       gameId,
       gameName,
       gameImage,
-      sessionId,
       rowCategory,
       colCategory,
       isDaily = true,
@@ -52,14 +51,13 @@ export async function POST(request: NextRequest) {
       gameId: number
       gameName?: string
       gameImage?: string | null
-      sessionId?: string
       rowCategory: Category
       colCategory: Category
       isDaily?: boolean
       lookupOnly?: boolean
     }
 
-    const resolvedSession = resolveAnonymousSession(request, sessionId)
+    const resolvedSession = resolveAnonymousSession(request)
 
     // Validate the guess
     const { valid, game, matchesRow, matchesCol } = await validateIGDBGameForCell(

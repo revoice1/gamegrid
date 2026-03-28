@@ -15,6 +15,7 @@ Use them as the fast path for questions like:
 - Which categories are standard vs custom-only?
 - What does search intentionally hide or reveal?
 - How does the objection / judgment flow work?
+- How does daily archive / anonymous session restore work?
 - Which parts of the product still feel unsettled?
 
 Start here:

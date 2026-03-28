@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
+import { getSessionId } from '@/lib/session'
 import { getTimeUntilNextUtcMidnight } from '@/lib/utils'
 
 export function useLoadingState<TLoadingAttempt = unknown>() {
-  const [sessionId, setSessionId] = useState('')
+  const [sessionId, setSessionId] = useState(() =>
+    typeof window === 'undefined' ? '' : getSessionId()
+  )
   const [loadingProgress, setLoadingProgress] = useState(8)
   const [loadingStage, setLoadingStage] = useState('Warming up the puzzle generator...')
   const [loadingAttempts, setLoadingAttempts] = useState<TLoadingAttempt[]>([])

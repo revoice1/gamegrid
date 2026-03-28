@@ -19,7 +19,6 @@ export interface GuessSubmissionRequest {
   gameId: number
   gameName: string
   gameImage: string | null
-  sessionId: string
   rowCategory: Category
   colCategory: Category
   isDaily: boolean
@@ -41,7 +40,6 @@ export function buildGuessSubmissionRequest(request: GuessSubmissionRequest) {
     gameId: request.gameId,
     gameName: request.gameName,
     gameImage: request.gameImage,
-    sessionId: request.sessionId,
     rowCategory: request.rowCategory,
     colCategory: request.colCategory,
     isDaily: request.isDaily,
@@ -103,17 +101,16 @@ export function getPostGuessState(options: {
   }
 }
 
-export function buildDailyStatsPayload(options: {
-  puzzleId: string
-  sessionId: string
-  score: number
-}) {
+export function buildDailyStatsPayload(options: { puzzleId: string; score: number }) {
   return {
     puzzleId: options.puzzleId,
-    sessionId: options.sessionId,
     score: options.score,
     rarityScore: 0,
   }
+}
+
+export function buildLegacySessionHeaders(sessionId: string | null | undefined) {
+  return sessionId ? { 'x-gamegrid-legacy-session': sessionId } : undefined
 }
 
 export async function postDailyStats(

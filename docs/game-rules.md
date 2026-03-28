@@ -15,7 +15,8 @@
 
 - One shared board per UTC day.
 - The board is stored in Supabase and reused after the first successful generation.
-- Daily state is restored locally for the current browser session history.
+- Daily progress is tied to an anonymous browser session and also mirrored locally so the current browser can restore in-progress boards quickly.
+- Older stored daily boards can be opened from the daily archive later so players can catch up on missed boards, including their own saved progress for those boards when that same browser session returns.
 - Daily completions are recorded for stats and rarity scoring.
 
 ### Practice

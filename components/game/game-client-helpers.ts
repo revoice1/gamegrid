@@ -148,6 +148,11 @@ export function buildGuessFromSelection(options: {
     companies: resolvedMetadata.companies,
     matchedRow: result.matchesRow,
     matchedCol: result.matchesCol,
+    objectionUsed: false,
+    objectionVerdict: null,
+    objectionExplanation: null,
+    objectionOriginalMatchedRow: null,
+    objectionOriginalMatchedCol: null,
   }
 }
 

@@ -47,11 +47,11 @@ function CategoryDefinitionDialog({
 }) {
   const definition = useMemo<CategoryDefinitionResponse>(
     () => ({
-      title: category.name,
+      title: displayName,
       typeLabel: getCategoryTypeLabel(category.type),
       ...getFallbackCategoryDefinition(category),
     }),
-    [category]
+    [category, displayName]
   )
 
   return (

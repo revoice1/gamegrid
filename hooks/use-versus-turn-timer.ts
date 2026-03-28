@@ -1,6 +1,9 @@
-import { useEffect, useEffectEvent, useRef, type MutableRefObject } from 'react'
+import { useEffect, useEffectEvent, type MutableRefObject } from 'react'
 import { getNextPlayer, type TicTacToePlayer } from '@/components/game/game-client-versus-helpers'
-import { playFinalStealHeartbeatCue } from '@/components/game/game-client-runtime-helpers'
+import {
+  startFinalStealHeartbeatLoop,
+  stopFinalStealHeartbeatLoop,
+} from '@/components/game/game-client-runtime-helpers'
 
 interface PendingFinalStealLike {
   defender: TicTacToePlayer
@@ -18,7 +21,7 @@ interface UseVersusTurnTimerOptions {
   turnTimeLeft: number | null
   pendingFinalSteal: PendingFinalStealLike | null
   animationsEnabled: boolean
-  alarmsEnabled: boolean
+  audioEnabled: boolean
   activeTurnTimerKeyRef: MutableRefObject<string | null>
   setTurnTimeLeft: (value: number | null | ((current: number | null) => number | null)) => void
   onTurnExpired: (nextPlayer: TicTacToePlayer) => void
@@ -35,13 +38,11 @@ export function useVersusTurnTimer({
   turnTimeLeft,
   pendingFinalSteal,
   animationsEnabled,
-  alarmsEnabled,
+  audioEnabled,
   activeTurnTimerKeyRef,
   setTurnTimeLeft,
   onTurnExpired,
 }: UseVersusTurnTimerOptions) {
-  const didMountFinalStealCueRef = useRef(false)
-  const lastFinalStealCueKeyRef = useRef<string | null>(null)
   const onTurnExpiredEvent = useEffectEvent(onTurnExpired)
 
   useEffect(() => {
@@ -49,29 +50,24 @@ export function useVersusTurnTimer({
       ? `${pendingFinalSteal.defender}:${pendingFinalSteal.cellIndex}`
       : null
 
-    if (!didMountFinalStealCueRef.current) {
-      didMountFinalStealCueRef.current = true
-      lastFinalStealCueKeyRef.current = cueKey
+    if (!cueKey || !animationsEnabled || !audioEnabled) {
+      stopFinalStealHeartbeatLoop()
       return
     }
 
-    if (!cueKey) {
-      lastFinalStealCueKeyRef.current = null
+    startFinalStealHeartbeatLoop()
+
+    return () => {
+      stopFinalStealHeartbeatLoop()
+    }
+  }, [audioEnabled, animationsEnabled, pendingFinalSteal])
+
+  useEffect(() => {
+    if (!isVersusMode || winner) {
+      stopFinalStealHeartbeatLoop()
       return
     }
-
-    if (lastFinalStealCueKeyRef.current === cueKey) {
-      return
-    }
-
-    lastFinalStealCueKeyRef.current = cueKey
-
-    if (!animationsEnabled || !alarmsEnabled) {
-      return
-    }
-
-    playFinalStealHeartbeatCue()
-  }, [alarmsEnabled, animationsEnabled, pendingFinalSteal])
+  }, [isVersusMode, winner])
 
   useEffect(() => {
     const isVersusBoardReady =

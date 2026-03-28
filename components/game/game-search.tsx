@@ -5,6 +5,7 @@ import { Check, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { getCategoryDisplayName } from '@/lib/category-display'
 import { getPlatformDisplayLabel } from '@/lib/category-display'
 import type { Game, Category } from '@/lib/types'
 import Image from 'next/image'
@@ -341,6 +342,16 @@ export function GameSearch({
 
   const getResultMetadata = (game: SearchResultGame, isDuplicateTitle: boolean) => {
     const preferredPlatform = getPreferredPlatform(game)
+    const primaryGenre = game.genres?.[0]
+    const primaryGenreDisplay = primaryGenre
+      ? getCategoryDisplayName({
+          type: 'genre',
+          id: primaryGenre.id,
+          name: primaryGenre.name,
+          slug: primaryGenre.slug,
+        })
+      : null
+    const typeLabel = game.hasSameNamePortFamily ? 'Family' : game.gameTypeLabel
 
     return [
       game.released && !isDuplicateTitle
@@ -349,8 +360,8 @@ export function GameSearch({
       !hideScores && game.metacritic !== null
         ? { label: 'Score', value: `${game.metacritic}` }
         : null,
-      game.gameTypeLabel ? { label: 'Type', value: game.gameTypeLabel } : null,
-      game.genres?.[0]?.name ? { label: 'Genre', value: game.genres[0].name } : null,
+      typeLabel ? { label: 'Type', value: typeLabel } : null,
+      primaryGenreDisplay ? { label: 'Genre', value: primaryGenreDisplay } : null,
       preferredPlatform && !isDuplicateTitle
         ? { label: 'Platform', value: preferredPlatform }
         : null,

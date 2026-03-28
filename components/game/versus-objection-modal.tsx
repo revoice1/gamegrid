@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import type { Category, CellGuess } from '@/lib/types'
 import Image from 'next/image'
 
-interface GuessDetailsModalProps {
+interface VersusObjectionModalProps {
   isOpen: boolean
   onClose: () => void
   guess: CellGuess | null
@@ -25,19 +25,6 @@ interface GuessDetailsModalProps {
   objectionDisabledLabel?: string | null
 }
 
-function MetadataList({ label, values }: { label: string; values: string[] | undefined }) {
-  if (!values || values.length === 0) {
-    return null
-  }
-
-  return (
-    <div>
-      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm text-foreground">{values.join(', ')}</p>
-    </div>
-  )
-}
-
 function formatCategoryType(type: Category['type'] | undefined) {
   if (!type) {
     return ''
@@ -46,7 +33,7 @@ function formatCategoryType(type: Category['type'] | undefined) {
   return type.replace(/_/g, ' ')
 }
 
-export function GuessDetailsModal({
+export function VersusObjectionModal({
   isOpen,
   onClose,
   guess,
@@ -58,14 +45,12 @@ export function GuessDetailsModal({
   objectionExplanation = null,
   objectionDisabled = false,
   objectionDisabledLabel = null,
-}: GuessDetailsModalProps) {
+}: VersusObjectionModalProps) {
   if (!guess) {
     return null
   }
 
   const isSustainedObjection = guess.objectionVerdict === 'sustained'
-  const shouldShowObjectionPanel =
-    !guess.isCorrect || isSustainedObjection || guess.objectionVerdict === 'overruled'
   const rowCorrectedByObjection =
     isSustainedObjection && guess.objectionOriginalMatchedRow === false && Boolean(guess.matchedRow)
   const colCorrectedByObjection =
@@ -84,7 +69,7 @@ export function GuessDetailsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto bg-card border-border">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
           <DialogTitle>{guess.gameName}</DialogTitle>
           <DialogDescription>
@@ -104,7 +89,7 @@ export function GuessDetailsModal({
                 alt={guess.gameName}
                 fill
                 className="object-cover"
-                sizes="(max-width: 768px) 100vw, 500px"
+                sizes="(max-width: 768px) 100vw, 480px"
               />
             </div>
           )}
@@ -128,6 +113,7 @@ export function GuessDetailsModal({
                 {guess.matchedRow ? 'Matched' : 'Did not match'}
               </p>
             </div>
+
             <div className="rounded-lg border border-border bg-secondary/30 p-3">
               <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
                 {colCategory?.name}
@@ -148,85 +134,42 @@ export function GuessDetailsModal({
             </div>
           </div>
 
-          {shouldShowObjectionPanel && (
-            <div className="rounded-2xl border border-[#f5b94e]/28 bg-[linear-gradient(180deg,rgba(245,185,78,0.12),rgba(245,185,78,0.04))] px-4 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#ffd46f]">
-                    Objection
-                  </p>
-                  <p className="mt-1 text-sm text-foreground/82">
-                    Ask the courtroom judge to review this rejected intersection.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  onClick={onObjection}
-                  disabled={objectionPending || objectionDisabled || !onObjection}
-                  className="bg-[#c46a2d] text-[#fff6ea] hover:bg-[#d97a36]"
-                >
-                  {objectionButtonLabel}
-                </Button>
+          <div className="rounded-2xl border border-[#f5b94e]/28 bg-[linear-gradient(180deg,rgba(245,185,78,0.12),rgba(245,185,78,0.04))] px-4 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#ffd46f]">
+                  Objection
+                </p>
+                <p className="mt-1 text-sm text-foreground/82">
+                  Review this intersection without exposing the full IGDB metadata during the match.
+                </p>
               </div>
-              {(objectionVerdict || objectionExplanation) && (
-                <div className="mt-3 rounded-xl border border-border/60 bg-background/55 px-3 py-3">
-                  {objectionVerdict && (
-                    <p
-                      className={`text-[11px] font-semibold uppercase tracking-[0.26em] ${
-                        objectionVerdict === 'sustained' ? 'text-[#f5b94e]' : 'text-destructive'
-                      }`}
-                    >
-                      {objectionVerdict === 'sustained' ? 'Sustained' : 'Overruled'}
-                    </p>
-                  )}
-                  {objectionExplanation && (
-                    <p className="mt-1 text-sm text-foreground/78">{objectionExplanation}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Released</p>
-              <p className="mt-1 text-sm text-foreground">{guess.released || 'Unknown'}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Metacritic
-              </p>
-              <p className="mt-1 text-sm text-foreground">
-                {guess.metacritic !== null && guess.metacritic !== undefined
-                  ? guess.metacritic
-                  : 'N/A'}
-              </p>
-            </div>
-          </div>
-
-          {guess.gameUrl && (
-            <div className="flex justify-start">
-              <a
-                href={guess.gameUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              <Button
+                type="button"
+                onClick={onObjection}
+                disabled={objectionPending || objectionDisabled || !onObjection}
+                className="bg-[#c46a2d] text-[#fff6ea] hover:bg-[#d97a36]"
               >
-                View on IGDB
-              </a>
+                {objectionButtonLabel}
+              </Button>
             </div>
-          )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <MetadataList label="Platforms" values={guess.platforms} />
-            <MetadataList label="Genres" values={guess.genres} />
-            <MetadataList label="Developers" values={guess.developers} />
-            <MetadataList label="Publishers" values={guess.publishers} />
-            <MetadataList label="Keywords" values={guess.tags} />
-            <MetadataList label="Game Modes" values={guess.gameModes} />
-            <MetadataList label="Perspectives" values={guess.perspectives} />
-            <MetadataList label="Themes" values={guess.themes} />
-            <MetadataList label="Companies" values={guess.companies} />
+            {(objectionVerdict || objectionExplanation) && (
+              <div className="mt-3 rounded-xl border border-border/60 bg-background/55 px-3 py-3">
+                {objectionVerdict && (
+                  <p
+                    className={`text-[11px] font-semibold uppercase tracking-[0.26em] ${
+                      objectionVerdict === 'sustained' ? 'text-[#f5b94e]' : 'text-destructive'
+                    }`}
+                  >
+                    {objectionVerdict === 'sustained' ? 'Sustained' : 'Overruled'}
+                  </p>
+                )}
+                {objectionExplanation && (
+                  <p className="mt-1 text-sm text-foreground/78">{objectionExplanation}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>

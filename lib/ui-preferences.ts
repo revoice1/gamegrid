@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 const SEARCH_CONFIRM_STORAGE_KEY = 'gamegrid_search_confirm'
 const VERSUS_ALARMS_STORAGE_KEY = 'gamegrid_versus_alarms'
+const VERSUS_AUDIO_STORAGE_KEY = 'gamegrid_versus_audio'
 const ANIMATIONS_STORAGE_KEY = 'gamegrid_animations'
 const UI_PREFERENCES_EVENT = 'gamegrid-ui-preferences'
 
@@ -67,6 +68,10 @@ export function useSearchConfirmPreference() {
 
 export function useVersusAlarmPreference() {
   return useBooleanPreference(VERSUS_ALARMS_STORAGE_KEY, true)
+}
+
+export function useVersusAudioPreference() {
+  return useBooleanPreference(VERSUS_AUDIO_STORAGE_KEY, true)
 }
 
 export function useAnimationPreference() {

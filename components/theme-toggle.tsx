@@ -9,6 +9,7 @@ import {
   useAnimationPreference,
   useSearchConfirmPreference,
   useVersusAlarmPreference,
+  useVersusAudioPreference,
 } from '@/lib/ui-preferences'
 
 function FlashbangIcon({ className }: { className?: string }) {
@@ -51,6 +52,8 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
   const { enabled: animationsEnabled, setEnabled: setAnimationsEnabled } = useAnimationPreference()
   const { enabled: versusAlarmsEnabled, setEnabled: setVersusAlarmsEnabled } =
     useVersusAlarmPreference()
+  const { enabled: versusAudioEnabled, setEnabled: setVersusAudioEnabled } =
+    useVersusAudioPreference()
 
   useEffect(() => {
     setMounted(true)
@@ -203,35 +206,70 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
             </button>
           </div>
           {showVersusAlarms && (
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">Versus Alarms</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {versusAlarmsEnabled ? 'Show timer and threat alarms' : 'Keep versus board calm'}
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label={
-                  versusAlarmsEnabled ? 'Turn off versus alarms' : 'Turn on versus alarms'
-                }
-                aria-pressed={versusAlarmsEnabled}
-                onClick={() => preferencesMounted && setVersusAlarmsEnabled(!versusAlarmsEnabled)}
-                className={cn(
-                  'relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors',
-                  versusAlarmsEnabled
-                    ? 'border-primary/40 bg-primary/20'
-                    : 'border-border bg-secondary/50'
-                )}
-              >
-                <span
+            <>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Versus Alarms</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {versusAlarmsEnabled
+                      ? 'Show timer and threat alarms'
+                      : 'Keep versus board calm'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={
+                    versusAlarmsEnabled ? 'Turn off versus alarms' : 'Turn on versus alarms'
+                  }
+                  aria-pressed={versusAlarmsEnabled}
+                  onClick={() => preferencesMounted && setVersusAlarmsEnabled(!versusAlarmsEnabled)}
                   className={cn(
-                    'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
-                    versusAlarmsEnabled ? 'left-[18px] bg-primary' : 'left-0.5 bg-muted-foreground'
+                    'relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors',
+                    versusAlarmsEnabled
+                      ? 'border-primary/40 bg-primary/20'
+                      : 'border-border bg-secondary/50'
                   )}
-                />
-              </button>
-            </div>
+                >
+                  <span
+                    className={cn(
+                      'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
+                      versusAlarmsEnabled
+                        ? 'left-[18px] bg-primary'
+                        : 'left-0.5 bg-muted-foreground'
+                    )}
+                  />
+                </button>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Audio</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {versusAudioEnabled
+                      ? 'Play heartbeat and future sound cues'
+                      : 'Mute versus audio cues'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={versusAudioEnabled ? 'Turn off versus audio' : 'Turn on versus audio'}
+                  aria-pressed={versusAudioEnabled}
+                  onClick={() => preferencesMounted && setVersusAudioEnabled(!versusAudioEnabled)}
+                  className={cn(
+                    'relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors',
+                    versusAudioEnabled
+                      ? 'border-primary/40 bg-primary/20'
+                      : 'border-border bg-secondary/50'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
+                      versusAudioEnabled ? 'left-[18px] bg-primary' : 'left-0.5 bg-muted-foreground'
+                    )}
+                  />
+                </button>
+              </div>
+            </>
           )}
           <div className="mt-3 rounded-xl border border-border/70 bg-secondary/20 px-3 py-2.5">
             <p className="text-sm font-medium text-foreground">Feedback</p>

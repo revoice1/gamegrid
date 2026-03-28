@@ -98,6 +98,11 @@ export interface CellGuess {
   companies?: string[]
   matchedRow?: boolean
   matchedCol?: boolean
+  objectionUsed?: boolean
+  objectionVerdict?: 'sustained' | 'overruled' | null
+  objectionExplanation?: string | null
+  objectionOriginalMatchedRow?: boolean | null
+  objectionOriginalMatchedCol?: boolean | null
 }
 
 export interface GameState {

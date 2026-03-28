@@ -1,3 +1,4 @@
+import { getCategoryDisplayName } from './category-display'
 import type { Category, CategoryType } from './types'
 
 export interface CategoryDefinitionContent {
@@ -170,9 +171,11 @@ export function getCategoryTypeLabel(type: CategoryType): string {
 }
 
 export function getFallbackCategoryDefinition(category: Category): CategoryDefinitionContent {
+  const displayName = getCategoryDisplayName(category)
+
   if (category.type === 'platform') {
     return {
-      description: `${category.name} is a platform category. A game qualifies if it had an official release on that hardware or within that platform family, including ports and platform-specific versions.`,
+      description: `${displayName} is a platform category. A game qualifies if it had an official release on that hardware or within that platform family, including ports and platform-specific versions.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -183,7 +186,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         GENRE_DESCRIPTIONS,
         category,
-        `${category.name} is a genre classification used to describe a game's dominant style of play.`
+        `${displayName} is a genre classification used to describe a game's dominant style of play.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -195,7 +198,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         THEME_DESCRIPTIONS,
         category,
-        `${category.name} is a theme label describing the setting, tone, or narrative flavor a game leans into.`
+        `${displayName} is a theme label describing the setting, tone, or narrative flavor a game leans into.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -207,7 +210,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         PERSPECTIVE_DESCRIPTIONS,
         category,
-        `${category.name} describes the viewpoint or camera perspective the player primarily experiences during play.`
+        `${displayName} describes the viewpoint or camera perspective the player primarily experiences during play.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -219,7 +222,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         GAME_MODE_DESCRIPTIONS,
         category,
-        `${category.name} describes how players participate in the game, such as solo, co-op, or competitive play.`
+        `${displayName} describes how players participate in the game, such as solo, co-op, or competitive play.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -231,8 +234,8 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
     return {
       description: rangeLabel
-        ? `${category.name} covers games originally released from ${rangeLabel}. This is based on the game's original release window, not later ports, remasters, or re-releases.`
-        : `${category.name} covers games originally released during that ten-year span, based on the game's original release window rather than later ports, remasters, or re-releases.`,
+        ? `${displayName} covers games originally released from ${rangeLabel}. This is based on the game's original release window, not later ports, remasters, or re-releases.`
+        : `${displayName} covers games originally released during that ten-year span, based on the game's original release window rather than later ports, remasters, or re-releases.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -240,7 +243,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
   if (category.type === 'developer') {
     return {
-      description: `${category.name} refers to the studio or development team that made the game. In GameGrid, this category is about authorship rather than release timing, platforms, or publishing ownership.`,
+      description: `${displayName} refers to the studio or development team that made the game. In GameGrid, this category is about authorship rather than release timing, platforms, or publishing ownership.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -248,7 +251,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
 
   if (category.type === 'publisher') {
     return {
-      description: `${category.name} refers to the company responsible for publishing or distributing the game. This is about release and publishing credit, not who necessarily developed it.`,
+      description: `${displayName} refers to the company responsible for publishing or distributing the game. This is about release and publishing credit, not who necessarily developed it.`,
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
     }
@@ -259,7 +262,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         COMPANY_DESCRIPTIONS,
         category,
-        `${category.name} is a company category. A game can qualify through its credited relationship to that company, most commonly as a developer or publisher.`
+        `${displayName} is a company category. A game can qualify through its credited relationship to that company, most commonly as a developer or publisher.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -271,7 +274,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
       description: getMappedDescription(
         TAG_DESCRIPTIONS,
         category,
-        `${category.name} is a tag-style category used to group games by notable traits, themes, mechanics, or player-facing qualities. It points to what a game is known for, not a specific release date or platform.`
+        `${displayName} is a tag-style category used to group games by notable traits, themes, mechanics, or player-facing qualities. It points to what a game is known for, not a specific release date or platform.`
       ),
       source: 'fallback',
       sourceLabel: 'GameGrid guide',
@@ -279,7 +282,7 @@ export function getFallbackCategoryDefinition(category: Category): CategoryDefin
   }
 
   return {
-    description: `${category.name} is a tag-style category used to group games by notable traits, themes, mechanics, or player-facing qualities. It points to what a game is known for, not a specific release date or platform.`,
+    description: `${displayName} is a tag-style category used to group games by notable traits, themes, mechanics, or player-facing qualities. It points to what a game is known for, not a specific release date or platform.`,
     source: 'fallback',
     sourceLabel: 'GameGrid guide',
   }

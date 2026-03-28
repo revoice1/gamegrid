@@ -29,15 +29,30 @@
 ## Versus
 
 - Turn state needs to be obvious, but not loud enough to destabilize the header layout.
+- The turn pill can show the active player's remaining objection economy when objections are enabled.
 - Final steal should feel focused and dramatic.
-- Alarm-driven motion and audio should respect the versus alarm setting.
-- Custom rules like disabling draws should be explained in setup and feel predictable at match end.
+- Alarm-driven motion should respect the versus alarm setting.
+- Heartbeat and future sound cues should respect the separate `Audio` toggle.
+- Custom rules like steals, objections, draws, and timer should be explained in setup and feel predictable at match end.
+- The custom setup modal now groups `Rules` and `Categories` into collapsible sections and surfaces subtle `Custom` indicators when defaults change.
 
 ## Results
 
 - Daily results can include copy/share and playerbase-oriented stats.
 - Practice results should stay local and lighter.
 - Versus end-state UI should allow players to keep inspecting the board after the match ends.
+
+## Objections
+
+- Rejected guesses can surface an `Objection!` action in the details modal.
+- The sequence should feel theatrical:
+  - `Objection!`
+  - `Judge Gemini Deliberating`
+  - `Sustained` or `Overruled`
+- The judgment explanation should remain attached to that square after the verdict, even if the objection is sustained and the square flips to correct.
+- Sustained objections use a gold reviewed-success treatment, but only on the category the review actually rescued.
+- Players only get one objection per square, so the button should lock after use.
+- Versus objections should use a reduced-information review modal so live players do not get the full metadata panel for a disputed guess.
 
 ## Achievements
 

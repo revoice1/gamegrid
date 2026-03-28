@@ -71,6 +71,11 @@ export interface CellGuessRecord {
   companies?: string[]
   matchedRow?: boolean
   matchedCol?: boolean
+  objectionUsed?: boolean
+  objectionVerdict?: 'sustained' | 'overruled' | null
+  objectionExplanation?: string | null
+  objectionOriginalMatchedRow?: boolean | null
+  objectionOriginalMatchedCol?: boolean | null
 }
 
 export interface SavedGameState {
@@ -88,9 +93,14 @@ export interface SavedGameState {
     cellIndex: number
   } | null
   versusCategoryFilters?: Record<string, string[]>
-  versusStealRule?: 'lower' | 'higher'
+  versusStealRule?: 'off' | 'lower' | 'higher'
   versusTimerOption?: 'none' | 20 | 60 | 120 | 300
   versusDisableDraws?: boolean
+  versusObjectionRule?: 'off' | 'one' | 'three'
+  versusObjectionsUsed?: {
+    x?: number
+    o?: number
+  }
   turnTimeLeft?: number | null
 }
 

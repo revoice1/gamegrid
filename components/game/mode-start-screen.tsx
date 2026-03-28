@@ -6,6 +6,7 @@ import { AchievementsModal } from './achievements-modal'
 import {
   VersusSetupModal,
   type VersusCategoryFilters,
+  type VersusObjectionRule,
   type VersusStealRule,
   type VersusTurnTimerOption,
 } from './versus-setup-modal'
@@ -34,6 +35,8 @@ interface ModeStartScreenProps {
   versusStealRule: VersusStealRule
   versusTimerOption: VersusTurnTimerOption
   versusDisableDraws: boolean
+  versusObjectionRule: VersusObjectionRule
+  versusObjectionsUsed?: { x: number; o: number }
   onModeChange: (mode: 'daily' | 'practice' | 'versus') => void
   onAchievementsOpen: () => void
   onAchievementsClose: () => void
@@ -48,13 +51,15 @@ interface ModeStartScreenProps {
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
-    disableDraws: boolean
+    disableDraws: boolean,
+    objectionRule: VersusObjectionRule
   ) => void
   onApplyVersusFilters: (
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
-    disableDraws: boolean
+    disableDraws: boolean,
+    objectionRule: VersusObjectionRule
   ) => void
 }
 
@@ -79,6 +84,8 @@ export function ModeStartScreen({
   versusStealRule,
   versusTimerOption,
   versusDisableDraws,
+  versusObjectionRule,
+  versusObjectionsUsed = { x: 0, o: 0 },
   onModeChange,
   onAchievementsOpen,
   onAchievementsClose,
@@ -104,6 +111,8 @@ export function ModeStartScreen({
           currentPlayer={currentPlayer}
           winner={winner}
           versusRecord={versusRecord}
+          versusObjectionRule={versusObjectionRule}
+          versusObjectionsUsed={versusObjectionsUsed}
           isHowToPlayOpen={isHowToPlayOpen}
           isAchievementsOpen={isAchievementsOpen}
           hasActiveCustomSetup={hasActiveCustomSetup}
@@ -161,9 +170,10 @@ export function ModeStartScreen({
         mode="practice"
         errorMessage={practiceSetupError}
         filters={practiceCategoryFilters}
-        stealRule="lower"
+        stealRule="off"
         timerOption="none"
         disableDraws={false}
+        objectionRule="off"
         onApply={onApplyPracticeFilters}
       />
 
@@ -176,6 +186,7 @@ export function ModeStartScreen({
         stealRule={versusStealRule}
         timerOption={versusTimerOption}
         disableDraws={versusDisableDraws}
+        objectionRule={versusObjectionRule}
         onApply={onApplyVersusFilters}
       />
 

@@ -122,8 +122,8 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
 
   try {
-    const { puzzleId, sessionId, score, rarityScore } = await request.json()
-    const resolvedSession = resolveAnonymousSession(request, sessionId)
+    const { puzzleId, score, rarityScore } = await request.json()
+    const resolvedSession = resolveAnonymousSession(request)
 
     const { data: existingCompletion, error: existingCompletionError } = await supabase
       .from('puzzle_completions')

@@ -12,6 +12,11 @@ import {
   getTodayDate,
   sanitizeCategories,
 } from '@/lib/puzzle-api'
+import {
+  getAnonymousSessionCookieHeader,
+  getLegacySessionIdFromRequest,
+  resolveAnonymousSession,
+} from '@/lib/server-session'
 import { buildGenerationPlans } from '@/lib/puzzle-generation-plans'
 import type { Category, PuzzleCellMetadata } from '@/lib/types'
 
@@ -92,6 +97,7 @@ export async function GET(request: NextRequest) {
   const mode = searchParams.get('mode') || 'daily'
   const rawFilters = searchParams.get('filters')
   const supabase = await createClient()
+  const resolvedSession = resolveAnonymousSession(request, getLegacySessionIdFromRequest(request))
   const allowedCategoryIds = rawFilters
     ? (JSON.parse(rawFilters) as PuzzleCategoryFilters)
     : undefined
@@ -289,12 +295,16 @@ export async function GET(request: NextRequest) {
     }
   })()
 
-  return new Response(stream.readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
+  const headers = new Headers({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
   })
+  const sessionCookieHeader = getAnonymousSessionCookieHeader(resolvedSession)
+  if (sessionCookieHeader) {
+    headers.set('Set-Cookie', sessionCookieHeader)
+  }
+
+  return new Response(stream.readable, { headers })
 }

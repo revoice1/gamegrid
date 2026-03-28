@@ -39,8 +39,17 @@
 ## Results
 
 - Daily results can include copy/share and playerbase-oriented stats.
+- Daily mode can surface an archive picker for older stored boards.
+- Daily archive entries should feel like "catch up on missed boards," not a separate replay mode.
 - Practice results should stay local and lighter.
 - Versus end-state UI should allow players to keep inspecting the board after the match ends.
+
+## Session Model
+
+- Daily progress is anonymous, not account-based.
+- The server-owned `gg_session` cookie is the authoritative identity for daily guesses and completions.
+- A short migration bridge can promote an older browser-local session id into that cookie, but write endpoints should not trust client-supplied session ids directly.
+- The practical unit of identity is still "this browser that still has the cookie," not a permanent cross-device account.
 
 ## Objections
 

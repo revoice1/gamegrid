@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
-import { applyAnonymousSessionCookie, resolveAnonymousSession } from '@/lib/server-session'
+import {
+  applyAnonymousSessionCookie,
+  getAnonymousSessionCookieHeader,
+  getLegacySessionIdFromRequest,
+  resolveAnonymousSession,
+} from '@/lib/server-session'
 
 describe('resolveAnonymousSession', () => {
   it('prefers the server-owned cookie when present', () => {
@@ -53,5 +58,33 @@ describe('applyAnonymousSessionCookie', () => {
     })
 
     expect(response.cookies.get('gg_session')).toBeUndefined()
+  })
+})
+
+describe('legacy session migration helpers', () => {
+  it('reads the legacy session id from the migration header', () => {
+    const request = new NextRequest('http://localhost/api/puzzle', {
+      headers: {
+        'x-gamegrid-legacy-session': 'legacy-session',
+      },
+    })
+
+    expect(getLegacySessionIdFromRequest(request)).toBe('legacy-session')
+  })
+
+  it('builds a set-cookie header for streaming responses when needed', () => {
+    expect(
+      getAnonymousSessionCookieHeader({
+        sessionId: 'cookie-session',
+        shouldSetCookie: true,
+      })
+    ).toContain('gg_session=cookie-session')
+
+    expect(
+      getAnonymousSessionCookieHeader({
+        sessionId: 'cookie-session',
+        shouldSetCookie: false,
+      })
+    ).toBeNull()
   })
 })

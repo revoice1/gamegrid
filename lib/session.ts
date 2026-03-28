@@ -105,24 +105,32 @@ export interface SavedGameState {
   turnTimeLeft?: number | null
 }
 
-function getStateKey(mode: PersistedMode): string {
-  if (mode === 'daily') return DAILY_STATE_KEY
+function getStateKey(mode: PersistedMode, dailyDate?: string): string {
+  if (mode === 'daily') {
+    return `${DAILY_STATE_KEY}:${dailyDate ?? getUtcDateKey()}`
+  }
   if (mode === 'practice') return PRACTICE_STATE_KEY
   return VERSUS_STATE_KEY
 }
 
-export function saveGameState(state: SavedGameState, mode: PersistedMode): void {
+export function saveGameState(
+  state: SavedGameState,
+  mode: PersistedMode,
+  dailyDate?: string
+): void {
   if (typeof window === 'undefined') return
 
-  const key = getStateKey(mode)
-  const saveState = mode === 'daily' ? { ...state, date: getUtcDateKey() } : state
+  const resolvedDailyDate = dailyDate ?? state.puzzle?.date ?? state.date ?? getUtcDateKey()
+  const key = getStateKey(mode, resolvedDailyDate)
+  const saveState = mode === 'daily' ? { ...state, date: resolvedDailyDate } : state
   localStorage.setItem(key, JSON.stringify(saveState))
 }
 
-export function loadGameState(mode: PersistedMode): SavedGameState | null {
+export function loadGameState(mode: PersistedMode, dailyDate?: string): SavedGameState | null {
   if (typeof window === 'undefined') return null
 
-  const key = getStateKey(mode)
+  const resolvedDailyDate = dailyDate ?? getUtcDateKey()
+  const key = getStateKey(mode, resolvedDailyDate)
   const saved = localStorage.getItem(key)
 
   if (!saved) return null
@@ -130,8 +138,7 @@ export function loadGameState(mode: PersistedMode): SavedGameState | null {
   try {
     const state = JSON.parse(saved) as SavedGameState
 
-    // For daily, align the saved-state key with the server's UTC rollover.
-    if (mode === 'daily' && state.date !== getUtcDateKey()) {
+    if (mode === 'daily' && state.date !== resolvedDailyDate) {
       localStorage.removeItem(key)
       return null
     }
@@ -142,8 +149,8 @@ export function loadGameState(mode: PersistedMode): SavedGameState | null {
   }
 }
 
-export function clearGameState(mode: PersistedMode): void {
+export function clearGameState(mode: PersistedMode, dailyDate?: string): void {
   if (typeof window === 'undefined') return
-  const key = getStateKey(mode)
+  const key = getStateKey(mode, dailyDate)
   localStorage.removeItem(key)
 }

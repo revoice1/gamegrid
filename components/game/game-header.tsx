@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import type { VersusObjectionRule } from './versus-setup-modal'
 
 function AchievementEggIcon({ className }: { className?: string }) {
   return (
@@ -34,6 +35,8 @@ interface GameHeaderProps {
   currentPlayer?: 'x' | 'o' | null
   winner?: 'x' | 'o' | 'draw' | null
   versusRecord?: { xWins: number; oWins: number }
+  versusObjectionRule?: VersusObjectionRule
+  versusObjectionsUsed?: { x: number; o: number }
   dailyResetLabel?: string | null
   isHowToPlayOpen?: boolean
   isAchievementsOpen?: boolean
@@ -52,6 +55,8 @@ export function GameHeader({
   currentPlayer = null,
   winner = null,
   versusRecord = { xWins: 0, oWins: 0 },
+  versusObjectionRule = 'off',
+  versusObjectionsUsed = { x: 0, o: 0 },
   dailyResetLabel,
   isHowToPlayOpen = false,
   isAchievementsOpen = false,
@@ -69,6 +74,8 @@ export function GameHeader({
   const poolLabel = hasActiveCustomSetup ? 'Custom' : 'Standard'
   const versusTurnLabel = winner === 'draw' ? 'Result' : winner ? 'Winner' : 'Turn'
   const versusTurnValue = winner === 'draw' ? 'Tie' : (winner ?? currentPlayer ?? 'x').toUpperCase()
+  const objectionTokenCount =
+    versusObjectionRule === 'three' ? 3 : versusObjectionRule === 'one' ? 1 : 0
   const utilityButtons = (
     <div className="flex items-center gap-2">
       <Button
@@ -213,24 +220,60 @@ export function GameHeader({
           <div className="mb-2 text-center">
             <div className="grid w-full max-w-[22rem] grid-cols-2 gap-1.5 px-1 sm:inline-flex sm:w-auto sm:max-w-full sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
               {mode === 'versus' && (
-                <div className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-secondary/35 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:gap-2 sm:px-3 sm:text-[11px]">
-                  <span className="tracking-[0.12em]">{versusTurnLabel}</span>
-                  <span
-                    className={cn(
-                      'text-base font-black leading-none sm:text-[1.1rem]',
-                      winner === 'draw'
-                        ? 'text-foreground'
-                        : winner === 'x'
-                          ? 'text-primary'
-                          : winner === 'o'
-                            ? 'text-sky-400'
-                            : currentPlayer === 'x'
-                              ? 'text-primary'
-                              : 'text-sky-400'
-                    )}
-                  >
-                    {versusTurnValue}
-                  </span>
+                <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                  <div className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-secondary/35 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:gap-2 sm:px-3 sm:text-[11px]">
+                    <span className="tracking-[0.12em]">{versusTurnLabel}</span>
+                    <span
+                      className={cn(
+                        'text-base font-black leading-none sm:text-[1.1rem]',
+                        winner === 'draw'
+                          ? 'text-foreground'
+                          : winner === 'x'
+                            ? 'text-primary'
+                            : winner === 'o'
+                              ? 'text-sky-400'
+                              : currentPlayer === 'x'
+                                ? 'text-primary'
+                                : 'text-sky-400'
+                      )}
+                    >
+                      {versusTurnValue}
+                    </span>
+                  </div>
+                  {objectionTokenCount > 0 && currentPlayer && !winner && (
+                    <div className="inline-flex h-8 items-center gap-2 rounded-full border border-[#f5b94e]/30 bg-[#f5b94e]/8 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:px-3 sm:text-[11px]">
+                      <div
+                        className="flex items-center gap-1"
+                        aria-label={`${currentPlayer.toUpperCase()} objections used: ${Math.max(0, Math.min(objectionTokenCount, versusObjectionsUsed[currentPlayer] ?? 0))} of ${objectionTokenCount}`}
+                        title={`${currentPlayer.toUpperCase()} objections used: ${Math.max(0, Math.min(objectionTokenCount, versusObjectionsUsed[currentPlayer] ?? 0))} of ${objectionTokenCount}`}
+                      >
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: objectionTokenCount }, (_, index) => {
+                            const usedCount = Math.max(
+                              0,
+                              Math.min(
+                                objectionTokenCount,
+                                versusObjectionsUsed[currentPlayer] ?? 0
+                              )
+                            )
+                            const used = index < usedCount
+                            return (
+                              <span
+                                key={`${currentPlayer}-${index}`}
+                                className={cn(
+                                  'h-2.5 w-2.5 rounded-full border transition-colors',
+                                  used
+                                    ? 'border-[#f5b94e] bg-[#f5b94e]'
+                                    : 'border-[#f5b94e]/40 bg-transparent'
+                                )}
+                                aria-hidden="true"
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

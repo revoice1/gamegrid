@@ -36,6 +36,10 @@
 - A correct answer must satisfy both its row and column categories.
 - Each game can only be used once per board.
 - Search selection is not the same as correctness. Correctness is decided by backend validation.
+- Rejected guesses can trigger a one-time objection review per square.
+- A sustained objection can promote a rejected square to correct and should preserve the judgment explanation on the guess details modal.
+- If a sustained objection only rescues one side of the intersection, only that category should get the gold reviewed-success treatment; already-correct categories stay in the normal correct color.
+- An overruled objection keeps the square rejected and still preserves the explanation for later review.
 - Search can hide metadata that would directly overlap with the active puzzle categories.
 - Same-name ports can be hidden from search when they are just duplicate clutter.
 - Selected guesses can still validate against an original-plus-official-ports family when that
@@ -78,15 +82,28 @@ flowchart TD
 ### Steals
 
 - A stealable cell can be challenged by the other player.
+- Custom versus can set steals to `Off`, `Lower score`, or `Higher score`.
 - Steal success is determined by the configured steal rule.
 - Steal resolution is handled by extracted pure logic, not inline component branching.
+
+### Objections
+
+- Custom versus can set objections to `Off`, `1 each`, or `3 each`.
+- Objection usage is tracked per player per match.
+- Versus objections use a sealed review modal so the full metadata payload is not exposed mid-match.
+
+### Draw Rules
+
+- Custom versus can leave draws enabled or disable them.
+- When draws are disabled, a full board with no line awards the match to the player with more claimed cells.
 
 ### Final Steal
 
 - During the final steal window, only the target cell should be interactable.
 - Non-target cells dim back visually.
 - The target cell gets a stronger pulse so the board reads as a focused last-chance state.
-- If versus alarms are disabled, the audio/alert treatment should be quiet or absent.
+- If versus alarms are disabled, the visual threat treatment should be quiet or absent.
+- Versus audio now has its own toggle, so heartbeat and future sound cues can be muted independently of visual alarms.
 
 ## Completion States
 

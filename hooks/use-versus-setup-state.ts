@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type {
   VersusCategoryFilters,
+  VersusObjectionRule,
   VersusStealRule,
   VersusTurnTimerOption,
 } from '@/components/game/versus-setup-modal'
@@ -10,6 +11,7 @@ export function useVersusSetupState() {
   const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('lower')
   const [versusTimerOption, setVersusTimerOption] = useState<VersusTurnTimerOption>('none')
   const [versusDisableDraws, setVersusDisableDraws] = useState(false)
+  const [versusObjectionRule, setVersusObjectionRule] = useState<VersusObjectionRule>('off')
   const [showVersusSetup, setShowVersusSetup] = useState(false)
   const [showVersusStartOptions, setShowVersusStartOptions] = useState(false)
   const [versusSetupError, setVersusSetupError] = useState<string | null>(null)
@@ -23,6 +25,8 @@ export function useVersusSetupState() {
     setVersusTimerOption,
     versusDisableDraws,
     setVersusDisableDraws,
+    versusObjectionRule,
+    setVersusObjectionRule,
     showVersusSetup,
     setShowVersusSetup,
     showVersusStartOptions,

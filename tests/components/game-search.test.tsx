@@ -179,6 +179,8 @@ describe('GameSearch', () => {
 
     await screen.findByText('Donkey Kong (ARC+Ports)')
     await screen.findByText('Donkey Kong (GB)')
+    await screen.findAllByText('Platformer')
+    await screen.findByText('Family')
   })
 
   it('ignores stale search responses when a newer query finishes later', async () => {

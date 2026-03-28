@@ -10,6 +10,69 @@ export interface VersusRecord {
 
 export const VERSUS_RECORD_KEY = 'gamegrid_versus_record'
 
+let sharedVersusAudioContext: AudioContext | null = null
+let audioUnlockListenersAttached = false
+let finalStealHeartbeatLoopTimer: number | null = null
+
+function getAudioContextCtor() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  return (
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ??
+    null
+  )
+}
+
+function getSharedVersusAudioContext(): AudioContext | null {
+  const AudioContextCtor = getAudioContextCtor()
+  if (!AudioContextCtor) {
+    return null
+  }
+
+  if (!sharedVersusAudioContext || sharedVersusAudioContext.state === 'closed') {
+    sharedVersusAudioContext = new AudioContextCtor()
+  }
+
+  return sharedVersusAudioContext
+}
+
+function attachAudioUnlockListeners(context: AudioContext) {
+  if (typeof window === 'undefined' || audioUnlockListenersAttached) {
+    return
+  }
+
+  const unlock = () => {
+    void context.resume().catch(() => undefined)
+    if (context.state === 'running') {
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+      window.removeEventListener('touchstart', unlock)
+      audioUnlockListenersAttached = false
+    }
+  }
+
+  audioUnlockListenersAttached = true
+  window.addEventListener('pointerdown', unlock, { passive: true })
+  window.addEventListener('keydown', unlock)
+  window.addEventListener('touchstart', unlock, { passive: true })
+}
+
+export function primeVersusAudioContext() {
+  const context = getSharedVersusAudioContext()
+  if (!context) {
+    return
+  }
+
+  if (context.state === 'running') {
+    return
+  }
+
+  attachAudioUnlockListeners(context)
+}
+
 export function detectAnimationQuality(): AnimationQuality {
   if (typeof window === 'undefined') {
     return 'high'
@@ -41,58 +104,111 @@ export function detectAnimationQuality(): AnimationQuality {
 }
 
 export function playFinalStealHeartbeatCue() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const AudioContextCtor =
-    window.AudioContext ??
-    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-
-  if (!AudioContextCtor) {
+  const context = getSharedVersusAudioContext()
+  if (!context) {
     return
   }
 
   try {
-    const context = new AudioContextCtor()
+    attachAudioUnlockListeners(context)
     const startTime = context.currentTime + 0.02
     const pulseOffsets = [0, 0.18]
-    const baseFrequencies = [58, 50]
+    const baseFrequencies = [68, 58]
 
     void context.resume().catch(() => undefined)
 
+    const compressor = context.createDynamicsCompressor()
+    compressor.threshold.setValueAtTime(-24, startTime)
+    compressor.knee.setValueAtTime(18, startTime)
+    compressor.ratio.setValueAtTime(12, startTime)
+    compressor.attack.setValueAtTime(0.003, startTime)
+    compressor.release.setValueAtTime(0.18, startTime)
+
     const masterGain = context.createGain()
-    masterGain.gain.setValueAtTime(0.06, startTime)
-    masterGain.connect(context.destination)
+    masterGain.gain.setValueAtTime(0.85, startTime)
+    masterGain.connect(compressor)
+    compressor.connect(context.destination)
 
     pulseOffsets.forEach((offset, index) => {
       const pulseStart = startTime + offset
-      const pulseEnd = pulseStart + 0.11
+      const pulseEnd = pulseStart + 0.2
       const oscillator = context.createOscillator()
+      const harmonicOscillator = context.createOscillator()
+      const clickOscillator = context.createOscillator()
       const gainNode = context.createGain()
+      const filter = context.createBiquadFilter()
+      const clickGain = context.createGain()
 
-      oscillator.type = 'triangle'
+      oscillator.type = 'sine'
       oscillator.frequency.setValueAtTime(baseFrequencies[index] ?? 52, pulseStart)
       oscillator.frequency.exponentialRampToValueAtTime(
-        (baseFrequencies[index] ?? 52) * 0.78,
+        (baseFrequencies[index] ?? 52) * 0.68,
         pulseEnd
       )
 
+      harmonicOscillator.type = 'triangle'
+      harmonicOscillator.frequency.setValueAtTime((baseFrequencies[index] ?? 52) * 1.35, pulseStart)
+      harmonicOscillator.frequency.exponentialRampToValueAtTime(
+        (baseFrequencies[index] ?? 52) * 1.08,
+        pulseEnd
+      )
+
+      clickOscillator.type = 'triangle'
+      clickOscillator.frequency.setValueAtTime(118, pulseStart)
+      clickOscillator.frequency.exponentialRampToValueAtTime(82, pulseStart + 0.05)
+
+      filter.type = 'lowpass'
+      filter.frequency.setValueAtTime(210, pulseStart)
+      filter.frequency.exponentialRampToValueAtTime(145, pulseEnd)
+      filter.Q.setValueAtTime(0.7, pulseStart)
+
       gainNode.gain.setValueAtTime(0.0001, pulseStart)
-      gainNode.gain.exponentialRampToValueAtTime(index === 0 ? 0.12 : 0.09, pulseStart + 0.016)
+      gainNode.gain.exponentialRampToValueAtTime(index === 0 ? 1.1 : 0.82, pulseStart + 0.022)
       gainNode.gain.exponentialRampToValueAtTime(0.0001, pulseEnd)
 
-      oscillator.connect(gainNode)
-      gainNode.connect(masterGain)
-      oscillator.start(pulseStart)
-      oscillator.stop(pulseEnd + 0.02)
-    })
+      clickGain.gain.setValueAtTime(0.0001, pulseStart)
+      clickGain.gain.exponentialRampToValueAtTime(index === 0 ? 0.1 : 0.08, pulseStart + 0.01)
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, pulseStart + 0.07)
 
-    window.setTimeout(() => {
-      void context.close().catch(() => undefined)
-    }, 900)
+      oscillator.connect(filter)
+      harmonicOscillator.connect(filter)
+      filter.connect(gainNode)
+      gainNode.connect(masterGain)
+      clickOscillator.connect(clickGain)
+      clickGain.connect(masterGain)
+      oscillator.start(pulseStart)
+      harmonicOscillator.start(pulseStart)
+      clickOscillator.start(pulseStart)
+      oscillator.stop(pulseEnd + 0.02)
+      harmonicOscillator.stop(pulseEnd + 0.02)
+      clickOscillator.stop(pulseStart + 0.06)
+    })
   } catch {
     // Audio is optional here; silently skip if the environment blocks it.
+  }
+}
+
+export function startFinalStealHeartbeatLoop() {
+  stopFinalStealHeartbeatLoop()
+  playFinalStealHeartbeatCue()
+
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  finalStealHeartbeatLoopTimer = window.setInterval(() => {
+    playFinalStealHeartbeatCue()
+  }, 1500)
+}
+
+export function stopFinalStealHeartbeatLoop() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (finalStealHeartbeatLoopTimer !== null) {
+    window.clearInterval(finalStealHeartbeatLoopTimer)
+    finalStealHeartbeatLoopTimer = null
   }
 }
 

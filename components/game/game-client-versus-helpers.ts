@@ -177,6 +177,7 @@ export function getVersusPlacementResolution(options: {
   currentPlayer: TicTacToePlayer
   selectedCell: number
   isVersusSteal: boolean
+  stealsEnabled: boolean
   disableDraws: boolean
 }):
   | {
@@ -210,11 +211,12 @@ export function getVersusPlacementResolution(options: {
       title: string
       description: string
     } {
-  const { newGuesses, currentPlayer, selectedCell, isVersusSteal, disableDraws } = options
+  const { newGuesses, currentPlayer, selectedCell, isVersusSteal, stealsEnabled, disableDraws } =
+    options
   const winningPlayer = getWinningPlayer(newGuesses)
   const nextPlayer = getNextPlayer(currentPlayer)
 
-  if (currentPlayer === 'x' && winningPlayer === 'x') {
+  if (stealsEnabled && currentPlayer === 'x' && winningPlayer === 'x') {
     return {
       kind: 'final-steal',
       defender: winningPlayer,

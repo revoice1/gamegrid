@@ -64,6 +64,7 @@ export function GridCell({
   onClick,
 }: GridCellProps) {
   const hasGuess = guess !== null
+  const isSustainedObjection = Boolean(guess?.isCorrect && guess?.objectionVerdict === 'sustained')
   const isButtonDisabled = isDisabled && !hasGuess
   const cellAlarmState = alarmsEnabled
     ? isGamePoint && isStealable
@@ -85,6 +86,12 @@ export function GridCell({
       : `${metadata.validOptionCount}`
     : null
   const possibleTitle = metadata ? `${metadata.validOptionCount} possible answers` : null
+  const cellTitle =
+    hasGuess && isStealable && possibleTitle
+      ? `Steal active. ${possibleTitle}.`
+      : !hasGuess && possibleTitle
+        ? possibleTitle
+        : undefined
   const difficultyMarker = metadata ? difficultyEmoji[metadata.difficulty] : null
   const alarmStyle =
     cellAlarmState === 'steal'
@@ -114,6 +121,7 @@ export function GridCell({
   return (
     <button
       data-testid={`grid-cell-${index}`}
+      title={cellTitle}
       onClick={onClick}
       disabled={isButtonDisabled}
       className={cn(
@@ -132,7 +140,11 @@ export function GridCell({
           (animationsEnabled
             ? 'border-sky-400/45 shadow-[0_0_0_1px_rgba(56,189,248,0.22),0_0_18px_rgba(56,189,248,0.14)] hover:border-sky-300/65'
             : 'border-sky-400/45'),
-        hasGuess && guess.isCorrect && 'correct border-primary/50',
+        hasGuess &&
+          guess.isCorrect &&
+          (isSustainedObjection
+            ? 'correct-sustained border-amber-400/60 shadow-[0_0_0_1px_rgba(245,185,78,0.28),0_0_20px_rgba(245,185,78,0.14)]'
+            : 'correct border-primary/50'),
         hasGuess && !guess.isCorrect && 'incorrect border-destructive/50',
         hasGuess && (animationsEnabled ? 'cursor-pointer hover:brightness-110' : 'cursor-pointer'),
         !hasGuess &&
@@ -191,9 +203,17 @@ export function GridCell({
             </div>
           )}
           {guess.isCorrect && (
-            <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+            <div
+              className={cn(
+                'absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full',
+                isSustainedObjection ? 'bg-[#f5b94e]' : 'bg-primary'
+              )}
+            >
               <svg
-                className="h-3 w-3 text-primary-foreground"
+                className={cn(
+                  'h-3 w-3',
+                  isSustainedObjection ? 'text-[#3f2a06]' : 'text-primary-foreground'
+                )}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -275,6 +295,20 @@ export function GridCell({
       <style jsx>{`
         .final-steal-focus {
           animation: final-steal-heartbeat 1.5s cubic-bezier(0.22, 0.68, 0.2, 1) infinite;
+        }
+
+        .correct-sustained::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: linear-gradient(
+            180deg,
+            rgba(245, 185, 78, 0.1),
+            rgba(245, 185, 78, 0.02) 42%,
+            rgba(0, 0, 0, 0)
+          );
+          z-index: 1;
         }
 
         .final-steal-dim-heart {

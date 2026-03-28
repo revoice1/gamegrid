@@ -185,6 +185,7 @@ describe('game client versus helpers', () => {
         currentPlayer: 'x',
         selectedCell: 2,
         isVersusSteal: false,
+        stealsEnabled: true,
         disableDraws: false,
       })
     ).toEqual({
@@ -214,6 +215,7 @@ describe('game client versus helpers', () => {
         currentPlayer: 'o',
         selectedCell: 2,
         isVersusSteal: true,
+        stealsEnabled: true,
         disableDraws: false,
       })
     ).toEqual({
@@ -221,6 +223,34 @@ describe('game client versus helpers', () => {
       winner: 'o',
       title: 'O wins!',
       description: 'That steal completed the line.',
+    })
+  })
+
+  it('resolves an X line as an immediate winner when steals are off', () => {
+    expect(
+      getVersusPlacementResolution({
+        newGuesses: [
+          makeOwnedGuess('x'),
+          makeOwnedGuess('x'),
+          makeOwnedGuess('x'),
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+        currentPlayer: 'x',
+        selectedCell: 2,
+        isVersusSteal: false,
+        stealsEnabled: false,
+        disableDraws: false,
+      })
+    ).toEqual({
+      kind: 'winner',
+      winner: 'x',
+      title: 'X wins!',
+      description: 'Three in a row takes the match.',
     })
   })
 })

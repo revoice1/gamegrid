@@ -75,6 +75,7 @@ export interface IGDBGame {
   category?: number | null
   game_type?: number | null
   parent_game?: number | null
+  version_parent?: number | null
   first_release_date?: number | null
   rating?: number | null
   aggregated_rating?: number | null
@@ -224,7 +225,7 @@ const GAME_TYPE_LABELS: Record<number, string> = {
 }
 
 const IGDB_GAME_FIELDS =
-  'fields name,slug,url,category,game_type,parent_game,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.id,release_dates.platform.name,release_dates.platform.slug,genres.id,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.id,keywords.name;'
+  'fields name,slug,url,category,game_type,parent_game,version_parent,first_release_date,rating,aggregated_rating,total_rating,total_rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,release_dates.date,release_dates.platform.id,release_dates.platform.name,release_dates.platform.slug,genres.id,genres.name,genres.slug,game_modes.name,themes.name,player_perspectives.name,involved_companies.company.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,keywords.id,keywords.name;'
 
 function normalizeName(value: string): string {
   return value
@@ -1168,6 +1169,41 @@ async function getPortFamilyGames(
     canonical,
     family: familyRawGames.map(mapIGDBGameToGame),
   }
+}
+
+export async function getIGDBFamilyNames(gameId: number): Promise<string[]> {
+  const game = await getRawIGDBGameDetails(gameId)
+  if (!game) {
+    return []
+  }
+
+  const parentId =
+    typeof game.parent_game === 'number'
+      ? game.parent_game
+      : typeof game.version_parent === 'number'
+        ? game.version_parent
+        : game.id
+
+  const parentGame = await getRawIGDBGameDetails(parentId)
+  const siblingQuery = [IGDB_GAME_FIELDS, `where parent_game = ${parentId};`, 'limit 100;'].join(
+    ' '
+  )
+
+  const siblings = (await queryIGDB<IGDBGame>('games', siblingQuery)).filter(
+    (entry) =>
+      typeof entry.first_release_date === 'number' &&
+      hasOfficialCompanyData(entry) &&
+      !hasDisqualifyingKeywords(entry) &&
+      !UNOFFICIAL_NAME_PATTERNS.some((pattern) => pattern.test(entry.name)) &&
+      !REJECTED_GAME_TYPE_SET.has(entry.game_type ?? -1)
+  )
+
+  return uniqueByKey(
+    [game, ...(parentGame ? [parentGame] : []), ...siblings]
+      .map((entry) => entry.name)
+      .filter((name): name is string => Boolean(name?.trim())),
+    (name) => normalizeName(name)
+  )
 }
 
 export async function searchIGDBGames(query: string): Promise<Game[]> {

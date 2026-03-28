@@ -8,9 +8,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { IndexBadge } from '@/components/index-badge'
 import { getFamilyDisplayLabel } from '@/lib/category-display'
 import type { CategoryType } from '@/lib/types'
@@ -25,8 +37,9 @@ type VersusFamilyKey = Extract<
 >
 
 export type VersusCategoryFilters = Partial<Record<VersusFamilyKey, string[]>>
-export type VersusStealRule = 'lower' | 'higher'
+export type VersusStealRule = 'off' | 'lower' | 'higher'
 export type VersusTurnTimerOption = 'none' | 20 | 60 | 120 | 300
+export type VersusObjectionRule = 'off' | 'one' | 'three'
 
 interface VersusSetupModalProps {
   isOpen: boolean
@@ -37,11 +50,13 @@ interface VersusSetupModalProps {
   stealRule: VersusStealRule
   timerOption: VersusTurnTimerOption
   disableDraws: boolean
+  objectionRule: VersusObjectionRule
   onApply: (
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
-    disableDraws: boolean
+    disableDraws: boolean,
+    objectionRule: VersusObjectionRule
   ) => void
 }
 
@@ -53,6 +68,18 @@ const TIMER_OPTIONS: Array<{ value: VersusTurnTimerOption; label: string }> = [
   { value: 300, label: '5 min' },
 ]
 
+const STEAL_RULE_OPTIONS: Array<{ value: VersusStealRule; label: string }> = [
+  { value: 'off', label: 'Off' },
+  { value: 'lower', label: 'Lower score' },
+  { value: 'higher', label: 'Higher score' },
+]
+
+const OBJECTION_RULE_OPTIONS: Array<{ value: VersusObjectionRule; label: string }> = [
+  { value: 'off', label: 'Off' },
+  { value: 'one', label: '1 each' },
+  { value: 'three', label: '3 each' },
+]
+
 export function VersusSetupModal({
   isOpen,
   onClose,
@@ -62,12 +89,14 @@ export function VersusSetupModal({
   stealRule,
   timerOption,
   disableDraws,
+  objectionRule,
   onApply,
 }: VersusSetupModalProps) {
   const [draftFilters, setDraftFilters] = useState<VersusCategoryFilters>(filters)
   const [draftStealRule, setDraftStealRule] = useState<VersusStealRule>(stealRule)
   const [draftTimerOption, setDraftTimerOption] = useState<VersusTurnTimerOption>(timerOption)
   const [draftDisableDraws, setDraftDisableDraws] = useState(disableDraws)
+  const [draftObjectionRule, setDraftObjectionRule] = useState<VersusObjectionRule>(objectionRule)
   const [expandedFamilies, setExpandedFamilies] = useState<
     Partial<Record<VersusFamilyKey, boolean>>
   >({})
@@ -80,7 +109,7 @@ export function VersusSetupModal({
       return
     }
 
-    const nextConfigKey = `${filtersKey}::${stealRule}::${timerOption}::${disableDraws}`
+    const nextConfigKey = `${filtersKey}::${stealRule}::${timerOption}::${disableDraws}::${objectionRule}`
     if (lastSyncedConfigRef.current === nextConfigKey) {
       return
     }
@@ -90,7 +119,8 @@ export function VersusSetupModal({
     setDraftStealRule(stealRule)
     setDraftTimerOption(timerOption)
     setDraftDisableDraws(disableDraws)
-  }, [disableDraws, filters, filtersKey, isOpen, stealRule, timerOption])
+    setDraftObjectionRule(objectionRule)
+  }, [disableDraws, filters, filtersKey, isOpen, objectionRule, stealRule, timerOption])
 
   useEffect(() => {
     if (!isOpen) {
@@ -193,6 +223,7 @@ export function VersusSetupModal({
     setDraftStealRule('lower')
     setDraftTimerOption('none')
     setDraftDisableDraws(false)
+    setDraftObjectionRule('off')
   }
 
   const canApply = enabledFamilyCount >= 4 && totalSelectedCategories >= 6
@@ -218,6 +249,32 @@ export function VersusSetupModal({
     return nextFilters
   }
 
+  const appliedFilters = buildAppliedFilters()
+  const hasCustomCategories = Object.keys(appliedFilters).length > 0
+  const hasCustomStealRule = draftStealRule !== 'lower'
+  const hasCustomObjectionRule = draftObjectionRule !== 'off'
+  const hasCustomDrawRule = draftDisableDraws !== false
+  const hasCustomTimerRule = draftTimerOption !== 'none'
+  const hasCustomRules =
+    hasCustomStealRule || hasCustomObjectionRule || hasCustomDrawRule || hasCustomTimerRule
+
+  const CustomIndicator = ({
+    label = 'Custom',
+    showDot = true,
+  }: {
+    label?: string
+    showDot?: boolean
+  }) => (
+    <span
+      className={`inline-flex items-center text-[10px] font-medium uppercase tracking-[0.12em] text-amber-200/80 ${
+        label && showDot ? 'gap-1' : ''
+      }`}
+    >
+      {showDot ? <span className="h-1.5 w-1.5 rounded-full bg-amber-300/80" /> : null}
+      {label ? label : null}
+    </span>
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto bg-card border-border">
@@ -236,163 +293,229 @@ export function VersusSetupModal({
           </div>
         )}
 
-        {isVersusMode && (
-          <section className="rounded-2xl border border-border bg-secondary/20 p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Steal Rule</h3>
-                <p className="text-xs text-muted-foreground">
-                  Toggle whether a steal has to beat the defending square with a lower or higher
-                  rating.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/50 px-3 py-2">
-                <span
-                  className={`text-xs font-medium ${draftStealRule === 'lower' ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
-                  Lower wins
+        <Accordion type="multiple" defaultValue={[]} className="space-y-4">
+          {isVersusMode && (
+            <AccordionItem
+              value="settings"
+              className="rounded-2xl border border-border bg-secondary/20 px-4"
+            >
+              <AccordionTrigger className="py-4 text-sm font-semibold text-foreground hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span>Rules</span>
+                  {hasCustomRules && <CustomIndicator showDot={false} />}
                 </span>
-                <Switch
-                  checked={draftStealRule === 'higher'}
-                  onCheckedChange={(checked) => setDraftStealRule(checked ? 'higher' : 'lower')}
-                  aria-label="Toggle steal rule"
-                />
-                <span
-                  className={`text-xs font-medium ${draftStealRule === 'higher' ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
-                  Higher wins
-                </span>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {isVersusMode && (
-          <section className="rounded-2xl border border-border bg-secondary/20 p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Disable draws</h3>
-                <p className="text-xs text-muted-foreground">
-                  Resolves draws and picks a winner based on cell counts.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/50 px-3 py-2">
-                <span
-                  className={`text-xs font-medium ${!draftDisableDraws ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
-                  Off
-                </span>
-                <Switch
-                  checked={draftDisableDraws}
-                  onCheckedChange={setDraftDisableDraws}
-                  aria-label="Toggle draw resolution"
-                />
-                <span
-                  className={`text-xs font-medium ${draftDisableDraws ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
-                  On
-                </span>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {isVersusMode && (
-          <section className="rounded-2xl border border-border bg-secondary/20 p-4">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Turn Timer</h3>
-              <p className="text-xs text-muted-foreground">
-                Set an optional shot clock for each turn. If time runs out, the turn passes.
-              </p>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {TIMER_OPTIONS.map((option) => (
-                <Button
-                  key={option.label}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDraftTimerOption(option.value)}
-                  className={
-                    draftTimerOption === option.value
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : undefined
-                  }
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <div className="space-y-5">
-          {families.map((family) => {
-            const selected = new Set(getEffectiveSelection(family))
-            const isCustom = selected.size < family.categories.length
-            const isExpanded = expandedFamilies[family.key] === true
-
-            return (
-              <section
-                key={family.key}
-                className="rounded-2xl border border-border bg-secondary/20 p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => toggleFamilyExpanded(family.key)}
-                    className="flex flex-1 items-center justify-between gap-3 text-left"
-                  >
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">
-                        {getFamilyDisplayLabel(family.key)}
-                      </h3>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="grid gap-3">
+                  <section className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/45 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-foreground">Steals</h4>
+                        {hasCustomStealRule && <CustomIndicator label="" />}
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        {isCustom
-                          ? `${selected.size} of ${family.categories.length} enabled`
-                          : `All ${family.categories.length} enabled`}
+                        Higher or lower score required to successfully steal the square.
                       </p>
                     </div>
-                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      {isExpanded ? 'Hide' : 'Show'}
-                    </span>
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => uncheckFamily(family.key)}>
-                      Uncheck All
-                    </Button>
-                    {isCustom && (
-                      <Button variant="ghost" size="sm" onClick={() => checkFamily(family.key)}>
-                        Check All
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                    <Select
+                      value={draftStealRule}
+                      onValueChange={(value) => setDraftStealRule(value as VersusStealRule)}
+                    >
+                      <SelectTrigger className="w-[11rem] shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STEAL_RULE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </section>
 
-                {isExpanded && (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {family.categories.map((category) => (
-                      <label
-                        key={`${family.key}-${category.id}`}
-                        htmlFor={`${family.key}-${category.id}`}
-                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/90 bg-background/65 px-3 py-2 text-sm transition-colors hover:bg-background/85"
-                      >
-                        <Checkbox
-                          id={`${family.key}-${category.id}`}
-                          checked={selected.has(category.id)}
-                          onCheckedChange={(checked) =>
-                            toggleCategory(family.key, category.id, checked === true)
-                          }
-                        />
-                        <span className="text-foreground">{category.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )
-          })}
-        </div>
+                  <section className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/45 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-foreground">Objections</h4>
+                        {hasCustomObjectionRule && <CustomIndicator label="" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Judge Gemini reviews available to each player.
+                      </p>
+                    </div>
+                    <Select
+                      value={draftObjectionRule}
+                      onValueChange={(value) => setDraftObjectionRule(value as VersusObjectionRule)}
+                    >
+                      <SelectTrigger className="w-[11rem] shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {OBJECTION_RULE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </section>
+
+                  <section className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/45 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-foreground">Draws</h4>
+                        {hasCustomDrawRule && <CustomIndicator label="" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Allow tied matches, or break them by claimed cell count.
+                      </p>
+                    </div>
+                    <Select
+                      value={draftDisableDraws ? 'disabled' : 'enabled'}
+                      onValueChange={(value) => setDraftDisableDraws(value === 'disabled')}
+                    >
+                      <SelectTrigger className="w-[11rem] shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="enabled">Enabled</SelectItem>
+                        <SelectItem value="disabled">Disabled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </section>
+
+                  <section className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-background/45 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-foreground">Turn Timer</h4>
+                        {hasCustomTimerRule && <CustomIndicator label="" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Optional shot clock for each turn.
+                      </p>
+                    </div>
+                    <Select
+                      value={String(draftTimerOption)}
+                      onValueChange={(value) =>
+                        setDraftTimerOption(
+                          value === 'none'
+                            ? 'none'
+                            : (Number(value) as Exclude<VersusTurnTimerOption, 'none'>)
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-[11rem] shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIMER_OPTIONS.map((option) => (
+                          <SelectItem key={option.label} value={String(option.value)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </section>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          <AccordionItem
+            value="categories"
+            className="rounded-2xl border border-border bg-secondary/20 px-4"
+          >
+            <AccordionTrigger className="py-4 text-sm font-semibold text-foreground hover:no-underline">
+              <span className="flex items-center gap-2">
+                <span>Categories</span>
+                {hasCustomCategories && <CustomIndicator showDot={false} />}
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-4">
+              <div className="space-y-5">
+                {families.map((family) => {
+                  const selected = new Set(getEffectiveSelection(family))
+                  const defaultSelection = getDefaultSelection(family)
+                  const isCustom = !hasSameSelection(Array.from(selected), defaultSelection)
+                  const hasAllSelected = selected.size === family.categories.length
+                  const isExpanded = expandedFamilies[family.key] === true
+
+                  return (
+                    <section
+                      key={family.key}
+                      className="rounded-2xl border border-border bg-secondary/20 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleFamilyExpanded(family.key)}
+                          className="flex flex-1 items-center justify-between gap-3 text-left"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-semibold text-foreground">
+                                {getFamilyDisplayLabel(family.key)}
+                              </h3>
+                              {isCustom && <CustomIndicator label="" />}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {hasAllSelected
+                                ? `All ${family.categories.length} enabled`
+                                : `${selected.size} of ${family.categories.length} enabled`}
+                            </p>
+                          </div>
+                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            {isExpanded ? 'Hide' : 'Show'}
+                          </span>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => uncheckFamily(family.key)}
+                          >
+                            Uncheck All
+                          </Button>
+                          {!hasAllSelected && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => checkFamily(family.key)}
+                            >
+                              Check All
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {family.categories.map((category) => (
+                            <label
+                              key={`${family.key}-${category.id}`}
+                              htmlFor={`${family.key}-${category.id}`}
+                              className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/90 bg-background/65 px-3 py-2 text-sm transition-colors hover:bg-background/85"
+                            >
+                              <Checkbox
+                                id={`${family.key}-${category.id}`}
+                                checked={selected.has(category.id)}
+                                onCheckedChange={(checked) =>
+                                  toggleCategory(family.key, category.id, checked === true)
+                                }
+                              />
+                              <span className="text-foreground">{category.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
         <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
           <div className="space-y-1">
@@ -414,7 +537,13 @@ export function VersusSetupModal({
             </Button>
             <Button
               onClick={() =>
-                onApply(buildAppliedFilters(), draftStealRule, draftTimerOption, draftDisableDraws)
+                onApply(
+                  buildAppliedFilters(),
+                  draftStealRule,
+                  draftTimerOption,
+                  draftDisableDraws,
+                  draftObjectionRule
+                )
               }
               disabled={!canApply}
               title={applyDisabledReason ?? undefined}

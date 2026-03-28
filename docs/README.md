@@ -14,6 +14,7 @@ Use them as the fast path for questions like:
 - What are the actual game rules?
 - Which categories are standard vs custom-only?
 - What does search intentionally hide or reveal?
+- How does the objection / judgment flow work?
 - Which parts of the product still feel unsettled?
 
 Start here:

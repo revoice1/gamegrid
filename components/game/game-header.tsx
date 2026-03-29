@@ -333,13 +333,7 @@ export function GameHeader({
                   onClick={onNewGame}
                   className="h-8 min-w-[9rem] px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
                 >
-                  {mode === 'versus'
-                    ? myOnlineRole
-                      ? winner !== null && myOnlineRole === 'x'
-                        ? 'Continue In Room'
-                        : 'New Online Room'
-                      : 'New Match'
-                    : 'New Game'}
+                  {mode === 'versus' ? (myOnlineRole ? 'New Match' : 'New Match') : 'New Game'}
                 </Button>
               )}
             </div>
@@ -358,6 +352,18 @@ export function GameHeader({
                       {myOnlineRole.toUpperCase()}
                     </span>
                   </div>
+                )}
+                {myOnlineRole && onNewGame && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onNewGame}
+                    className="h-8 min-w-[9rem] border-sky-500/35 px-2.5 text-xs text-sky-300 hover:bg-sky-500/10 hover:text-sky-200 sm:h-9 sm:px-3 sm:text-sm"
+                  >
+                    {winner !== null && myOnlineRole === 'x'
+                      ? 'Continue In Room'
+                      : 'New Online Room'}
+                  </Button>
                 )}
                 {!myOnlineRole && onStartOnlineMatch && (
                   <Button

@@ -352,6 +352,11 @@ describe('game client helpers', () => {
         gameName: 'Test Game',
         gameImage: 'https://example.com/cover.png',
         isCorrect: true,
+        objectionUsed: false,
+        objectionVerdict: null,
+        objectionExplanation: null,
+        objectionOriginalMatchedRow: null,
+        objectionOriginalMatchedCol: null,
       },
       null,
     ])

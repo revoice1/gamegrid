@@ -164,6 +164,11 @@ export function buildPersistedGuessSnapshot(guesses: Array<CellGuess | null>) {
           gameName: guess.gameName,
           gameImage: guess.gameImage,
           isCorrect: guess.isCorrect,
+          objectionUsed: guess.objectionUsed ?? false,
+          objectionVerdict: guess.objectionVerdict ?? null,
+          objectionExplanation: guess.objectionExplanation ?? null,
+          objectionOriginalMatchedRow: guess.objectionOriginalMatchedRow ?? null,
+          objectionOriginalMatchedCol: guess.objectionOriginalMatchedCol ?? null,
         }
       : null
   )

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { validateIGDBGameForCell } from '@/lib/igdb'
 import { logError, logWarn } from '@/lib/logging'
 import { applyAnonymousSessionCookie, resolveAnonymousSession } from '@/lib/server-session'
@@ -32,6 +33,7 @@ function serializeGameDetails(game: Awaited<ReturnType<typeof validateIGDBGameFo
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
 
   try {
     const body = await request.json()
@@ -125,7 +127,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isDaily) {
-      const { error: guessInsertError } = await supabase.from('guesses').insert({
+      const { error: guessInsertError } = await adminSupabase.from('guesses').insert({
         puzzle_id: puzzleId,
         cell_index: cellIndex,
         game_id: gameId,
@@ -139,7 +141,7 @@ export async function POST(request: NextRequest) {
         logWarn('Guess insert with correctness failed, falling back:', guessInsertError.message)
 
         if (valid) {
-          const { error: legacyGuessInsertError } = await supabase.from('guesses').insert({
+          const { error: legacyGuessInsertError } = await adminSupabase.from('guesses').insert({
             puzzle_id: puzzleId,
             cell_index: cellIndex,
             game_id: gameId,
@@ -168,5 +170,110 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logError('Guess error:', error)
     return NextResponse.json({ error: 'Failed to process guess', valid: false }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const supabase = createAdminClient()
+
+  try {
+    const body = await request.json()
+    const {
+      puzzleId,
+      cellIndex,
+      gameId,
+      verdict,
+      explanation,
+      isCorrect,
+      objectionOriginalMatchedRow,
+      objectionOriginalMatchedCol,
+    } = body as {
+      puzzleId?: string
+      cellIndex?: number
+      gameId?: number
+      verdict?: 'sustained' | 'overruled'
+      explanation?: string | null
+      isCorrect?: boolean
+      objectionOriginalMatchedRow?: boolean | null
+      objectionOriginalMatchedCol?: boolean | null
+    }
+
+    if (
+      !puzzleId ||
+      typeof cellIndex !== 'number' ||
+      typeof gameId !== 'number' ||
+      (verdict !== 'sustained' && verdict !== 'overruled') ||
+      typeof isCorrect !== 'boolean'
+    ) {
+      return NextResponse.json({ error: 'Invalid objection payload' }, { status: 400 })
+    }
+
+    const resolvedSession = resolveAnonymousSession(request)
+    const updatePayload = {
+      is_correct: isCorrect,
+      objection_used: true,
+      objection_verdict: verdict,
+      objection_explanation: explanation ?? null,
+      objection_original_matched_row: objectionOriginalMatchedRow ?? null,
+      objection_original_matched_col: objectionOriginalMatchedCol ?? null,
+    }
+
+    const { data: exactMatch, error: exactMatchError } = await supabase
+      .from('guesses')
+      .update(updatePayload)
+      .eq('puzzle_id', puzzleId)
+      .eq('cell_index', cellIndex)
+      .eq('game_id', gameId)
+      .eq('session_id', resolvedSession.sessionId)
+      .select('id')
+      .maybeSingle()
+
+    if (exactMatchError) {
+      throw exactMatchError
+    }
+
+    if (!exactMatch) {
+      logWarn('Guess objection update fell back to puzzle/session/cell match', {
+        puzzleId,
+        cellIndex,
+        gameId,
+        sessionId: resolvedSession.sessionId,
+      })
+
+      const { data: fallbackMatch, error: fallbackMatchError } = await supabase
+        .from('guesses')
+        .update(updatePayload)
+        .eq('puzzle_id', puzzleId)
+        .eq('cell_index', cellIndex)
+        .eq('session_id', resolvedSession.sessionId)
+        .select('id,game_id')
+        .maybeSingle()
+
+      if (fallbackMatchError) {
+        throw fallbackMatchError
+      }
+
+      if (!fallbackMatch) {
+        return NextResponse.json(
+          { error: 'No matching guess found for objection persistence' },
+          { status: 404 }
+        )
+      }
+
+      if (fallbackMatch.game_id !== gameId) {
+        logWarn('Guess objection update matched a different game id', {
+          puzzleId,
+          cellIndex,
+          requestedGameId: gameId,
+          matchedGameId: fallbackMatch.game_id,
+          sessionId: resolvedSession.sessionId,
+        })
+      }
+    }
+
+    return applyAnonymousSessionCookie(NextResponse.json({ ok: true }), resolvedSession)
+  } catch (error) {
+    logError('Guess objection update error:', error)
+    return NextResponse.json({ error: 'Failed to persist objection result' }, { status: 500 })
   }
 }

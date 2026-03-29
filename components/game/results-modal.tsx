@@ -1,7 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
@@ -189,6 +195,9 @@ export function ResultsModal({
           <DialogTitle className="text-center text-2xl font-bold">
             {isDaily ? 'Daily' : 'Practice'} Results
           </DialogTitle>
+          <DialogDescription className="text-center text-sm text-muted-foreground">
+            Review your board, your score, and any playerbase stats that apply to this puzzle.
+          </DialogDescription>
         </DialogHeader>
 
         {isDaily && (
@@ -253,38 +262,38 @@ export function ResultsModal({
               )}
 
               {isDaily && dailySummary && (
-                <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-secondary/30 p-4 text-center sm:grid-cols-4">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Current Streak
+                <div className="rounded-lg border border-border bg-secondary/30 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      Daily Progress
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-foreground">
-                      {dailySummary.currentStreak}
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">This browser session</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Best Streak
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-foreground">
-                      {dailySummary.bestStreak}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Dailies Done
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-foreground">
-                      {dailySummary.completedCount}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Perfects
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-foreground">
-                      {dailySummary.perfectCount}
-                    </p>
+                  <div className="grid grid-cols-2 divide-x divide-y divide-border/70 overflow-hidden rounded-md border border-border/70 bg-background/30 text-center sm:grid-cols-4 sm:divide-y-0">
+                    <div className="px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">Current</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                        {dailySummary.currentStreak}
+                      </p>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">Best</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                        {dailySummary.bestStreak}
+                      </p>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">Played</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                        {dailySummary.completedCount}
+                      </p>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">Perfects</p>
+                      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                        {dailySummary.perfectCount}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

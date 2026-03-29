@@ -26,6 +26,11 @@ export async function POST(
     .single()
 
   if (fetchError || !room) {
+    console.error('[versus.room.join] room lookup failed', {
+      code: upperCode,
+      sessionId: session.sessionId,
+      error: fetchError,
+    })
     return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
   }
 
@@ -81,6 +86,12 @@ export async function POST(
     .single()
 
   if (updateError || !updated) {
+    console.error('[versus.room.join] guest attach failed', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+      error: updateError,
+    })
     return NextResponse.json(
       { error: 'Failed to join match. It may have just filled up.' },
       { status: 409 }

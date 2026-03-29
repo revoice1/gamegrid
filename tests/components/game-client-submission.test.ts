@@ -283,6 +283,26 @@ describe('game client submission helpers', () => {
     })
   })
 
+  it('throws when daily objection persistence returns a non-ok response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'No matching guess found for objection persistence' }),
+    })
+
+    await expect(
+      persistDailyObjectionResult(fetchImpl as typeof fetch, {
+        puzzleId: 'test-puzzle',
+        cellIndex: 4,
+        gameId: 7,
+        verdict: 'sustained',
+        explanation: 'Metadata missed the category.',
+        isCorrect: true,
+        objectionOriginalMatchedRow: false,
+        objectionOriginalMatchedCol: true,
+      })
+    ).rejects.toThrow('No matching guess found for objection persistence')
+  })
+
   it('flags sub-50 games as real stinkers', () => {
     expect(shouldUnlockRealStinker(game)).toBe(true)
     expect(shouldUnlockRealStinker({ ...game, metacritic: 50 })).toBe(false)

@@ -82,11 +82,28 @@ export async function persistDailyObjectionResult(
   fetchImpl: FetchLike,
   request: DailyObjectionPersistenceRequest
 ) {
-  return fetchImpl('/api/guess', {
+  const response = await fetchImpl('/api/guess', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   })
+
+  if (!response.ok) {
+    let message = 'Failed to persist objection result.'
+
+    try {
+      const payload = (await response.json()) as { error?: string }
+      if (payload.error) {
+        message = payload.error
+      }
+    } catch {
+      // Ignore invalid JSON bodies and keep the generic message.
+    }
+
+    throw new Error(message)
+  }
+
+  return response
 }
 
 export function getPostGuessState(options: {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { validateIGDBGameForCell } from '@/lib/igdb'
 import { logError, logWarn } from '@/lib/logging'
 import { applyAnonymousSessionCookie, resolveAnonymousSession } from '@/lib/server-session'
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   try {
     const body = await request.json()
@@ -207,24 +208,66 @@ export async function PATCH(request: NextRequest) {
     }
 
     const resolvedSession = resolveAnonymousSession(request)
+    const updatePayload = {
+      is_correct: isCorrect,
+      objection_used: true,
+      objection_verdict: verdict,
+      objection_explanation: explanation ?? null,
+      objection_original_matched_row: objectionOriginalMatchedRow ?? null,
+      objection_original_matched_col: objectionOriginalMatchedCol ?? null,
+    }
 
-    const { error } = await supabase
+    const { data: exactMatch, error: exactMatchError } = await supabase
       .from('guesses')
-      .update({
-        is_correct: isCorrect,
-        objection_used: true,
-        objection_verdict: verdict,
-        objection_explanation: explanation ?? null,
-        objection_original_matched_row: objectionOriginalMatchedRow ?? null,
-        objection_original_matched_col: objectionOriginalMatchedCol ?? null,
-      })
+      .update(updatePayload)
       .eq('puzzle_id', puzzleId)
       .eq('cell_index', cellIndex)
       .eq('game_id', gameId)
       .eq('session_id', resolvedSession.sessionId)
+      .select('id')
+      .maybeSingle()
 
-    if (error) {
-      throw error
+    if (exactMatchError) {
+      throw exactMatchError
+    }
+
+    if (!exactMatch) {
+      logWarn('Guess objection update fell back to puzzle/session/cell match', {
+        puzzleId,
+        cellIndex,
+        gameId,
+        sessionId: resolvedSession.sessionId,
+      })
+
+      const { data: fallbackMatch, error: fallbackMatchError } = await supabase
+        .from('guesses')
+        .update(updatePayload)
+        .eq('puzzle_id', puzzleId)
+        .eq('cell_index', cellIndex)
+        .eq('session_id', resolvedSession.sessionId)
+        .select('id,game_id')
+        .maybeSingle()
+
+      if (fallbackMatchError) {
+        throw fallbackMatchError
+      }
+
+      if (!fallbackMatch) {
+        return NextResponse.json(
+          { error: 'No matching guess found for objection persistence' },
+          { status: 404 }
+        )
+      }
+
+      if (fallbackMatch.game_id !== gameId) {
+        logWarn('Guess objection update matched a different game id', {
+          puzzleId,
+          cellIndex,
+          requestedGameId: gameId,
+          matchedGameId: fallbackMatch.game_id,
+          sessionId: resolvedSession.sessionId,
+        })
+      }
     }
 
     return applyAnonymousSessionCookie(NextResponse.json({ ok: true }), resolvedSession)

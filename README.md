@@ -62,6 +62,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_SUPABASE_URL`       | Yes      | Supabase project URL                                                                                                          |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Yes      | Supabase anon key                                                                                                             |
+| `SUPABASE_SERVICE_ROLE_KEY`      | Yes      | Supabase service-role key, used only in server routes for privileged daily persistence updates                                |
 | `TWITCH_IGDB_CLIENT_ID`          | Yes      | IGDB API client ID via the Twitch developer console                                                                           |
 | `TWITCH_IGDB_CLIENT_SECRET`      | Yes      | IGDB API client secret                                                                                                        |
 | `PUZZLE_MIN_VALID_OPTIONS`       | No       | Minimum valid answers per cell, default `3`                                                                                   |
@@ -79,23 +80,27 @@ scripts/002_add_increment_function.sql
 scripts/003_add_guess_correctness.sql
 scripts/004_add_cell_metadata.sql      - adds cell metadata to puzzles
 scripts/005_add_guess_objection_metadata.sql - persists daily objection outcomes on guesses
+scripts/006_add_guess_update_policy.sql - removes the temporary public update policy for guesses after moving objection updates server-side
 ```
 
 ## API Routes
 
-| Route                                         | Description                                                        |
-| --------------------------------------------- | ------------------------------------------------------------------ |
-| `GET /api/puzzle?mode=daily\|practice`        | Returns the current puzzle as JSON.                                |
-| `GET /api/puzzle-stream?mode=daily\|practice` | Streams puzzle generation progress.                                |
-| `GET /api/search?q=...`                       | Searches IGDB for games matching a query.                          |
-| `POST /api/guess`                             | Validates a game guess against a cell's row and column categories. |
-| `POST /api/stats`                             | Records a completed daily game session.                            |
+| Route                                         | Description                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GET /api/puzzle?mode=daily\|practice`        | Returns the current puzzle as JSON.                                                    |
+| `GET /api/puzzle-stream?mode=daily\|practice` | Streams puzzle generation progress.                                                    |
+| `GET /api/search?q=...`                       | Searches IGDB for games matching a query.                                              |
+| `POST /api/guess`                             | Validates a game guess against a cell's row and column categories.                     |
+| `PATCH /api/guess`                            | Persists daily objection verdict metadata through a server-only privileged write path. |
+| `POST /api/stats`                             | Records a completed daily game session.                                                |
 
 ## Notes
 
 - Daily puzzles are stored and reused after generation.
 - Daily progress is tied to an anonymous browser session so archived boards can reopen your saved
   state on the same device/browser.
+- Daily objection verdict metadata is updated server-side with the Supabase service-role key, so
+  the database does not need a public `UPDATE` policy on `guesses`.
 - Practice puzzles are generated fresh and are not stored in the database.
 - Versus matches are local-only and restored from local storage.
 - Finished versus matches can expand into a post-game summary with the rules used, picks, and key

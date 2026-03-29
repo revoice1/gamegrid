@@ -53,6 +53,7 @@
 - Daily progress is anonymous, not account-based.
 - The server-owned `gg_session` cookie is the authoritative identity for daily guesses and completions.
 - A short migration bridge can promote an older browser-local session id into that cookie, but write endpoints should not trust client-supplied session ids directly.
+- Daily objection persistence now goes through a server-only privileged write path, so public guess-row updates are not required in Supabase RLS.
 - The practical unit of identity is still "this browser that still has the cookie," not a permanent cross-device account.
 
 ## Objections

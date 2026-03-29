@@ -46,6 +46,7 @@ export interface UseOnlineVersusRoomReturn {
   markFinished: () => Promise<SendEventResult>
   setPuzzle: (puzzleId: string, puzzle: Puzzle) => Promise<SendEventResult>
   saveSnapshot: (snapshot: OnlineVersusSnapshot) => Promise<SendEventResult>
+  continueRoom: () => Promise<SendEventResult>
   reset: () => void
 }
 
@@ -133,8 +134,14 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
           const updated = payload.new as VersusRoom
           setRoom(updated)
           if (updated.status === 'active') {
+            if (updated.puzzle_id === null && updated.state_data === null) {
+              setEvents([])
+            }
             setOpponentReady(true)
             setPhase('active')
+            if (myRoleRef.current) {
+              saveRoomEntry(updated.code, myRoleRef.current)
+            }
           } else if (updated.status === 'finished') {
             setPhase('finished')
             clearRoomEntry()
@@ -410,6 +417,23 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     []
   )
 
+  const continueRoom = useCallback(async (): Promise<SendEventResult> => {
+    const currentRoom = roomRef.current
+    if (!currentRoom) return { ok: false, error: 'Not in a match.' }
+
+    try {
+      const res = await fetch(`/api/versus/room/${currentRoom.code}/continue`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        return { ok: false, error: json.error ?? 'Failed to continue match.' }
+      }
+      setEvents([])
+      return { ok: true, error: null }
+    } catch {
+      return { ok: false, error: 'Network error.' }
+    }
+  }, [])
+
   const reset = useCallback(() => {
     const supabase = createClient()
     if (channelRef.current) {
@@ -441,6 +465,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     markFinished,
     setPuzzle,
     saveSnapshot,
+    continueRoom,
     reset,
   }
 }

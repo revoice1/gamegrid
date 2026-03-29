@@ -215,7 +215,7 @@ export function GameClient() {
   const isPuzzleLoadInFlightRef = useRef(false)
   const recordedVersusWinnerKeyRef = useRef<string | null>(null)
   const finishedOnlineRoomIdRef = useRef<string | null>(null)
-  const preparedOnlineRoomIdRef = useRef<string | null>(null)
+  const preparedOnlineRoomKeyRef = useRef<string | null>(null)
   const lastSavedOnlineSnapshotRef = useRef<string | null>(null)
   const lastAppliedOnlineSnapshotRef = useRef<string | null>(null)
   const replayedOnlineStealShowdownIdsRef = useRef(new Set<number>())
@@ -409,7 +409,7 @@ export function GameClient() {
     publishedPuzzleRoomIdRef.current = null
     appliedOnlineEventIdsRef.current = new Set()
     finishedOnlineRoomIdRef.current = null
-    preparedOnlineRoomIdRef.current = null
+    preparedOnlineRoomKeyRef.current = null
     lastSavedOnlineSnapshotRef.current = null
     lastAppliedOnlineSnapshotRef.current = null
     replayedOnlineStealShowdownIdsRef.current = new Set()
@@ -471,6 +471,7 @@ export function GameClient() {
     setShowOnlineLobby(false)
 
     const roomSnapshot = room.state_data
+    const roomPrepKey = `${room.id}:${room.puzzle_id ?? 'pending'}`
     const roomSnapshotSignature = roomSnapshot ? JSON.stringify(roomSnapshot) : null
     const hasMatchingLocalPuzzle =
       loadedPuzzleMode === 'versus' &&
@@ -480,7 +481,7 @@ export function GameClient() {
     const isSwitchingToDifferentPuzzle =
       room.puzzle_id !== null && (puzzle === null || puzzle.id !== room.puzzle_id)
     const needsFreshRoomPrep =
-      preparedOnlineRoomIdRef.current !== room.id && !hasMatchingLocalPuzzle
+      preparedOnlineRoomKeyRef.current !== roomPrepKey && !hasMatchingLocalPuzzle
     const shouldHydrateRoomSnapshot =
       Boolean(roomSnapshot) &&
       (myRole === 'o' ||
@@ -502,6 +503,8 @@ export function GameClient() {
     if (needsFreshRoomPrep && !roomSnapshot) {
       // Clear stale local versus state only when entering a genuinely new online room.
       clearGameState('versus')
+      setLoadedPuzzleMode(null)
+      setPuzzle(null)
       setGuesses(Array.from({ length: 9 }, () => null))
       setGuessesRemaining(9)
       setCurrentPlayer('x')
@@ -512,9 +515,10 @@ export function GameClient() {
       setTurnDeadlineAt(null)
       setVersusObjectionsUsed({ x: 0, o: 0 })
       commitVersusEventLog([])
+      setIsLoading(true)
     }
 
-    preparedOnlineRoomIdRef.current = room.id
+    preparedOnlineRoomKeyRef.current = roomPrepKey
 
     if (room.puzzle_data && room.puzzle_id && (!puzzle || puzzle.id !== room.puzzle_id)) {
       // Puzzle already exists — load it directly (guest path, or host rejoining).
@@ -3204,6 +3208,36 @@ export function GameClient() {
     })()
   }, [onlineVersus, resetOnlineVersusSession, toast, commitVersusEventLog])
 
+  const handleContinueOnlineRoom = useCallback(() => {
+    activePuzzleLoadControllerRef.current?.abort()
+
+    void (async () => {
+      const result = await onlineVersus.continueRoom()
+      if (!result.ok) {
+        toast({
+          title: 'Failed to continue in this room',
+          description: result.error ?? undefined,
+          variant: 'destructive',
+        })
+        return
+      }
+
+      setShowVersusWinnerBanner(false)
+      setShowVersusSummaryDetails(false)
+      setShowOnlineLobby(false)
+      setPendingVersusObjectionReview(null)
+      setActiveStealShowdown(null)
+      setActiveStealMissSplash(null)
+      setActiveDoubleKoSplash(null)
+      setActiveObjectionSplash(null)
+      setActiveJudgmentPending(null)
+      setActiveJudgmentVerdict(null)
+      setObjectionPending(false)
+      setObjectionVerdict(null)
+      setObjectionExplanation(null)
+    })()
+  }, [onlineVersus, toast])
+
   const handleStartFreshOnlineMatch = useCallback(() => {
     activePuzzleLoadControllerRef.current?.abort()
 
@@ -3283,7 +3317,11 @@ export function GameClient() {
     }
 
     if (onlineVersus.myRole) {
-      handleStartFreshOnlineMatch()
+      if (winner !== null && onlineVersus.myRole === 'x') {
+        handleContinueOnlineRoom()
+      } else {
+        handleStartFreshOnlineMatch()
+      }
       return
     }
 
@@ -3704,10 +3742,14 @@ export function GameClient() {
           <DialogDescription className="sr-only">
             {winner === 'draw'
               ? onlineVersus.myRole
-                ? 'The online match ended in a draw. Close this dialog to review the finished board or start a fresh online match.'
+                ? onlineVersus.myRole === 'x'
+                  ? 'The online match ended in a draw. Close this dialog to review the finished board, continue in this room, or start a fresh online room.'
+                  : 'The online match ended in a draw. Close this dialog to review the finished board or start a fresh online room.'
                 : 'The versus match ended in a draw. Close this dialog to review the finished board or start a new match.'
               : onlineVersus.myRole
-                ? 'The online match is over. Close this dialog to review the finished board or start a fresh online match.'
+                ? onlineVersus.myRole === 'x'
+                  ? 'The online match is over. Close this dialog to review the finished board, continue in this room, or start a fresh online room.'
+                  : 'The online match is over. Close this dialog to review the finished board or start a fresh online room.'
                 : 'The versus match is over. Close this dialog to review the finished board or start a new match.'}
           </DialogDescription>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
@@ -3719,10 +3761,14 @@ export function GameClient() {
           <p className="mt-2 text-sm text-muted-foreground">
             {winner === 'draw'
               ? onlineVersus.myRole
-                ? 'No line was completed before the board filled up. Start a fresh online room to play again.'
+                ? onlineVersus.myRole === 'x'
+                  ? 'No line was completed before the board filled up. Continue in this room or start a fresh online room to play again.'
+                  : 'No line was completed before the board filled up. Wait for the host to continue this room or start a fresh online room.'
                 : 'No line was completed before the board filled up.'
               : onlineVersus.myRole
-                ? 'Click outside to review the finished board, or start a fresh online room to play again.'
+                ? onlineVersus.myRole === 'x'
+                  ? 'Click outside to review the finished board, continue in this room, or start a fresh online room.'
+                  : 'Click outside to review the finished board, or wait for the host to continue this room.'
                 : 'Click outside to review the finished board, or start a new match.'}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -3732,8 +3778,16 @@ export function GameClient() {
             >
               Hide
             </button>
+            {onlineVersus.myRole === 'x' && (
+              <button
+                onClick={handleContinueOnlineRoom}
+                className="rounded-lg border border-sky-500/35 bg-sky-500/10 px-5 py-2.5 font-medium text-sky-100 transition-colors hover:bg-sky-500/15"
+              >
+                Continue In Room
+              </button>
+            )}
             <button
-              onClick={handleNewGame}
+              onClick={onlineVersus.myRole === 'x' ? handleStartFreshOnlineMatch : handleNewGame}
               className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {onlineVersus.myRole ? 'New Online Room' : 'New Match'}

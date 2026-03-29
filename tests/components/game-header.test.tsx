@@ -95,4 +95,27 @@ describe('GameHeader objection tracker', () => {
     expect(screen.getByRole('button', { name: 'New Online Room' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Play Online' })).not.toBeInTheDocument()
   })
+
+  it('shows continue in room for a finished host-side online match', () => {
+    render(
+      <GameHeader
+        mode="versus"
+        guessesRemaining={0}
+        score={0}
+        currentPlayer="o"
+        myOnlineRole="x"
+        winner="x"
+        versusRecord={{ xWins: 0, oWins: 0 }}
+        versusObjectionRule="one"
+        versusObjectionsUsed={{ x: 0, o: 1 }}
+        onModeChange={() => {}}
+        onHowToPlay={() => {}}
+        onAchievements={() => {}}
+        onEndOnlineMatch={() => {}}
+        onNewGame={() => {}}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Continue In Room' })).toBeInTheDocument()
+  })
 })

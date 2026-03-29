@@ -112,6 +112,7 @@ for live room/event updates, so the tables must be published for clients to stay
 | `POST /api/versus/room/:code/puzzle`          | Host-only route that publishes the shared versus puzzle into the room.                 |
 | `POST /api/versus/room/:code/state`           | Persists the current authoritative online versus snapshot state.                       |
 | `POST /api/versus/room/:code/finish`          | Marks an online room finished.                                                         |
+| `POST /api/versus/room/:code/continue`        | Host-only route that clears a finished room for another game under the same code.      |
 | `POST /api/versus/event`                      | Appends an online versus event for the active room.                                    |
 | `GET /api/versus/room-events/:roomId`         | Fetches room event history for resume/hydration.                                       |
 
@@ -127,8 +128,8 @@ for live room/event updates, so the tables must be published for clients to stay
 - Local versus matches are restored from local storage.
 - Online versus rooms use backend routes for writes, Supabase Realtime for live updates, and room
   snapshots for faster resume after refresh.
-- Online post-game flow currently creates a fresh room (`New Online Room`) rather than reusing the
-  same room for a rematch.
+- Online post-game flow now supports a host-side `Continue In Room` reset, but it still is not a
+  fully modeled rematch lifecycle with match-scoped history.
 - Finished versus matches can expand into a post-game summary with the rules used, picks, and key
   match stats.
 - Standard puzzle generation uses curated category families and prevalidated banned pairs to avoid

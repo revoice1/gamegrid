@@ -24,6 +24,17 @@ export interface GuessSubmissionRequest {
   isDaily: boolean
 }
 
+export interface DailyObjectionPersistenceRequest {
+  puzzleId: string
+  cellIndex: number
+  gameId: number
+  verdict: 'sustained' | 'overruled'
+  explanation: string | null
+  isCorrect: boolean
+  objectionOriginalMatchedRow: boolean | null
+  objectionOriginalMatchedCol: boolean | null
+}
+
 export function buildGuessLookupRequest(request: GuessLookupRequest) {
   return {
     gameId: request.gameId,
@@ -65,6 +76,17 @@ export async function lookupGuessDetails(fetchImpl: FetchLike, request: GuessLoo
 
 export async function submitGuessSelection(fetchImpl: FetchLike, request: GuessSubmissionRequest) {
   return postGuessRequest(fetchImpl, buildGuessSubmissionRequest(request))
+}
+
+export async function persistDailyObjectionResult(
+  fetchImpl: FetchLike,
+  request: DailyObjectionPersistenceRequest
+) {
+  return fetchImpl('/api/guess', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
 }
 
 export function getPostGuessState(options: {

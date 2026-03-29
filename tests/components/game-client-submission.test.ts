@@ -7,6 +7,7 @@ import {
   getPostGuessCompletionEffects,
   getPostGuessState,
   lookupGuessDetails,
+  persistDailyObjectionResult,
   postDailyStats,
   shouldUnlockRealStinker,
   submitGuessSelection,
@@ -171,6 +172,11 @@ describe('game client submission helpers', () => {
             gameName: 'Test Game',
             gameImage: 'https://example.com/cover.png',
             isCorrect: true,
+            objectionUsed: false,
+            objectionVerdict: null,
+            objectionExplanation: null,
+            objectionOriginalMatchedRow: null,
+            objectionOriginalMatchedCol: null,
           },
           null,
           null,
@@ -244,6 +250,36 @@ describe('game client submission helpers', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+    })
+  })
+
+  it('persists objection outcomes for daily guesses', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
+
+    await persistDailyObjectionResult(fetchImpl as typeof fetch, {
+      puzzleId: 'test-puzzle',
+      cellIndex: 4,
+      gameId: 7,
+      verdict: 'sustained',
+      explanation: 'Metadata missed the category.',
+      isCorrect: true,
+      objectionOriginalMatchedRow: false,
+      objectionOriginalMatchedCol: true,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith('/api/guess', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        puzzleId: 'test-puzzle',
+        cellIndex: 4,
+        gameId: 7,
+        verdict: 'sustained',
+        explanation: 'Metadata missed the category.',
+        isCorrect: true,
+        objectionOriginalMatchedRow: false,
+        objectionOriginalMatchedCol: true,
+      }),
     })
   })
 

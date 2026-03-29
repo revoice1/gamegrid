@@ -78,6 +78,7 @@ scripts/001_create_tables.sql          - core schema (puzzles, guesses, stats)
 scripts/002_add_increment_function.sql
 scripts/003_add_guess_correctness.sql
 scripts/004_add_cell_metadata.sql      - adds cell metadata to puzzles
+scripts/005_add_guess_objection_metadata.sql - persists daily objection outcomes on guesses
 ```
 
 ## API Routes

@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
         ] = await Promise.all([
           supabase
             .from('guesses')
-            .select('cell_index,game_id,game_name,game_image,is_correct')
+            .select(
+              'cell_index,game_id,game_name,game_image,is_correct,objection_used,objection_verdict,objection_explanation,objection_original_matched_row,objection_original_matched_col'
+            )
             .eq('puzzle_id', puzzle.id)
             .eq('session_id', resolvedSession.sessionId),
           supabase
@@ -80,6 +82,11 @@ export async function GET(request: NextRequest) {
               companies: validation.game?.igdb?.companies ?? [],
               matchedRow: validation.matchesRow,
               matchedCol: validation.matchesCol,
+              objectionUsed: row.objection_used ?? false,
+              objectionVerdict: row.objection_verdict ?? null,
+              objectionExplanation: row.objection_explanation ?? null,
+              objectionOriginalMatchedRow: row.objection_original_matched_row ?? null,
+              objectionOriginalMatchedCol: row.objection_original_matched_col ?? null,
             }
           })
         )

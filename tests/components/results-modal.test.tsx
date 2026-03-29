@@ -53,9 +53,11 @@ describe('ResultsModal', () => {
       />
     )
 
-    expect(await screen.findByText('Current Streak')).toBeInTheDocument()
-    expect(screen.getByText('Best Streak')).toBeInTheDocument()
-    expect(screen.getByText('Dailies Done')).toBeInTheDocument()
+    expect(await screen.findByText('Daily Progress')).toBeInTheDocument()
+    expect(screen.getByText('This browser session')).toBeInTheDocument()
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    expect(screen.getByText('Best')).toBeInTheDocument()
+    expect(screen.getByText('Played')).toBeInTheDocument()
     expect(screen.getByText('Perfects')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()

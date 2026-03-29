@@ -46,6 +46,7 @@ import {
   getPostGuessCompletionEffects,
   getPostGuessState,
   lookupGuessDetails,
+  persistDailyObjectionResult,
   postDailyStats,
   shouldUnlockRealStinker,
   submitGuessSelection,
@@ -2264,6 +2265,21 @@ export function GameClient() {
           },
           mode
         )
+      }
+
+      if (mode === 'daily' && activeDetailCell !== null) {
+        void persistDailyObjectionResult(fetch, {
+          puzzleId: puzzle.id,
+          cellIndex: activeDetailCell,
+          gameId: nextGuess.gameId,
+          verdict: payload.verdict,
+          explanation: payload.explanation ?? null,
+          isCorrect: nextGuess.isCorrect,
+          objectionOriginalMatchedRow: nextGuess.objectionOriginalMatchedRow ?? null,
+          objectionOriginalMatchedCol: nextGuess.objectionOriginalMatchedCol ?? null,
+        }).catch((error) => {
+          console.error('Failed to persist objection result:', error)
+        })
       }
 
       toast({

@@ -84,6 +84,7 @@ scripts/006_add_guess_update_policy.sql - removes the temporary public update po
 scripts/007_drop_public_guess_insert_policy.sql - removes the public guess insert policy after moving daily guess writes server-side
 scripts/008_create_versus_tables.sql - creates online versus rooms/events and Realtime-friendly read policies
 scripts/009_add_online_versus_room_state.sql - adds snapshot state storage for online versus resume/sync
+scripts/010_expand_versus_event_types.sql - updates existing versus event constraints to allow newer event kinds like `miss`
 ```
 
 For online versus, also add these tables to your Supabase Realtime publication:

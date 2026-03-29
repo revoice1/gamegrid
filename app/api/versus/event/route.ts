@@ -21,11 +21,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the session owns the player slot they're claiming
-    const { data: room } = await supabase
+    const { data: room, error: roomError } = await supabase
       .from('versus_rooms')
       .select('host_session_id, guest_session_id, status')
       .eq('id', roomId)
       .single()
+
+    if (roomError) {
+      console.error('Online versus event room lookup failed', {
+        roomId,
+        player,
+        type,
+        sessionId: session.sessionId,
+        error: roomError,
+      })
+      return NextResponse.json({ error: roomError.message }, { status: 500 })
+    }
 
     if (!room) return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
     if (room.status === 'finished')
@@ -45,10 +56,24 @@ export async function POST(request: NextRequest) {
       .from('versus_events')
       .insert({ room_id: roomId, player, type, payload: payload ?? {} })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      console.error('Online versus event insert failed', {
+        roomId,
+        player,
+        type,
+        sessionId: session.sessionId,
+        payload,
+        error,
+      })
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true })
-  } catch {
+  } catch (error) {
+    console.error('Online versus event route crashed', {
+      sessionId: session.sessionId,
+      error,
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { logError, logWarn } from '@/lib/logging'
 import { applyAnonymousSessionCookie, resolveAnonymousSession } from '@/lib/server-session'
+import { buildDailyStreakSummary } from '@/lib/daily-streaks'
 
 interface GuessStatRow {
   puzzle_id: string
@@ -22,9 +23,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const resolvedSession = resolveAnonymousSession(request)
     const { data: puzzle, error: puzzleError } = await supabase
       .from('puzzles')
-      .select('row_categories,col_categories')
+      .select('row_categories,col_categories,is_daily')
       .eq('id', puzzleId)
       .single()
 
@@ -107,11 +109,69 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      puzzle,
-      cellStats,
-      totalCompletions: completionCount || 0,
-    })
+    let dailySummary = null
+
+    if (puzzle?.is_daily) {
+      const { data: userCompletionRows, error: userCompletionError } = await supabase
+        .from('puzzle_completions')
+        .select('puzzle_id,score')
+        .eq('session_id', resolvedSession.sessionId)
+
+      if (userCompletionError) {
+        throw userCompletionError
+      }
+
+      const userPuzzleIds = (userCompletionRows ?? [])
+        .map((row) => row.puzzle_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+
+      if (userPuzzleIds.length > 0) {
+        const { data: userPuzzleRows, error: userPuzzleError } = await supabase
+          .from('puzzles')
+          .select('id,date')
+          .eq('is_daily', true)
+          .not('date', 'is', null)
+          .in('id', userPuzzleIds)
+
+        if (userPuzzleError) {
+          throw userPuzzleError
+        }
+
+        const puzzleDateById = new Map(
+          (userPuzzleRows ?? [])
+            .filter(
+              (row): row is { id: string; date: string } =>
+                typeof row.id === 'string' && typeof row.date === 'string'
+            )
+            .map((row) => [row.id, row.date])
+        )
+
+        dailySummary = buildDailyStreakSummary(
+          (userCompletionRows ?? [])
+            .map((row) => {
+              const date = puzzleDateById.get(row.puzzle_id)
+              if (!date) return null
+              return {
+                date,
+                score: typeof row.score === 'number' ? row.score : null,
+              }
+            })
+            .filter((row): row is { date: string; score: number | null } => row !== null)
+        )
+      } else {
+        dailySummary = buildDailyStreakSummary([])
+      }
+    }
+
+    return applyAnonymousSessionCookie(
+      NextResponse.json({
+        puzzle,
+        cellStats,
+        totalCompletions: completionCount || 0,
+        dailySummary,
+      }),
+      resolvedSession
+    )
   } catch (error) {
     logError('Stats error:', error)
     return NextResponse.json({ error: 'Failed to get stats' }, { status: 500 })

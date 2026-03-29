@@ -5,8 +5,11 @@ A daily video game trivia grid game where every answer must satisfy both its row
 GameGrid includes:
 
 - a daily puzzle
+- a daily archive for catching up on missed boards
+- streak and completion tracking for daily play
 - unlimited practice boards
 - local versus play
+- post-match versus summaries
 - curated category pools for standard play
 - customizable category pools for practice and versus
 - search metadata, easter eggs, and local achievements
@@ -90,8 +93,12 @@ scripts/004_add_cell_metadata.sql      - adds cell metadata to puzzles
 ## Notes
 
 - Daily puzzles are stored and reused after generation.
+- Daily progress is tied to an anonymous browser session so archived boards can reopen your saved
+  state on the same device/browser.
 - Practice puzzles are generated fresh and are not stored in the database.
 - Versus matches are local-only and restored from local storage.
+- Finished versus matches can expand into a post-game summary with the rules used, picks, and key
+  match stats.
 - Standard puzzle generation uses curated category families and prevalidated banned pairs to avoid
   dead intersections.
 - Practice and versus custom setup start from curated defaults and let players opt into additional
@@ -160,6 +167,8 @@ Notable category behavior:
 
 ## Feedback
 
+- Changelog: `/changelog`
+- Daily archive and streak behavior: [app/how-to-play/page.tsx](./app/how-to-play/page.tsx)
 - Bug reports: [github.com/revoice1/gamegrid/issues/new?template=bug_report.yml](https://github.com/revoice1/gamegrid/issues/new?template=bug_report.yml)
 - Feature requests: [github.com/revoice1/gamegrid/issues/new?template=feature_request.yml](https://github.com/revoice1/gamegrid/issues/new?template=feature_request.yml)
 

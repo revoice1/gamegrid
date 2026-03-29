@@ -4,6 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameSearch } from '@/components/game/game-search'
 import type { Category, Game } from '@/lib/types'
 
+type SearchResultFixture = Game & {
+  disambiguationPlatform?: string | null
+  disambiguationYear?: string | null
+}
+
 const fakeGame: Game = {
   id: 1,
   name: 'World of Warcraft',
@@ -37,6 +42,35 @@ const duplicatePortFamilyResults: Game[] = [
     metacritic: 90,
     originalPlatformName: 'Game Boy',
     genres: [{ id: 2, name: 'Platform', slug: 'platform' }],
+    platforms: [{ platform: { id: 33, name: 'Game Boy', slug: 'game-boy' } }],
+  },
+]
+
+const duplicateSamePlatformResults: SearchResultFixture[] = [
+  {
+    id: 11,
+    name: 'Tetris',
+    slug: 'tetris-gb-1989',
+    background_image: null,
+    released: '1989-06-14',
+    metacritic: 90,
+    originalPlatformName: 'Game Boy',
+    disambiguationPlatform: 'Game Boy',
+    disambiguationYear: '1989',
+    genres: [{ id: 2, name: 'Puzzle', slug: 'puzzle' }],
+    platforms: [{ platform: { id: 33, name: 'Game Boy', slug: 'game-boy' } }],
+  },
+  {
+    id: 12,
+    name: 'Tetris',
+    slug: 'tetris-gb-1990',
+    background_image: null,
+    released: '1990-11-21',
+    metacritic: 87,
+    originalPlatformName: 'Game Boy',
+    disambiguationPlatform: 'Game Boy',
+    disambiguationYear: '1990',
+    genres: [{ id: 2, name: 'Puzzle', slug: 'puzzle' }],
     platforms: [{ platform: { id: 33, name: 'Game Boy', slug: 'game-boy' } }],
   },
 ]
@@ -181,6 +215,32 @@ describe('GameSearch', () => {
     await screen.findByText('Donkey Kong (GB)')
     await screen.findAllByText('Platformer')
     await screen.findByText('Family')
+  })
+
+  it('falls back to year when duplicate-title platform labels would still collide', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({ results: duplicateSamePlatformResults }),
+      })
+    )
+
+    const user = userEvent.setup()
+
+    render(
+      <GameSearch
+        isOpen
+        rowCategory={rowCategory}
+        colCategory={colCategory}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />
+    )
+
+    await user.type(screen.getByPlaceholderText('Search for a video game...'), 'tet')
+
+    await screen.findByText('Tetris (1989)')
+    await screen.findByText('Tetris (1990)')
   })
 
   it('shows the active turn timer in the search header when provided', () => {

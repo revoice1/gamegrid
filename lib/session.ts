@@ -1,4 +1,5 @@
 import type { CellGuess, Puzzle } from './types'
+import type { VersusEventRecord } from './versus-events'
 
 // Session management for anonymous users
 const SESSION_KEY = 'gamegrid_session_id'
@@ -102,6 +103,7 @@ export interface SavedGameState {
     x?: number
     o?: number
   }
+  versusEventLog?: VersusEventRecord[]
   turnTimeLeft?: number | null
 }
 

@@ -278,6 +278,15 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <a
+                href="/changelog"
+                className={cn(
+                  'inline-flex items-center rounded-full border border-border bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors',
+                  'hover:bg-secondary/50 hover:text-foreground'
+                )}
+              >
+                Changelog
+              </a>
+              <a
                 href="https://github.com/revoice1/gamegrid/issues/new?template=bug_report.yml"
                 target="_blank"
                 rel="noreferrer"

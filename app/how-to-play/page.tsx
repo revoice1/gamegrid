@@ -109,9 +109,19 @@ export default function HowToPlayPage() {
             <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4">
               <h3 className="font-medium text-foreground">Can I play old daily boards?</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Yes. GameGrid now surfaces a daily archive so you can jump back into stored boards
-                you missed, and if you already started one in this browser your saved progress can
-                come back with it. Practice mode remains the faster endless-play option.
+                Yes. GameGrid now surfaces a daily archive calendar so you can jump back into stored
+                boards you missed, and if you already started one in this browser your saved
+                progress can come back with it. Practice mode remains the faster endless-play
+                option.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4">
+              <h3 className="font-medium text-foreground">
+                Where can I see what changed recently?
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                GameGrid now has a player-facing changelog page that summarizes recent features,
+                versus updates, archive improvements, and category-pool changes in one place.
               </p>
             </div>
             <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4">
@@ -122,6 +132,14 @@ export default function HowToPlayPage() {
                 Daily progress is anonymous and tied to this browser through a server-managed
                 session cookie. There is no account login yet, so progress follows the browser
                 session rather than a cross-device profile.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4">
+              <h3 className="font-medium text-foreground">Do daily streaks carry over?</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Yes, as long as you keep using the same browser session. The daily results modal can
+                show your current streak, best streak, total daily completions, and perfect boards
+                tied to that anonymous session.
               </p>
             </div>
           </div>

@@ -9,6 +9,7 @@ import { DailyHistoryModal, type DailyArchiveEntry } from './daily-history-modal
 import { HowToPlayModal } from './how-to-play-modal'
 import { GuessDetailsModal } from './guess-details-modal'
 import { VersusObjectionModal } from './versus-objection-modal'
+import { VersusSummaryPanel } from './versus-summary-panel'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { AchievementsModal } from './achievements-modal'
 import { FallingParticlesOverlay } from './falling-particles-overlay'
@@ -68,7 +69,7 @@ import {
   type VersusStealRule,
   type VersusTurnTimerOption,
 } from './versus-setup-modal'
-import { clearGameState, loadGameState, saveGameState } from '@/lib/session'
+import { clearGameState, loadGameState, saveGameState, type SavedGameState } from '@/lib/session'
 import {
   useAnimationPreference,
   useSearchConfirmPreference,
@@ -79,6 +80,7 @@ import { unlockAchievement } from '@/lib/achievements'
 import { EASTER_EGGS, type EasterEggConfig, type EasterEggPieceKind } from '@/lib/easter-eggs'
 import { ROUTE_ACHIEVEMENT_ID, ROUTE_PENDING_TOAST_KEY } from '@/lib/route-index'
 import type { Puzzle, CellGuess, Game, Category } from '@/lib/types'
+import type { VersusEventRecord } from '@/lib/versus-events'
 import { useToast } from '@/hooks/use-toast'
 import { useAnimationQuality } from '@/hooks/use-animation-quality'
 import { useLoadingState } from '@/hooks/use-loading-state'
@@ -1247,9 +1249,11 @@ export function GameClient() {
     x: 0,
     o: 0,
   })
+  const [versusEventLog, setVersusEventLog] = useState<VersusEventRecord[]>([])
   const [pendingVersusObjectionReview, setPendingVersusObjectionReview] =
     useState<PendingVersusObjectionReview | null>(null)
   const [showVersusWinnerBanner, setShowVersusWinnerBanner] = useState(true)
+  const [showVersusSummaryDetails, setShowVersusSummaryDetails] = useState(false)
   const [showDailyHistory, setShowDailyHistory] = useState(false)
   const [dailyArchiveEntries, setDailyArchiveEntries] = useState<DailyArchiveEntry[]>([])
   const [dailyArchiveLoading, setDailyArchiveLoading] = useState(false)
@@ -1272,6 +1276,7 @@ export function GameClient() {
   const { enabled: animationsEnabled } = useAnimationPreference()
   const { enabled: versusAlarmsEnabled } = useVersusAlarmPreference()
   const { enabled: versusAudioEnabled } = useVersusAudioPreference()
+  const versusEventLogRef = useRef<VersusEventRecord[]>([])
   const detectConfiguredAnimationQuality = useCallback(
     () => (animationsEnabled ? detectAnimationQuality() : 'low'),
     [animationsEnabled]
@@ -1299,6 +1304,17 @@ export function GameClient() {
   useEffect(() => {
     versusObjectionRuleRef.current = versusObjectionRule
   }, [versusObjectionRule])
+
+  const commitVersusEventLog = useCallback((nextEventLog: VersusEventRecord[]) => {
+    versusEventLogRef.current = nextEventLog
+    setVersusEventLog(nextEventLog)
+    return nextEventLog
+  }, [])
+
+  const appendVersusEvent = useCallback(
+    (event: VersusEventRecord) => commitVersusEventLog([...versusEventLogRef.current, event]),
+    [commitVersusEventLog]
+  )
 
   const score = guesses.filter((g) => g?.isCorrect).length
   const isVersusMode = mode === 'versus'
@@ -1368,6 +1384,52 @@ export function GameClient() {
   // Game is over when out of guesses OR all cells filled (not necessarily all correct)
   const gridFull = guesses.every((g) => g !== null)
   const isComplete = isVersusMode ? winner !== null : guessesRemaining === 0 || gridFull
+
+  const buildPersistedVersusState = useCallback(
+    (overrides: Partial<SavedGameState>): SavedGameState | null => {
+      if (!puzzle) {
+        return null
+      }
+
+      return {
+        puzzleId: puzzle.id,
+        puzzle,
+        guesses,
+        guessesRemaining,
+        isComplete,
+        currentPlayer,
+        stealableCell,
+        winner,
+        pendingFinalSteal,
+        versusCategoryFilters,
+        versusStealRule,
+        versusTimerOption,
+        versusDisableDraws,
+        versusObjectionRule,
+        versusObjectionsUsed,
+        versusEventLog: versusEventLogRef.current,
+        turnTimeLeft,
+        ...overrides,
+      }
+    },
+    [
+      currentPlayer,
+      guesses,
+      guessesRemaining,
+      isComplete,
+      pendingFinalSteal,
+      puzzle,
+      stealableCell,
+      turnTimeLeft,
+      versusCategoryFilters,
+      versusDisableDraws,
+      versusObjectionRule,
+      versusObjectionsUsed,
+      versusStealRule,
+      versusTimerOption,
+      winner,
+    ]
+  )
 
   const triggerEasterEggCelebration = useCallback(
     (gameId: number) => {
@@ -1594,6 +1656,7 @@ export function GameClient() {
 
   useEffect(() => {
     setShowVersusWinnerBanner(winner !== null)
+    setShowVersusSummaryDetails(false)
   }, [winner])
 
   useEffect(() => {
@@ -1705,50 +1768,26 @@ export function GameClient() {
       if (invalidGuessResolution.kind === 'defender-wins') {
         setWinner(invalidGuessResolution.defender)
         setPendingFinalSteal(null)
-        saveGameState(
-          {
-            puzzleId: puzzle.id,
-            puzzle,
-            guesses,
-            guessesRemaining,
-            isComplete: true,
-            currentPlayer,
-            stealableCell: null,
-            winner: invalidGuessResolution.defender,
-            pendingFinalSteal: null,
-            versusCategoryFilters,
-            versusStealRule,
-            versusTimerOption,
-            versusDisableDraws,
-            versusObjectionRule,
-            versusObjectionsUsed: nextVersusObjectionsUsed,
-            turnTimeLeft,
-          },
-          mode
-        )
+        const persistedState = buildPersistedVersusState({
+          isComplete: true,
+          stealableCell: null,
+          winner: invalidGuessResolution.defender,
+          pendingFinalSteal: null,
+          versusObjectionsUsed: nextVersusObjectionsUsed,
+        })
+        if (persistedState) {
+          saveGameState(persistedState, mode)
+        }
       } else {
         setCurrentPlayer(invalidGuessResolution.nextPlayer)
-        saveGameState(
-          {
-            puzzleId: puzzle.id,
-            puzzle,
-            guesses,
-            guessesRemaining,
-            isComplete,
-            currentPlayer: invalidGuessResolution.nextPlayer,
-            stealableCell: null,
-            winner,
-            pendingFinalSteal,
-            versusCategoryFilters,
-            versusStealRule,
-            versusTimerOption,
-            versusDisableDraws,
-            versusObjectionRule,
-            versusObjectionsUsed: nextVersusObjectionsUsed,
-            turnTimeLeft,
-          },
-          mode
-        )
+        const persistedState = buildPersistedVersusState({
+          currentPlayer: invalidGuessResolution.nextPlayer,
+          stealableCell: null,
+          versusObjectionsUsed: nextVersusObjectionsUsed,
+        })
+        if (persistedState) {
+          saveGameState(persistedState, mode)
+        }
       }
 
       toast({
@@ -1769,13 +1808,8 @@ export function GameClient() {
       puzzle,
       toast,
       turnTimeLeft,
-      versusCategoryFilters,
-      versusDisableDraws,
-      versusObjectionRule,
+      buildPersistedVersusState,
       versusObjectionsUsed,
-      versusStealRule,
-      versusTimerOption,
-      winner,
     ]
   )
 
@@ -1891,6 +1925,15 @@ export function GameClient() {
       })
 
       if (mode === 'versus' && pendingVersusObjectionReview) {
+        appendVersusEvent({
+          type: 'objection',
+          player: pendingVersusObjectionReview.player,
+          cellIndex: activeDetailCell,
+          gameName: nextGuess.gameName,
+          verdict: payload.verdict,
+          onSteal: pendingVersusObjectionReview.isVersusSteal,
+        })
+
         if (payload.verdict === 'sustained') {
           const objectionCellIndex = activeDetailCell
           const objectionPlayer = pendingVersusObjectionReview.player
@@ -1923,6 +1966,20 @@ export function GameClient() {
                   successful: stealOutcome.successful,
                 })
               }
+
+              appendVersusEvent({
+                type: 'steal',
+                player: objectionPlayer,
+                cellIndex: objectionCellIndex,
+                gameName: nextGuess.gameName,
+                successful: stealOutcome.successful,
+                viaObjection: true,
+                hadShowdownScores: stealOutcome.hasShowdownScores,
+                finalSteal: pendingFinalSteal?.cellIndex === objectionCellIndex,
+                attackingScore: nextGuess.stealRating ?? null,
+                defendingGameName: defendingGuess.gameName,
+                defendingScore: defendingGuess.stealRating ?? null,
+              })
 
               setPendingVersusObjectionReview(null)
               setDetailCell(null)
@@ -1972,27 +2029,17 @@ export function GameClient() {
                   }
 
                   applyStealActions(stealOutcome.actions)
-                  saveGameState(
-                    {
-                      puzzleId: puzzle.id,
-                      puzzle,
-                      guesses: revealedGuesses,
-                      guessesRemaining,
-                      isComplete,
-                      currentPlayer: persistedCurrentPlayer,
-                      stealableCell: null,
-                      winner: persistedWinner,
-                      pendingFinalSteal: persistedPendingFinalSteal,
-                      versusCategoryFilters,
-                      versusStealRule,
-                      versusTimerOption,
-                      versusDisableDraws,
-                      versusObjectionRule,
-                      versusObjectionsUsed: nextVersusObjectionsUsed,
-                      turnTimeLeft,
-                    },
-                    mode
-                  )
+                  const persistedState = buildPersistedVersusState({
+                    guesses: revealedGuesses,
+                    currentPlayer: persistedCurrentPlayer,
+                    stealableCell: null,
+                    winner: persistedWinner,
+                    pendingFinalSteal: persistedPendingFinalSteal,
+                    versusObjectionsUsed: nextVersusObjectionsUsed,
+                  })
+                  if (persistedState) {
+                    saveGameState(persistedState, mode)
+                  }
                   toast({
                     variant: 'destructive',
                     title: 'Steal failed',
@@ -2071,31 +2118,29 @@ export function GameClient() {
                 persistedCurrentPlayer = placementResolution.nextPlayer
               }
 
-              saveGameState(
-                {
-                  puzzleId: puzzle.id,
-                  puzzle,
-                  guesses: successfulStealGuesses,
-                  guessesRemaining,
-                  isComplete,
-                  currentPlayer: persistedCurrentPlayer,
-                  stealableCell: persistedStealableCell,
-                  winner: persistedWinner,
-                  pendingFinalSteal: persistedPendingFinalSteal,
-                  versusCategoryFilters,
-                  versusStealRule,
-                  versusTimerOption,
-                  versusDisableDraws,
-                  versusObjectionRule,
-                  versusObjectionsUsed: nextVersusObjectionsUsed,
-                  turnTimeLeft,
-                },
-                mode
-              )
+              const persistedState = buildPersistedVersusState({
+                guesses: successfulStealGuesses,
+                currentPlayer: persistedCurrentPlayer,
+                stealableCell: persistedStealableCell,
+                winner: persistedWinner,
+                pendingFinalSteal: persistedPendingFinalSteal,
+                versusObjectionsUsed: nextVersusObjectionsUsed,
+              })
+              if (persistedState) {
+                saveGameState(persistedState, mode)
+              }
 
               return
             }
           }
+
+          appendVersusEvent({
+            type: 'claim',
+            player: objectionPlayer,
+            cellIndex: objectionCellIndex,
+            gameName: nextGuess.gameName,
+            viaObjection: true,
+          })
 
           setPendingVersusObjectionReview(null)
           setDetailCell(null)
@@ -2154,27 +2199,17 @@ export function GameClient() {
             persistedCurrentPlayer = placementResolution.nextPlayer
           }
 
-          saveGameState(
-            {
-              puzzleId: puzzle.id,
-              puzzle,
-              guesses: nextGuesses,
-              guessesRemaining,
-              isComplete,
-              currentPlayer: persistedCurrentPlayer,
-              stealableCell: persistedStealableCell,
-              winner: persistedWinner,
-              pendingFinalSteal: persistedPendingFinalSteal,
-              versusCategoryFilters,
-              versusStealRule,
-              versusTimerOption,
-              versusDisableDraws,
-              versusObjectionRule,
-              versusObjectionsUsed: nextVersusObjectionsUsed,
-              turnTimeLeft,
-            },
-            mode
-          )
+          const persistedState = buildPersistedVersusState({
+            guesses: nextGuesses,
+            currentPlayer: persistedCurrentPlayer,
+            stealableCell: persistedStealableCell,
+            winner: persistedWinner,
+            pendingFinalSteal: persistedPendingFinalSteal,
+            versusObjectionsUsed: nextVersusObjectionsUsed,
+          })
+          if (persistedState) {
+            saveGameState(persistedState, mode)
+          }
         } else {
           setObjectionVerdict(null)
           setObjectionExplanation(null)
@@ -2248,6 +2283,8 @@ export function GameClient() {
     }
   }, [
     activeDetailCell,
+    appendVersusEvent,
+    buildPersistedVersusState,
     currentPlayer,
     detailColCategory,
     detailGuess,
@@ -2259,16 +2296,12 @@ export function GameClient() {
     pendingVersusObjectionReview,
     pendingFinalSteal,
     puzzle,
-    stealableCell,
     toast,
-    turnTimeLeft,
-    versusCategoryFilters,
     versusDisableDraws,
     versusObjectionRule,
     versusObjectionsUsed,
     versusStealRule,
     stealsEnabled,
-    versusTimerOption,
     winner,
   ])
 
@@ -2344,13 +2377,14 @@ export function GameClient() {
         setPendingFinalSteal(savedState.pendingFinalSteal ?? null)
         setVersusCategoryFilters((savedState.versusCategoryFilters as VersusCategoryFilters) ?? {})
         setVersusStealRule(savedState.versusStealRule ?? 'lower')
-        setVersusTimerOption(savedState.versusTimerOption ?? 'none')
-        setVersusDisableDraws(savedState.versusDisableDraws ?? false)
-        setVersusObjectionRule(savedState.versusObjectionRule ?? 'off')
+        setVersusTimerOption(savedState.versusTimerOption ?? 300)
+        setVersusDisableDraws(savedState.versusDisableDraws ?? true)
+        setVersusObjectionRule(savedState.versusObjectionRule ?? 'one')
         setVersusObjectionsUsed({
           x: savedState.versusObjectionsUsed?.x ?? 0,
           o: savedState.versusObjectionsUsed?.o ?? 0,
         })
+        commitVersusEventLog(savedState.versusEventLog ?? [])
         setTurnTimeLeft(savedState.turnTimeLeft ?? null)
         setLockImpactCell(null)
         setSelectedCell(null)
@@ -2374,6 +2408,7 @@ export function GameClient() {
         setVersusObjectionRule('off')
       }
       setVersusObjectionsUsed({ x: 0, o: 0 })
+      commitVersusEventLog([])
       setPendingVersusObjectionReview(null)
       setLockImpactCell(null)
       setSelectedCell(null)
@@ -2585,6 +2620,7 @@ export function GameClient() {
                     versusDisableDraws: versusDisableDrawsRef.current,
                     versusObjectionRule: versusObjectionRuleRef.current,
                     versusObjectionsUsed: { x: 0, o: 0 },
+                    versusEventLog: [],
                     turnTimeLeft:
                       versusTimerOptionRef.current === 'none' ? null : versusTimerOptionRef.current,
                   }
@@ -2659,28 +2695,14 @@ export function GameClient() {
       return
     }
 
-    saveGameState(
-      {
-        puzzleId: puzzle.id,
-        puzzle,
-        guesses,
-        guessesRemaining,
-        isComplete,
-        currentPlayer,
-        stealableCell,
-        winner,
-        pendingFinalSteal,
-        versusCategoryFilters,
-        versusStealRule,
-        versusTimerOption,
-        versusDisableDraws,
-        versusObjectionRule,
-        versusObjectionsUsed,
-        turnTimeLeft,
-      },
-      'versus'
-    )
+    const persistedState = buildPersistedVersusState({})
+    if (!persistedState) {
+      return
+    }
+
+    saveGameState(persistedState, 'versus')
   }, [
+    buildPersistedVersusState,
     currentPlayer,
     guesses,
     guessesRemaining,
@@ -2695,6 +2717,7 @@ export function GameClient() {
     versusStealRule,
     versusTimerOption,
     versusDisableDraws,
+    versusEventLog,
     versusObjectionRule,
     versusObjectionsUsed,
     winner,
@@ -3049,6 +3072,20 @@ export function GameClient() {
           })
         }
 
+        appendVersusEvent({
+          type: 'steal',
+          player: currentPlayer,
+          cellIndex: selectedCell,
+          gameName: newGuess.gameName,
+          successful: outcome.successful,
+          viaObjection: false,
+          hadShowdownScores: outcome.hasShowdownScores,
+          finalSteal: pendingFinalSteal?.cellIndex === selectedCell,
+          attackingScore: newGuess.stealRating ?? null,
+          defendingGameName: existingGuess.gameName,
+          defendingScore: existingGuess.stealRating ?? null,
+        })
+
         if (!outcome.successful) {
           const failureDescription = buildStealFailureDescription({
             pendingFinalSteal,
@@ -3134,10 +3171,27 @@ export function GameClient() {
       setSelectedCell(null)
 
       if (postGuessState.persistedState) {
-        saveGameState(postGuessState.persistedState, mode)
+        if (mode === 'versus') {
+          const persistedState = buildPersistedVersusState(postGuessState.persistedState)
+          if (persistedState) {
+            saveGameState(persistedState, mode)
+          }
+        } else {
+          saveGameState(postGuessState.persistedState, mode)
+        }
       }
 
       if (mode === 'versus') {
+        if (!isVersusSteal) {
+          appendVersusEvent({
+            type: 'claim',
+            player: currentPlayer,
+            cellIndex: selectedCell,
+            gameName: newGuess.gameName,
+            viaObjection: false,
+          })
+        }
+
         setPendingFinalSteal(null)
         setLockImpactCell(null)
         setStealableCell(stealsEnabled ? selectedCell : null)
@@ -3347,13 +3401,13 @@ export function GameClient() {
             setVersusCategoryFilters({})
             setVersusSetupError(null)
             versusStealRuleRef.current = 'lower'
-            versusTimerOptionRef.current = 'none'
-            versusDisableDrawsRef.current = false
-            versusObjectionRuleRef.current = 'off'
+            versusTimerOptionRef.current = 300
+            versusDisableDrawsRef.current = true
+            versusObjectionRuleRef.current = 'one'
             setVersusStealRule('lower')
-            setVersusTimerOption('none')
-            setVersusDisableDraws(false)
-            setVersusObjectionRule('off')
+            setVersusTimerOption(300)
+            setVersusDisableDraws(true)
+            setVersusObjectionRule('one')
             setShowVersusStartOptions(false)
             skipNextVersusAutoLoadRef.current = true
             clearGameState('versus')
@@ -3467,7 +3521,7 @@ export function GameClient() {
           }
         }}
       >
-        <DialogContent className="max-w-md border-border bg-card/95 p-5 text-center shadow-xl backdrop-blur-sm">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto border-border bg-card/95 p-5 text-center shadow-xl backdrop-blur-sm">
           <DialogTitle className="sr-only">
             {winner === 'draw'
               ? 'Versus match ended in a draw'
@@ -3503,6 +3557,26 @@ export function GameClient() {
               New Match
             </button>
           </div>
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => setShowVersusSummaryDetails((current) => !current)}
+              className="rounded-lg border border-border bg-secondary/40 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary/65"
+            >
+              {showVersusSummaryDetails ? 'Hide Summary' : 'View Summary'}
+            </button>
+          </div>
+          {showVersusSummaryDetails && (
+            <VersusSummaryPanel
+              guesses={guesses}
+              eventLog={versusEventLog}
+              winner={winner ?? 'draw'}
+              stealRule={versusStealRule}
+              timerOption={versusTimerOption}
+              disableDraws={versusDisableDraws}
+              objectionRule={versusObjectionRule}
+              objectionsUsed={versusObjectionsUsed}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

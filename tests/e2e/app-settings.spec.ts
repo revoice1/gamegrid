@@ -20,6 +20,52 @@ test('home loads and settings can open', async ({ page }) => {
   await expect(page.getByText('Theme')).toBeVisible()
 })
 
+test('settings panel links through to the changelog', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Open settings' }).click()
+  await expect(page.getByText('Feedback')).toBeVisible()
+
+  await page.getByRole('link', { name: 'Changelog' }).click()
+
+  await page.waitForURL('**/changelog')
+  await expect(page.getByRole('heading', { name: "What's new in GameGrid" })).toBeVisible()
+  await expect(page.getByText('Recent updates, newest first')).toBeVisible()
+})
+
+test('changelog can return back to the game', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/changelog')
+
+  await expect(page.getByRole('heading', { name: "What's new in GameGrid" })).toBeVisible()
+
+  await page.getByRole('link', { name: 'Back to Game' }).click()
+
+  await page.waitForURL('**/')
+  await expect(page.getByRole('heading', { name: 'GameGrid' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'How to Play' })).toBeVisible()
+})
+
+test('changelog jump links update the page hash', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/changelog')
+
+  await expect(page.getByRole('heading', { name: "What's new in GameGrid" })).toBeVisible()
+
+  await page.getByRole('link', { name: 'March 27, 2026' }).click()
+
+  await expect(page).toHaveURL(/#march-27-2026$/)
+  await expect(
+    page.getByRole('heading', { name: 'Versus Objections And Custom Rules' })
+  ).toBeVisible()
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => document.getElementById('march-27-2026')?.matches(':target'))
+    })
+    .toBe(true)
+})
+
 test('confirm picks setting persists after reload', async ({ page }) => {
   await resetStorage(page)
   await page.goto('/')

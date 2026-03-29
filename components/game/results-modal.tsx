@@ -26,6 +26,13 @@ interface CellStatsData {
   [key: number]: CellStatBucket
 }
 
+interface DailySummary {
+  currentStreak: number
+  bestStreak: number
+  completedCount: number
+  perfectCount: number
+}
+
 interface ResultsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -55,11 +62,14 @@ function getRarityLabel(percentage: number): string {
 }
 
 function getShareEmoji(guess: CellGuess | null): string {
-  if (!guess) return '⬜'
-  return guess.isCorrect ? '🟩' : '🟥'
+  if (!guess) return String.fromCodePoint(0x2b1c)
+  if (guess.isCorrect && guess.objectionVerdict === 'sustained') {
+    return String.fromCodePoint(0x1f7e7)
+  }
+  return guess.isCorrect ? String.fromCodePoint(0x1f7e9) : String.fromCodePoint(0x1f7e5)
 }
 
-function buildShareText(
+export function buildShareText(
   guesses: (CellGuess | null)[],
   isDaily: boolean,
   puzzleDate?: string | null
@@ -91,6 +101,7 @@ export function ResultsModal({
 }: ResultsModalProps) {
   const [stats, setStats] = useState<CellStatsData | null>(null)
   const [totalCompletions, setTotalCompletions] = useState(0)
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'your-results' | 'playerbase'>('your-results')
   const { toast } = useToast()
@@ -102,6 +113,7 @@ export function ResultsModal({
     if (!isDaily) {
       setStats(null)
       setTotalCompletions(0)
+      setDailySummary(null)
       setIsLoading(false)
       setActiveTab('your-results')
       return
@@ -114,6 +126,7 @@ export function ResultsModal({
         .then((data) => {
           setStats(data.cellStats || {})
           setTotalCompletions(data.totalCompletions || 0)
+          setDailySummary(data.dailySummary ?? null)
         })
         .catch(console.error)
         .finally(() => setIsLoading(false))
@@ -236,6 +249,43 @@ export function ResultsModal({
                     {getRarityLabel(100 - overallRarity)} Picks
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">Higher = more unique answers</p>
+                </div>
+              )}
+
+              {isDaily && dailySummary && (
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-secondary/30 p-4 text-center sm:grid-cols-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Current Streak
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {dailySummary.currentStreak}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Best Streak
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {dailySummary.bestStreak}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Dailies Done
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {dailySummary.completedCount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Perfects
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-foreground">
+                      {dailySummary.perfectCount}
+                    </p>
+                  </div>
                 </div>
               )}
 

@@ -94,6 +94,35 @@ test('versus winner panel can be dismissed while keeping the board visible', asy
     stealableCell: null,
     winner: 'x',
     pendingFinalSteal: null,
+    versusDisableDraws: true,
+    versusObjectionRule: 'one',
+    versusObjectionsUsed: { x: 1, o: 1 },
+    versusEventLog: [
+      { type: 'claim', player: 'x', cellIndex: 0, gameName: 'X1', viaObjection: false },
+      { type: 'claim', player: 'x', cellIndex: 1, gameName: 'X2', viaObjection: false },
+      { type: 'claim', player: 'x', cellIndex: 2, gameName: 'X3', viaObjection: false },
+      {
+        type: 'steal',
+        player: 'o',
+        cellIndex: 3,
+        gameName: 'O4',
+        successful: false,
+        viaObjection: false,
+        hadShowdownScores: true,
+        finalSteal: false,
+        attackingScore: 74,
+        defendingGameName: 'X2',
+        defendingScore: 81,
+      },
+      {
+        type: 'objection',
+        player: 'o',
+        cellIndex: 3,
+        gameName: 'O4',
+        verdict: 'overruled',
+        onSteal: true,
+      },
+    ],
     versusCategoryFilters: {},
     versusStealRule: 'lower',
     versusTimerOption: 'none',
@@ -103,9 +132,19 @@ test('versus winner panel can be dismissed while keeping the board visible', asy
   await page.goto('/')
   await page.getByRole('button', { name: 'Versus' }).click()
 
-  await expect(page.getByText('X wins', { exact: true })).toBeVisible()
+  const winnerDialog = page.getByRole('dialog')
+  await expect(winnerDialog.getByText('X wins', { exact: true }).first()).toBeVisible()
+  await expect(winnerDialog.getByRole('button', { name: 'View Summary' })).toBeVisible()
+  await expect(winnerDialog.getByText('Match Summary')).toHaveCount(0)
+  await expect(winnerDialog.getByText('All Picks')).toHaveCount(0)
+  await winnerDialog.getByRole('button', { name: 'View Summary' }).click()
+  await expect(winnerDialog.getByText('Match Summary')).toBeVisible()
+  await expect(winnerDialog.getByText('Steals: Lower score')).toBeVisible()
+  await expect(winnerDialog.getByText('Steal attempts: 1')).toBeVisible()
+  await expect(winnerDialog.getByText('Failed steals: 1')).toBeVisible()
+  await expect(winnerDialog.getByText('All Picks')).toBeVisible()
   await expect(page.getByTestId('grid-cell-0')).toContainText('X1')
-  await page.getByRole('button', { name: 'Hide' }).click()
+  await winnerDialog.getByRole('button', { name: 'Hide', exact: true }).click()
   await expect(page.getByText('Match Over')).toHaveCount(0)
   await expect(page.getByTestId('grid-cell-0')).toContainText('X1')
 })
@@ -141,8 +180,13 @@ test('versus draw restore renders tie state without a winner', async ({ page }) 
   await page.goto('/')
   await page.getByRole('button', { name: 'Versus' }).click()
 
-  await expect(page.getByText('Draw game')).toBeVisible()
-  await expect(page.getByText('No line was completed before the board filled up.')).toBeVisible()
+  const drawDialog = page.getByRole('dialog')
+  await expect(drawDialog.getByText('Draw game').first()).toBeVisible()
+  await expect(
+    drawDialog.getByText('No line was completed before the board filled up.')
+  ).toBeVisible()
+  await drawDialog.getByRole('button', { name: 'View Summary' }).click()
+  await expect(drawDialog.getByText('Match Summary')).toBeVisible()
   await expect(page.locator('header').getByText('Result', { exact: true })).toBeVisible()
   await expect(page.locator('header').getByText('Tie', { exact: true })).toBeVisible()
 })

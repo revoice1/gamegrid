@@ -88,6 +88,7 @@ test('how to play modal stays available for daily and versus modes', async ({ pa
   await expect(page.getByText('Fill the Grid')).toBeVisible()
   await expect(page.getByText('Release Tags')).toBeVisible()
   await expect(page.getByText('Rarity Score')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Changelog' })).toBeVisible()
   await page.getByRole('button', { name: 'Got it!' }).click()
   await expect(page.getByRole('heading', { name: 'How to Play' })).toHaveCount(0)
 
@@ -100,6 +101,20 @@ test('how to play modal stays available for daily and versus modes', async ({ pa
   await expect(page.getByText('Final Square Tiebreak')).toBeVisible()
   await page.getByRole('button', { name: 'Got it!' }).click()
   await expect(page.getByRole('heading', { name: 'How to Play Versus' })).toHaveCount(0)
+})
+
+test('how to play modal can navigate to the changelog', async ({ page }) => {
+  await resetStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'How to Play' }).click()
+  await expect(page.getByRole('heading', { name: 'How to Play' })).toBeVisible()
+
+  await page.getByRole('link', { name: 'Changelog' }).click()
+
+  await page.waitForURL('**/changelog')
+  await expect(page.getByRole('heading', { name: "What's new in GameGrid" })).toBeVisible()
+  await expect(page.getByText('Recent updates, newest first')).toBeVisible()
 })
 
 test('practice and versus restore in-progress boards from local storage', async ({ page }) => {
@@ -139,4 +154,76 @@ test('practice and versus restore in-progress boards from local storage', async 
 
   await page.getByRole('button', { name: 'Versus' }).click()
   await expect(page.getByTestId('grid-cell-0')).toContainText('Restored Versus Game')
+})
+
+test('daily archive calendar can open an older board and reflects the open day', async ({
+  page,
+}) => {
+  const todayDate = fakePuzzle.date
+  const archiveDate = '2026-03-27'
+  const archivedPuzzle = {
+    ...fakePuzzle,
+    id: 'archived-daily-puzzle',
+    date: archiveDate,
+    row_categories: [
+      { type: 'genre', id: 'genre-adventure', name: 'Adventure' },
+      { type: 'genre', id: 'genre-action', name: 'Action' },
+      { type: 'genre', id: 'genre-platformer', name: 'Platformer' },
+    ],
+  }
+
+  await resetStorage(page)
+  await page.route('**/api/daily-history', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        entries: [
+          { id: `daily-${todayDate}`, date: todayDate, is_completed: false, guess_count: 0 },
+          { id: `daily-${archiveDate}`, date: archiveDate, is_completed: true, guess_count: 9 },
+        ],
+      }),
+    })
+  })
+  await page.route('**/api/puzzle?*', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.searchParams.get('mode') === 'daily' && url.searchParams.get('date') === archiveDate) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...archivedPuzzle,
+          user_state: {
+            guesses: Array(9).fill(null),
+            guessesRemaining: 9,
+            isComplete: false,
+          },
+        }),
+      })
+      return
+    }
+
+    await route.fallback()
+  })
+
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Daily Archive' }).click()
+  await expect(page.getByRole('heading', { name: 'Daily Archive' })).toBeVisible()
+  await expect(page.getByText(/Open marks the board you have loaded right now\./i)).toBeVisible()
+  const archiveLoad = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return (
+      response.request().method() === 'GET' &&
+      url.pathname === '/api/puzzle' &&
+      url.searchParams.get('mode') === 'daily' &&
+      url.searchParams.get('date') === archiveDate
+    )
+  })
+  await page.getByRole('button', { name: `${archiveDate}, Completed` }).click()
+  await archiveLoad
+
+  await expect(page.getByTestId('grid-cell-0')).toBeVisible()
+  await page.getByRole('button', { name: 'Daily Archive' }).first().click()
+  await expect(page.getByRole('button', { name: `${archiveDate}, Current board` })).toBeVisible()
 })

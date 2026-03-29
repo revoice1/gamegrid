@@ -427,6 +427,15 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
       if (!res.ok || json.error) {
         return { ok: false, error: json.error ?? 'Failed to continue match.' }
       }
+      const continuedRoom = json.room as VersusRoom | undefined
+      if (continuedRoom) {
+        setRoom(continuedRoom)
+        setPhase('active')
+        setOpponentReady(true)
+        if (myRoleRef.current) {
+          saveRoomEntry(continuedRoom.code, myRoleRef.current)
+        }
+      }
       setEvents([])
       return { ok: true, error: null }
     } catch {

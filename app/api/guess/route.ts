@@ -33,6 +33,7 @@ function serializeGameDetails(game: Awaited<ReturnType<typeof validateIGDBGameFo
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
 
   try {
     const body = await request.json()
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isDaily) {
-      const { error: guessInsertError } = await supabase.from('guesses').insert({
+      const { error: guessInsertError } = await adminSupabase.from('guesses').insert({
         puzzle_id: puzzleId,
         cell_index: cellIndex,
         game_id: gameId,
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
         logWarn('Guess insert with correctness failed, falling back:', guessInsertError.message)
 
         if (valid) {
-          const { error: legacyGuessInsertError } = await supabase.from('guesses').insert({
+          const { error: legacyGuessInsertError } = await adminSupabase.from('guesses').insert({
             puzzle_id: puzzleId,
             cell_index: cellIndex,
             game_id: gameId,

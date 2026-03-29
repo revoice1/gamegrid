@@ -81,6 +81,7 @@ scripts/003_add_guess_correctness.sql
 scripts/004_add_cell_metadata.sql      - adds cell metadata to puzzles
 scripts/005_add_guess_objection_metadata.sql - persists daily objection outcomes on guesses
 scripts/006_add_guess_update_policy.sql - removes the temporary public update policy for guesses after moving objection updates server-side
+scripts/007_drop_public_guess_insert_policy.sql - removes the public guess insert policy after moving daily guess writes server-side
 ```
 
 ## API Routes
@@ -99,8 +100,9 @@ scripts/006_add_guess_update_policy.sql - removes the temporary public update po
 - Daily puzzles are stored and reused after generation.
 - Daily progress is tied to an anonymous browser session so archived boards can reopen your saved
   state on the same device/browser.
-- Daily objection verdict metadata is updated server-side with the Supabase service-role key, so
-  the database does not need a public `UPDATE` policy on `guesses`.
+- Daily guess inserts and objection verdict metadata are updated server-side with the Supabase
+  service-role key, so the database does not need public `INSERT` or `UPDATE` policies on
+  `guesses`.
 - Practice puzzles are generated fresh and are not stored in the database.
 - Versus matches are local-only and restored from local storage.
 - Finished versus matches can expand into a post-game summary with the rules used, picks, and key

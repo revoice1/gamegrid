@@ -62,18 +62,32 @@ export async function POST(
   const session = resolveAnonymousSession(request)
   const { code } = await params
 
-  const { data: room } = await supabase
+  const upperCode = code.toUpperCase()
+
+  const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
     .select('id, host_session_id, guest_session_id, status, puzzle_id')
-    .eq('code', code.toUpperCase())
+    .eq('code', upperCode)
     .single()
 
-  if (!room) return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
+  if (fetchError || !room) {
+    console.error('[versus.room.state] room lookup failed', {
+      code: upperCode,
+      sessionId: session.sessionId,
+      error: fetchError,
+    })
+    return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
+  }
 
   const isParticipant =
     room.host_session_id === session.sessionId || room.guest_session_id === session.sessionId
 
   if (!isParticipant) {
+    console.error('[versus.room.state] not authorized', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+    })
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
   }
 
@@ -85,11 +99,22 @@ export async function POST(
   try {
     body = await request.json()
   } catch {
+    console.error('[versus.room.state] invalid request body', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+    })
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
   }
 
   const parsed = SnapshotSchema.safeParse((body as { snapshot?: unknown })?.snapshot)
   if (!parsed.success) {
+    console.error('[versus.room.state] invalid snapshot', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+      detail: parsed.error.flatten(),
+    })
     return NextResponse.json(
       { error: 'Invalid snapshot.', detail: parsed.error.flatten() },
       { status: 400 }
@@ -109,6 +134,13 @@ export async function POST(
     .eq('id', room.id)
 
   if (error) {
+    console.error('[versus.room.state] update failed', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+      snapshotPuzzleId: parsed.data.puzzleId,
+      error,
+    })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

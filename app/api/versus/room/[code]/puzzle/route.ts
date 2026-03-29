@@ -12,14 +12,28 @@ export async function POST(
   const session = resolveAnonymousSession(request)
   const { code } = await params
 
-  const { data: room } = await supabase
+  const upperCode = code.toUpperCase()
+
+  const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
     .select('id, host_session_id, status, puzzle_id, settings')
-    .eq('code', code.toUpperCase())
+    .eq('code', upperCode)
     .single()
 
-  if (!room) return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
+  if (fetchError || !room) {
+    console.error('[versus.room.puzzle] room lookup failed', {
+      code: upperCode,
+      sessionId: session.sessionId,
+      error: fetchError,
+    })
+    return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
+  }
   if (room.host_session_id !== session.sessionId) {
+    console.error('[versus.room.puzzle] not host', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+    })
     return NextResponse.json({ error: 'Only the host can set the puzzle.' }, { status: 403 })
   }
   if (room.status !== 'active') {
@@ -35,6 +49,11 @@ export async function POST(
   try {
     ;({ puzzleId, puzzle } = (await request.json()) as { puzzleId: string; puzzle: Puzzle })
   } catch {
+    console.error('[versus.room.puzzle] invalid request body', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+    })
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
   }
 
@@ -68,6 +87,13 @@ export async function POST(
     .select('id')
 
   if (updateError) {
+    console.error('[versus.room.puzzle] update failed', {
+      code: upperCode,
+      roomId: room.id,
+      sessionId: session.sessionId,
+      puzzleId,
+      error: updateError,
+    })
     return NextResponse.json({ error: 'Failed to save puzzle.' }, { status: 500 })
   }
 

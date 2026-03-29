@@ -9,6 +9,7 @@ to keep in mind while the feature is still being hardened.
 - [Supabase Setup](#supabase-setup)
 - [How Sync Works](#how-sync-works)
 - [Current Limits](#current-limits)
+- [Future Same-Room Rematch](#future-same-room-rematch)
 
 ## Current Shape
 
@@ -103,3 +104,28 @@ So the current feature should be treated as:
 - playable
 - reviewable in a preview deployment
 - not yet fully hardened like the local-versus flow
+
+## Future Same-Room Rematch
+
+If online play should support multiple games under one invite code, the room needs a real match
+boundary inside it. Reusing the same room without scoping events and snapshot state per match will
+cause reload hydration and event replay to leak old games into new ones.
+
+Recommended shape:
+
+- keep `versus_rooms` as the stable invite/lobby identity
+- add either a `versus_room_matches` table keyed by `room_id` plus `match_number`, or a
+  `match_number` column on both `versus_rooms` and `versus_events`
+- scope `puzzle_id`, `puzzle_data`, `state_data`, and event replay to the current match
+
+Minimum lifecycle:
+
+1. game ends
+2. host requests rematch
+3. guest confirms ready
+4. server advances the match boundary (`match_number` or new match row)
+5. server clears current puzzle/snapshot state for the next match
+6. host publishes the next puzzle
+7. both clients hydrate only the new match state
+
+Until that exists, a fresh room is the safer and simpler post-game flow.

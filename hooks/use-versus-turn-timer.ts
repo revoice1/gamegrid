@@ -12,6 +12,7 @@ interface PendingFinalStealLike {
 
 interface UseVersusTurnTimerOptions {
   isVersusMode: boolean
+  isOnlineMatch?: boolean
   isLoading: boolean
   loadedPuzzleMode: 'daily' | 'practice' | 'versus' | null
   puzzleId: string | null
@@ -19,16 +20,19 @@ interface UseVersusTurnTimerOptions {
   winner: TicTacToePlayer | 'draw' | null
   versusTimerOption: number | 'none'
   turnTimeLeft: number | null
+  turnDeadlineAt: string | null
   pendingFinalSteal: PendingFinalStealLike | null
   animationsEnabled: boolean
   audioEnabled: boolean
   activeTurnTimerKeyRef: MutableRefObject<string | null>
   setTurnTimeLeft: (value: number | null | ((current: number | null) => number | null)) => void
+  setTurnDeadlineAt: (value: string | null) => void
   onTurnExpired: (nextPlayer: TicTacToePlayer) => void
 }
 
 export function useVersusTurnTimer({
   isVersusMode,
+  isOnlineMatch = false,
   isLoading,
   loadedPuzzleMode,
   puzzleId,
@@ -36,11 +40,13 @@ export function useVersusTurnTimer({
   winner,
   versusTimerOption,
   turnTimeLeft,
+  turnDeadlineAt,
   pendingFinalSteal,
   animationsEnabled,
   audioEnabled,
   activeTurnTimerKeyRef,
   setTurnTimeLeft,
+  setTurnDeadlineAt,
   onTurnExpired,
 }: UseVersusTurnTimerOptions) {
   const onTurnExpiredEvent = useEffectEvent(onTurnExpired)
@@ -76,30 +82,78 @@ export function useVersusTurnTimer({
     if (!isVersusBoardReady || winner || versusTimerOption === 'none') {
       activeTurnTimerKeyRef.current = null
       setTurnTimeLeft(null)
+      setTurnDeadlineAt(null)
       return
     }
 
     const turnTimerKey = `${puzzleId}:${currentPlayer}`
     if (activeTurnTimerKeyRef.current === turnTimerKey) {
+      if (isOnlineMatch && turnDeadlineAt === null) {
+        const nextDeadline = new Date(Date.now() + versusTimerOption * 1000).toISOString()
+        setTurnDeadlineAt(nextDeadline)
+      } else if (!isOnlineMatch && turnTimeLeft === null) {
+        setTurnTimeLeft(versusTimerOption)
+      }
       return
     }
 
     activeTurnTimerKeyRef.current = turnTimerKey
-    setTurnTimeLeft(versusTimerOption)
+    if (isOnlineMatch) {
+      const nextDeadline = new Date(Date.now() + versusTimerOption * 1000).toISOString()
+      setTurnDeadlineAt(nextDeadline)
+    } else {
+      setTurnTimeLeft(versusTimerOption)
+      setTurnDeadlineAt(null)
+    }
   }, [
     activeTurnTimerKeyRef,
     currentPlayer,
     isLoading,
+    isOnlineMatch,
     isVersusMode,
     loadedPuzzleMode,
     puzzleId,
+    setTurnDeadlineAt,
     setTurnTimeLeft,
+    turnDeadlineAt,
+    turnTimeLeft,
     versusTimerOption,
     winner,
   ])
 
   useEffect(() => {
-    if (!isVersusMode || winner || turnTimeLeft === null) {
+    if (!isVersusMode || winner) {
+      return
+    }
+
+    if (isOnlineMatch) {
+      if (!turnDeadlineAt) {
+        setTurnTimeLeft(null)
+        return
+      }
+
+      const deadlineMs = Date.parse(turnDeadlineAt)
+      if (Number.isNaN(deadlineMs)) {
+        setTurnTimeLeft(null)
+        return
+      }
+
+      const remaining = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000))
+      setTurnTimeLeft(remaining)
+
+      if (remaining <= 0) {
+        onTurnExpiredEvent(getNextPlayer(currentPlayer))
+        return
+      }
+
+      const timer = window.setTimeout(() => {
+        setTurnTimeLeft(Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000)))
+      }, 250)
+
+      return () => window.clearTimeout(timer)
+    }
+
+    if (turnTimeLeft === null) {
       return
     }
 
@@ -113,5 +167,13 @@ export function useVersusTurnTimer({
     }, 1000)
 
     return () => window.clearTimeout(timer)
-  }, [currentPlayer, isVersusMode, setTurnTimeLeft, turnTimeLeft, winner])
+  }, [
+    currentPlayer,
+    isOnlineMatch,
+    isVersusMode,
+    setTurnTimeLeft,
+    turnDeadlineAt,
+    turnTimeLeft,
+    winner,
+  ])
 }

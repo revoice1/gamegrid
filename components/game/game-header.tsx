@@ -33,6 +33,7 @@ interface GameHeaderProps {
   guessesRemaining: number
   score: number
   currentPlayer?: 'x' | 'o' | null
+  myOnlineRole?: 'x' | 'o' | null
   winner?: 'x' | 'o' | 'draw' | null
   versusRecord?: { xWins: number; oWins: number }
   versusObjectionRule?: VersusObjectionRule
@@ -48,6 +49,8 @@ interface GameHeaderProps {
   onDailyHistory?: () => void
   onNewGame?: () => void
   onCustomizeGame?: () => void
+  onStartOnlineMatch?: () => void
+  onEndOnlineMatch?: () => void
 }
 
 export function GameHeader({
@@ -55,6 +58,7 @@ export function GameHeader({
   guessesRemaining,
   score,
   currentPlayer = null,
+  myOnlineRole = null,
   winner = null,
   versusRecord = { xWins: 0, oWins: 0 },
   versusObjectionRule = 'off',
@@ -70,6 +74,8 @@ export function GameHeader({
   onDailyHistory,
   onNewGame,
   onCustomizeGame,
+  onStartOnlineMatch,
+  onEndOnlineMatch,
 }: GameHeaderProps) {
   void guessesRemaining
   void score
@@ -327,10 +333,52 @@ export function GameHeader({
                   onClick={onNewGame}
                   className="h-8 w-full px-2.5 text-xs sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
                 >
-                  {mode === 'versus' ? 'New Match' : 'New Game'}
+                  {mode === 'versus'
+                    ? myOnlineRole
+                      ? 'New Online Match'
+                      : 'New Match'
+                    : 'New Game'}
                 </Button>
               )}
             </div>
+
+            {mode === 'versus' && (myOnlineRole || onStartOnlineMatch || onEndOnlineMatch) && (
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 px-1 sm:gap-2">
+                {myOnlineRole && (
+                  <div className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/8 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:gap-2 sm:px-3 sm:text-[11px]">
+                    <span className="tracking-[0.12em]">You</span>
+                    <span
+                      className={cn(
+                        'text-base font-black leading-none sm:text-[1.1rem]',
+                        myOnlineRole === 'x' ? 'text-primary' : 'text-sky-400'
+                      )}
+                    >
+                      {myOnlineRole.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                {!myOnlineRole && onStartOnlineMatch && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onStartOnlineMatch}
+                    className="h-8 border-sky-500/35 px-2.5 text-xs text-sky-300 hover:bg-sky-500/10 hover:text-sky-200 sm:h-9 sm:px-3 sm:text-sm"
+                  >
+                    Play Online
+                  </Button>
+                )}
+                {myOnlineRole && onEndOnlineMatch && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onEndOnlineMatch}
+                    className="h-8 border-destructive/35 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-9 sm:px-3 sm:text-sm"
+                  >
+                    End Online Match
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

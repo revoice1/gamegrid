@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { GameHeader } from './game-header'
 import { GameGrid } from './game-grid'
 import { GameSearch } from './game-search'
+import { DevReloadBadge } from './dev-reload-badge'
 import { ResultsModal } from './results-modal'
 import { DailyHistoryModal, type DailyArchiveEntry } from './daily-history-modal'
 import { HowToPlayModal } from './how-to-play-modal'
 import { GuessDetailsModal } from './guess-details-modal'
 import { VersusObjectionModal } from './versus-objection-modal'
 import { VersusSummaryPanel } from './versus-summary-panel'
+import { OnlineVersusLobby } from './online-versus-lobby'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { AchievementsModal } from './achievements-modal'
 import { PuzzleLoadingScreen } from './puzzle-loading-screen'
@@ -98,11 +100,13 @@ import { useGameModeState } from '@/hooks/use-game-mode-state'
 import { useOverlayState } from '@/hooks/use-overlay-state'
 import { useGameGridDevTools } from '@/hooks/use-game-grid-dev-tools'
 import { usePracticeSetupState } from '@/hooks/use-practice-setup-state'
+import { useOnlineVersusRoom } from '@/hooks/use-online-versus-room'
 import { usePuzzleState } from '@/hooks/use-puzzle-state'
 import { useTimedOverlayDismiss } from '@/hooks/use-timed-overlay-dismiss'
 import { useVersusMatchState } from '@/hooks/use-versus-match-state'
 import { useVersusSetupState } from '@/hooks/use-versus-setup-state'
 import { useVersusTurnTimer } from '@/hooks/use-versus-turn-timer'
+import type { OnlineVersusSnapshot } from '@/lib/versus-room'
 import {
   resolveStealOutcome,
   type PendingVersusSteal,
@@ -204,6 +208,14 @@ export function GameClient() {
   const activePuzzleLoadControllerRef = useRef<AbortController | null>(null)
   const isPuzzleLoadInFlightRef = useRef(false)
   const recordedVersusWinnerKeyRef = useRef<string | null>(null)
+  // Loser-becomes-O: null = randomize (first game), otherwise the player who starts as X
+  const nextVersusStartingPlayerRef = useRef<'x' | 'o' | null>(null)
+  const finishedOnlineRoomIdRef = useRef<string | null>(null)
+  const preparedOnlineRoomIdRef = useRef<string | null>(null)
+  const lastSavedOnlineSnapshotRef = useRef<string | null>(null)
+  const lastAppliedOnlineSnapshotRef = useRef<string | null>(null)
+  const replayedOnlineStealShowdownIdsRef = useRef(new Set<number>())
+  const attemptedInviteJoinCodeRef = useRef<string | null>(null)
   const { mode, setMode, loadedPuzzleMode, setLoadedPuzzleMode } = useGameModeState()
   const {
     puzzle,
@@ -260,6 +272,8 @@ export function GameClient() {
     versusSetupError,
     setVersusSetupError,
   } = useVersusSetupState()
+  const onlineVersus = useOnlineVersusRoom()
+  const [showOnlineLobby, setShowOnlineLobby] = useState(false)
   const {
     sessionId,
     loadingProgress,
@@ -301,6 +315,7 @@ export function GameClient() {
     useState<PendingVersusObjectionReview | null>(null)
   const [showVersusWinnerBanner, setShowVersusWinnerBanner] = useState(true)
   const [showVersusSummaryDetails, setShowVersusSummaryDetails] = useState(false)
+  const [searchQueryDraft, setSearchQueryDraft] = useState('')
   const [showDailyHistory, setShowDailyHistory] = useState(false)
   const [dailyArchiveEntries, setDailyArchiveEntries] = useState<DailyArchiveEntry[]>([])
   const [dailyArchiveLoading, setDailyArchiveLoading] = useState(false)
@@ -311,6 +326,8 @@ export function GameClient() {
   const {
     turnTimeLeft,
     setTurnTimeLeft,
+    turnDeadlineAt,
+    setTurnDeadlineAt,
     versusRecord,
     setVersusRecord,
     pendingFinalSteal,
@@ -351,6 +368,550 @@ export function GameClient() {
   useEffect(() => {
     versusObjectionRuleRef.current = versusObjectionRule
   }, [versusObjectionRule])
+
+  useEffect(() => {
+    guessesRef.current = guesses
+  }, [guesses])
+
+  const hasActiveOnlineRoom = onlineVersus.room?.status === 'active'
+  const isOnlineRoomActive = hasActiveOnlineRoom && onlineVersus.myRole !== null
+  const currentOnlineRoomPuzzleId = onlineVersus.room?.puzzle_id ?? null
+  const isCurrentOnlineMatch =
+    isOnlineRoomActive &&
+    mode === 'versus' &&
+    currentOnlineRoomPuzzleId !== null &&
+    puzzle?.id === currentOnlineRoomPuzzleId
+  const hasStableOnlineBoardLoaded =
+    mode === 'versus' &&
+    loadedPuzzleMode === 'versus' &&
+    puzzle !== null &&
+    currentOnlineRoomPuzzleId !== null &&
+    puzzle.id === currentOnlineRoomPuzzleId
+  const isWaitingForOnlinePuzzle =
+    Boolean(onlineVersus.room) &&
+    (onlineVersus.phase === 'joining' ||
+      onlineVersus.phase === 'creating' ||
+      (hasActiveOnlineRoom && (!onlineVersus.room?.puzzle_id || !onlineVersus.room?.puzzle_data)))
+
+  const resetOnlineVersusSession = useCallback(() => {
+    onlineVersus.reset()
+    publishedPuzzleRoomIdRef.current = null
+    appliedOnlineEventIdsRef.current = new Set()
+    finishedOnlineRoomIdRef.current = null
+    preparedOnlineRoomIdRef.current = null
+    lastSavedOnlineSnapshotRef.current = null
+    lastAppliedOnlineSnapshotRef.current = null
+    replayedOnlineStealShowdownIdsRef.current = new Set()
+    attemptedInviteJoinCodeRef.current = null
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('join')) {
+      return
+    }
+
+    url.searchParams.delete('join')
+    const query = url.searchParams.toString()
+    window.history.replaceState({}, '', `${url.pathname}${query ? `?${query}` : ''}${url.hash}`)
+  }, [onlineVersus])
+
+  // Open the online lobby when arriving via an invite link (?join=CODE).
+  // isResuming is derived synchronously from localStorage before this effect
+  // runs, so the check is race-free — no async timing required.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const joinCode = params.get('join')?.toUpperCase() ?? null
+    if (
+      joinCode &&
+      joinCode.length === 6 &&
+      !onlineVersus.isResuming &&
+      attemptedInviteJoinCodeRef.current !== joinCode
+    ) {
+      attemptedInviteJoinCodeRef.current = joinCode
+      setShowOnlineLobby(true)
+      onlineVersus.joinRoom(joinCode)
+    }
+  }, [])
+
+  // When the online room becomes active, apply authoritative settings and reset board state
+  useEffect(() => {
+    const { room, myRole } = onlineVersus
+    if (!hasActiveOnlineRoom || !room) return
+
+    // Apply room.settings as the authoritative rules for this match.
+    // This is critical for the guest — their local settings are irrelevant.
+    const { categoryFilters, stealRule, timerOption, disableDraws, objectionRule } = room.settings
+    setVersusCategoryFilters(categoryFilters)
+    setVersusStealRule(stealRule)
+    setVersusTimerOption(timerOption)
+    setVersusDisableDraws(disableDraws)
+    setVersusObjectionRule(objectionRule)
+    versusStealRuleRef.current = stealRule
+    versusTimerOptionRef.current = timerOption
+    versusDisableDrawsRef.current = disableDraws
+    versusObjectionRuleRef.current = objectionRule
+
+    setMode('versus')
+    setShowVersusStartOptions(false)
+    setShowOnlineLobby(false)
+
+    const roomSnapshot = room.state_data
+    const roomSnapshotSignature = roomSnapshot ? JSON.stringify(roomSnapshot) : null
+    const hasMatchingLocalPuzzle =
+      loadedPuzzleMode === 'versus' &&
+      puzzle !== null &&
+      room.puzzle_id !== null &&
+      puzzle.id === room.puzzle_id
+    const isSwitchingToDifferentPuzzle =
+      room.puzzle_id !== null && (puzzle === null || puzzle.id !== room.puzzle_id)
+    const needsFreshRoomPrep =
+      preparedOnlineRoomIdRef.current !== room.id && !hasMatchingLocalPuzzle
+    const shouldHydrateRoomSnapshot =
+      Boolean(roomSnapshot) &&
+      (myRole === 'o' ||
+        needsFreshRoomPrep ||
+        isSwitchingToDifferentPuzzle ||
+        !hasMatchingLocalPuzzle) &&
+      roomSnapshotSignature !== lastAppliedOnlineSnapshotRef.current
+
+    if (needsFreshRoomPrep || isSwitchingToDifferentPuzzle) {
+      setSelectedCell(null)
+      setDetailCell(null)
+      setPendingVersusObjectionReview(null)
+      appliedOnlineEventIdsRef.current = new Set()
+      lastSavedOnlineSnapshotRef.current = roomSnapshotSignature
+      lastAppliedOnlineSnapshotRef.current = null
+      replayedOnlineStealShowdownIdsRef.current = new Set()
+    }
+
+    if (needsFreshRoomPrep && !roomSnapshot) {
+      // Clear stale local versus state only when entering a genuinely new online room.
+      clearGameState('versus')
+      setGuesses(Array.from({ length: 9 }, () => null))
+      setGuessesRemaining(9)
+      setCurrentPlayer('x')
+      setWinner(null)
+      setStealableCell(null)
+      setPendingFinalSteal(null)
+      setLockImpactCell(null)
+      setTurnDeadlineAt(null)
+      setVersusObjectionsUsed({ x: 0, o: 0 })
+      commitVersusEventLog([])
+    }
+
+    preparedOnlineRoomIdRef.current = room.id
+
+    if (room.puzzle_data && room.puzzle_id && (!puzzle || puzzle.id !== room.puzzle_id)) {
+      // Puzzle already exists — load it directly (guest path, or host rejoining).
+      // If the same puzzle is already loaded locally, keep it to avoid a harsh flash.
+      setPuzzle(room.puzzle_data)
+      setLoadedPuzzleMode('versus')
+      setIsLoading(false)
+    }
+
+    if (shouldHydrateRoomSnapshot && roomSnapshot && room.puzzle_id) {
+      const appliedSignature = roomSnapshotSignature ?? JSON.stringify(roomSnapshot)
+      activeTurnTimerKeyRef.current = `${room.puzzle_id}:${roomSnapshot.currentPlayer}`
+      setLoadedPuzzleMode('versus')
+      guessesRef.current = roomSnapshot.guesses
+      setGuesses(roomSnapshot.guesses)
+      setGuessesRemaining(roomSnapshot.guessesRemaining)
+      setCurrentPlayer(roomSnapshot.currentPlayer)
+      setStealableCell(roomSnapshot.stealableCell)
+      setWinner(roomSnapshot.winner)
+      setPendingFinalSteal(roomSnapshot.pendingFinalSteal)
+      setLockImpactCell(null)
+      setVersusObjectionsUsed(roomSnapshot.objectionsUsed)
+      setTurnDeadlineAt(roomSnapshot.turnDeadlineAt)
+      lastAppliedOnlineSnapshotRef.current = appliedSignature
+      lastSavedOnlineSnapshotRef.current = appliedSignature
+      setIsLoading(false)
+      return
+    }
+
+    if (myRole === 'x' && room.puzzle_id === null && needsFreshRoomPrep) {
+      // Host generates the puzzle; after generation, the host should call
+      // onlineVersus.setPuzzle() to push it to the room for the guest to load
+      skipNextVersusAutoLoadRef.current = true
+      loadPuzzle('versus', categoryFilters)
+    }
+  }, [
+    hasActiveOnlineRoom,
+    loadedPuzzleMode,
+    onlineVersus.room?.puzzle_id,
+    onlineVersus.room?.state_data,
+    puzzle,
+  ])
+
+  // Tracks which room ID has already had its puzzle published, preventing double-writes.
+  const publishedPuzzleRoomIdRef = useRef<string | null>(null)
+  // Tracks online event IDs already applied to local state (prevents double-apply on re-renders).
+  const appliedOnlineEventIdsRef = useRef(new Set<number>())
+  // Mirror of guesses state for synchronous reads inside the online event effect.
+  const guessesRef = useRef(guesses)
+
+  // Host-only: once the puzzle is generated and loaded locally, publish it to the room once.
+  // Guards:
+  //   - must be the host (myRole === 'x')
+  //   - room must be active with no puzzle yet (room.puzzle_id null = not yet published)
+  //   - puzzle must be fully loaded locally
+  //   - ref prevents re-firing if this effect re-runs (e.g. strict mode double-invoke)
+  useEffect(() => {
+    const { room, myRole } = onlineVersus
+    if (
+      !isOnlineRoomActive ||
+      !room ||
+      myRole !== 'x' ||
+      room.puzzle_id !== null || // room already has a puzzle — do not overwrite
+      !puzzle ||
+      loadedPuzzleMode !== 'versus' ||
+      publishedPuzzleRoomIdRef.current === room.id // already published for this room
+    ) {
+      return
+    }
+
+    publishedPuzzleRoomIdRef.current = room.id
+
+    onlineVersus.setPuzzle(puzzle.id, puzzle).then((result) => {
+      if (!result.ok) {
+        // Reset the guard so a retry is possible if the publish failed
+        publishedPuzzleRoomIdRef.current = null
+        toast({
+          title: 'Failed to share puzzle',
+          description: result.error ?? undefined,
+          variant: 'destructive',
+        })
+      }
+    })
+  }, [
+    isOnlineRoomActive,
+    onlineVersus.room?.puzzle_id,
+    onlineVersus.myRole,
+    puzzle,
+    loadedPuzzleMode,
+  ])
+
+  useEffect(() => {
+    if (
+      mode !== 'versus' ||
+      !isCurrentOnlineMatch ||
+      !onlineVersus.room ||
+      !puzzle ||
+      loadedPuzzleMode !== 'versus' ||
+      onlineVersus.room.puzzle_id !== puzzle.id
+    ) {
+      return
+    }
+
+    const snapshot: OnlineVersusSnapshot = {
+      puzzleId: puzzle.id,
+      guesses,
+      guessesRemaining,
+      currentPlayer,
+      winner,
+      stealableCell,
+      pendingFinalSteal,
+      objectionsUsed: versusObjectionsUsed,
+      turnDeadlineAt,
+      turnDurationSeconds: typeof versusTimerOption === 'number' ? versusTimerOption : null,
+    }
+
+    if (onlineVersus.myRole !== 'x') {
+      return
+    }
+
+    const signature = JSON.stringify(snapshot)
+    if (signature === lastSavedOnlineSnapshotRef.current) {
+      return
+    }
+
+    lastSavedOnlineSnapshotRef.current = signature
+    lastAppliedOnlineSnapshotRef.current = signature
+
+    void onlineVersus.saveSnapshot(snapshot).then((result) => {
+      if (!result.ok) {
+        lastSavedOnlineSnapshotRef.current = null
+        lastAppliedOnlineSnapshotRef.current = null
+        console.error('Failed to save online versus snapshot:', result.error)
+      }
+    })
+  }, [
+    currentPlayer,
+    guesses,
+    guessesRemaining,
+    loadedPuzzleMode,
+    mode,
+    isCurrentOnlineMatch,
+    onlineVersus.myRole,
+    onlineVersus.room,
+    onlineVersus.saveSnapshot,
+    pendingFinalSteal,
+    puzzle,
+    stealableCell,
+    turnDeadlineAt,
+    versusObjectionsUsed,
+    versusTimerOption,
+    winner,
+  ])
+
+  // ── Apply incoming online opponent events to local board state ──────────────
+  // Runs when onlineVersus.events grows and replays the authoritative room event log.
+  // We rely on appliedOnlineEventIdsRef for dedupe rather than skipping "own" events,
+  // because after a refresh/rejoin the local board is rebuilt from history.
+  // Uses refs for game settings (versusStealRuleRef, versusDisableDrawsRef) to
+  // avoid stale closures without triggering re-runs on every render.
+  useEffect(() => {
+    if (!isCurrentOnlineMatch || !onlineVersus.myRole) return
+
+    const myRole = onlineVersus.myRole
+    const shouldProcessOnlineEvents =
+      myRole === 'x' || onlineVersus.isHydratingHistory || !onlineVersus.room?.state_data
+
+    if (!shouldProcessOnlineEvents) {
+      return
+    }
+
+    for (const event of onlineVersus.events) {
+      // Live events from this client are already applied locally. We only
+      // replay "own" events while hydrating history after a join/reload.
+      if (!onlineVersus.isHydratingHistory && event.player === myRole) {
+        appliedOnlineEventIdsRef.current.add(event.id)
+        continue
+      }
+
+      // Skip already-processed events
+      if (appliedOnlineEventIdsRef.current.has(event.id)) continue
+      appliedOnlineEventIdsRef.current.add(event.id)
+
+      const payload = event.payload as Record<string, unknown>
+      const cellIndex = payload.cellIndex as number
+      const steals = versusStealRuleRef.current !== 'off'
+      const noDraws = versusDisableDrawsRef.current
+
+      // Helper: apply a placement resolution to local state (called after updating guesses)
+      const applyResolution = (
+        resolution: ReturnType<typeof getVersusPlacementResolution>,
+        newStealable: number | null
+      ) => {
+        if (resolution.kind === 'winner' || resolution.kind === 'claims-win') {
+          setWinner(resolution.winner)
+          setStealableCell(null)
+        } else if (resolution.kind === 'draw') {
+          setWinner('draw')
+          setStealableCell(null)
+        } else if (resolution.kind === 'final-steal') {
+          setPendingFinalSteal({ defender: resolution.defender, cellIndex: resolution.cellIndex })
+          setStealableCell(null)
+          setCurrentPlayer(resolution.nextPlayer)
+        } else {
+          setStealableCell(newStealable)
+          setCurrentPlayer(resolution.nextPlayer)
+        }
+      }
+
+      if (event.type === 'claim') {
+        const guess = { ...(payload.guess as CellGuess), owner: event.player }
+        const next = guessesRef.current.map((g, i) => (i === cellIndex ? guess : g))
+        guessesRef.current = next
+        setGuesses(next)
+        const resolution = getVersusPlacementResolution({
+          newGuesses: next,
+          currentPlayer: event.player,
+          selectedCell: cellIndex,
+          isVersusSteal: false,
+          stealsEnabled: steals,
+          disableDraws: noDraws,
+        })
+        applyResolution(resolution, steals ? cellIndex : null)
+      } else if (event.type === 'steal') {
+        const attackingGuess = { ...(payload.attackingGuess as CellGuess), owner: event.player }
+        const successful = payload.successful as boolean
+        const defendingGuess = guessesRef.current[cellIndex]
+        const hasShowdownScores =
+          typeof defendingGuess?.stealRating === 'number' &&
+          typeof attackingGuess.stealRating === 'number'
+        const suppressReplayEffects = onlineVersus.isHydratingHistory
+        const showdownDuration =
+          !suppressReplayEffects && animationsEnabled && hasShowdownScores
+            ? STEAL_SHOWDOWN_DURATION_MS
+            : 0
+
+        if (hasShowdownScores && !suppressReplayEffects) {
+          setActiveStealShowdown({
+            burstId: Date.now(),
+            durationMs: showdownDuration,
+            defenderName: defendingGuess?.gameName ?? 'Defender',
+            defenderScore: defendingGuess!.stealRating!,
+            attackerName: attackingGuess.gameName,
+            attackerScore: attackingGuess.stealRating!,
+            rule: versusStealRuleRef.current === 'higher' ? 'higher' : 'lower',
+            successful,
+          })
+        }
+
+        if (successful) {
+          const nextGuess = hasShowdownScores
+            ? {
+                ...attackingGuess,
+                showdownScoreRevealed: true,
+              }
+            : attackingGuess
+          const next = guessesRef.current.map((g, i) => (i === cellIndex ? nextGuess : g))
+          guessesRef.current = next
+          setGuesses(next)
+          const resolution = getVersusPlacementResolution({
+            newGuesses: next,
+            currentPlayer: event.player,
+            selectedCell: cellIndex,
+            isVersusSteal: true,
+            stealsEnabled: steals,
+            disableDraws: noDraws,
+          })
+          applyResolution(resolution, steals ? cellIndex : null)
+        } else {
+          const applyFailedSteal = () => {
+            setPendingFinalSteal(null)
+            setStealableCell(null)
+            setCurrentPlayer(myRole)
+          }
+
+          if (showdownDuration > 0) {
+            window.setTimeout(applyFailedSteal, showdownDuration)
+          } else {
+            applyFailedSteal()
+          }
+        }
+      } else if (event.type === 'miss') {
+        const nextGuessesRemaining =
+          typeof payload.guessesRemaining === 'number'
+            ? payload.guessesRemaining
+            : Math.max(0, guessesRemaining - 1)
+        setGuessesRemaining(nextGuessesRemaining)
+        setPendingFinalSteal(null)
+        setStealableCell(null)
+        setLockImpactCell(null)
+
+        if (payload.resolutionKind === 'defender-wins') {
+          const defender = payload.defender as TicTacToePlayer
+          if (defender === 'x' || defender === 'o') {
+            setWinner(defender)
+          }
+        } else {
+          const nextPlayer = payload.nextPlayer as TicTacToePlayer
+          if (nextPlayer === 'x' || nextPlayer === 'o') {
+            setCurrentPlayer(nextPlayer)
+          }
+        }
+      } else if (event.type === 'objection') {
+        const verdict = payload.verdict as 'sustained' | 'overruled'
+        const updatedGuess =
+          verdict === 'sustained'
+            ? ({ ...(payload.updatedGuess as CellGuess), owner: event.player } as CellGuess)
+            : null
+        setVersusObjectionsUsed((current) => ({
+          ...current,
+          [event.player]: current[event.player] + 1,
+        }))
+
+        if (verdict === 'sustained') {
+          const next = guessesRef.current.map((g, i) => (i === cellIndex ? updatedGuess : g))
+          guessesRef.current = next
+          setGuesses(next)
+          const resolution = getVersusPlacementResolution({
+            newGuesses: next,
+            currentPlayer: event.player,
+            selectedCell: cellIndex,
+            isVersusSteal: false,
+            stealsEnabled: steals,
+            disableDraws: noDraws,
+          })
+          applyResolution(resolution, steals ? cellIndex : null)
+        } else {
+          // Overruled: turn returns to me
+          setCurrentPlayer(myRole)
+        }
+      }
+    }
+  }, [
+    onlineVersus.events,
+    onlineVersus.isHydratingHistory,
+    onlineVersus.myRole,
+    onlineVersus.room?.state_data,
+    isCurrentOnlineMatch,
+  ])
+
+  useEffect(() => {
+    if (
+      !isCurrentOnlineMatch ||
+      !onlineVersus.myRole ||
+      onlineVersus.myRole !== 'o' ||
+      onlineVersus.isHydratingHistory ||
+      !onlineVersus.room?.state_data
+    ) {
+      return
+    }
+
+    for (const event of onlineVersus.events) {
+      if (event.type !== 'steal') {
+        continue
+      }
+
+      if (event.player === onlineVersus.myRole) {
+        continue
+      }
+
+      if (replayedOnlineStealShowdownIdsRef.current.has(event.id)) {
+        continue
+      }
+
+      replayedOnlineStealShowdownIdsRef.current.add(event.id)
+
+      const payload = event.payload as Record<string, unknown>
+      if (!payload.hadShowdownScores || !animationsEnabled) {
+        continue
+      }
+
+      const defenderName =
+        typeof payload.defendingGameName === 'string' ? payload.defendingGameName : null
+      const defenderScore =
+        typeof payload.defendingScore === 'number' ? payload.defendingScore : null
+      const attackerName =
+        typeof payload.attackingGameName === 'string' ? payload.attackingGameName : null
+      const attackerScore =
+        typeof payload.attackingScore === 'number' ? payload.attackingScore : null
+
+      if (
+        defenderName === null ||
+        defenderScore === null ||
+        attackerName === null ||
+        attackerScore === null
+      ) {
+        continue
+      }
+
+      setActiveStealShowdown({
+        burstId: event.id,
+        durationMs: STEAL_SHOWDOWN_DURATION_MS,
+        defenderName,
+        defenderScore,
+        attackerName,
+        attackerScore,
+        rule: versusStealRuleRef.current === 'higher' ? 'higher' : 'lower',
+        successful: Boolean(payload.successful),
+      })
+    }
+  }, [
+    animationsEnabled,
+    isCurrentOnlineMatch,
+    onlineVersus.events,
+    onlineVersus.isHydratingHistory,
+    onlineVersus.myRole,
+    onlineVersus.room?.state_data,
+  ])
 
   const commitVersusEventLog = useCallback((nextEventLog: VersusEventRecord[]) => {
     versusEventLogRef.current = nextEventLog
@@ -444,6 +1005,8 @@ export function GameClient() {
         guesses,
         guessesRemaining,
         isComplete,
+        selectedCell,
+        searchQuery: selectedCell !== null ? searchQueryDraft : null,
         currentPlayer,
         stealableCell,
         winner,
@@ -456,6 +1019,7 @@ export function GameClient() {
         versusObjectionsUsed,
         versusEventLog: versusEventLogRef.current,
         turnTimeLeft,
+        turnDeadlineAt,
         ...overrides,
       }
     },
@@ -466,7 +1030,10 @@ export function GameClient() {
       isComplete,
       pendingFinalSteal,
       puzzle,
+      searchQueryDraft,
+      selectedCell,
       stealableCell,
+      turnDeadlineAt,
       turnTimeLeft,
       versusCategoryFilters,
       versusDisableDraws,
@@ -632,6 +1199,7 @@ export function GameClient() {
     }
 
     if (winner === 'draw') {
+      nextVersusStartingPlayerRef.current = null
       return
     }
 
@@ -641,6 +1209,8 @@ export function GameClient() {
     }
 
     recordedVersusWinnerKeyRef.current = winnerKey
+    // Loser becomes O next game (winner stays X)
+    nextVersusStartingPlayerRef.current = winner
     setVersusRecord((current) => {
       const nextRecord =
         winner === 'x'
@@ -705,6 +1275,79 @@ export function GameClient() {
     setShowVersusWinnerBanner(winner !== null)
     setShowVersusSummaryDetails(false)
   }, [winner])
+
+  useEffect(() => {
+    if (
+      mode !== 'versus' ||
+      !isCurrentOnlineMatch ||
+      !onlineVersus.room ||
+      onlineVersus.myRole !== 'x' ||
+      !puzzle ||
+      winner === null ||
+      finishedOnlineRoomIdRef.current === onlineVersus.room.id
+    ) {
+      return
+    }
+
+    finishedOnlineRoomIdRef.current = onlineVersus.room.id
+
+    const finalSnapshot: OnlineVersusSnapshot = {
+      puzzleId: puzzle.id,
+      guesses,
+      guessesRemaining,
+      currentPlayer,
+      winner,
+      stealableCell,
+      pendingFinalSteal,
+      objectionsUsed: versusObjectionsUsed,
+      turnDeadlineAt,
+      turnDurationSeconds: typeof versusTimerOption === 'number' ? versusTimerOption : null,
+    }
+
+    const finalSignature = JSON.stringify(finalSnapshot)
+    lastSavedOnlineSnapshotRef.current = finalSignature
+    lastAppliedOnlineSnapshotRef.current = finalSignature
+
+    void onlineVersus.saveSnapshot(finalSnapshot).then((snapshotResult) => {
+      if (!snapshotResult.ok) {
+        finishedOnlineRoomIdRef.current = null
+        lastSavedOnlineSnapshotRef.current = null
+        lastAppliedOnlineSnapshotRef.current = null
+        toast({
+          title: 'Failed to save final match state',
+          description: snapshotResult.error ?? undefined,
+          variant: 'destructive',
+        })
+        return
+      }
+
+      void onlineVersus.markFinished().then((result) => {
+        if (!result.ok) {
+          finishedOnlineRoomIdRef.current = null
+          toast({
+            title: 'Failed to finish online match',
+            description: result.error ?? undefined,
+            variant: 'destructive',
+          })
+        }
+      })
+    })
+  }, [
+    currentPlayer,
+    guesses,
+    guessesRemaining,
+    isCurrentOnlineMatch,
+    mode,
+    onlineVersus,
+    pendingFinalSteal,
+    puzzle,
+    stealableCell,
+    toast,
+    turnDeadlineAt,
+    versusObjectionsUsed,
+    versusTimerOption,
+    winner,
+  ])
 
   useEffect(() => {
     return () => {
@@ -812,10 +1455,14 @@ export function GameClient() {
         return
       }
 
+      const nextGuessesRemaining = Math.max(0, guessesRemaining - 1)
+      setGuessesRemaining(nextGuessesRemaining)
+
       if (invalidGuessResolution.kind === 'defender-wins') {
         setWinner(invalidGuessResolution.defender)
         setPendingFinalSteal(null)
         const persistedState = buildPersistedVersusState({
+          guessesRemaining: nextGuessesRemaining,
           isComplete: true,
           stealableCell: null,
           winner: invalidGuessResolution.defender,
@@ -828,6 +1475,7 @@ export function GameClient() {
       } else {
         setCurrentPlayer(invalidGuessResolution.nextPlayer)
         const persistedState = buildPersistedVersusState({
+          guessesRemaining: nextGuessesRemaining,
           currentPlayer: invalidGuessResolution.nextPlayer,
           stealableCell: null,
           versusObjectionsUsed: nextVersusObjectionsUsed,
@@ -835,6 +1483,22 @@ export function GameClient() {
         if (persistedState) {
           saveGameState(persistedState, mode)
         }
+      }
+
+      if (isCurrentOnlineMatch) {
+        void onlineVersus.sendEvent('miss', {
+          cellIndex: pendingVersusObjectionReview?.cellIndex ?? selectedCell,
+          guessesRemaining: nextGuessesRemaining,
+          resolutionKind: invalidGuessResolution.kind,
+          nextPlayer:
+            invalidGuessResolution.kind === 'next-player'
+              ? invalidGuessResolution.nextPlayer
+              : undefined,
+          defender:
+            invalidGuessResolution.kind === 'defender-wins'
+              ? invalidGuessResolution.defender
+              : undefined,
+        })
       }
 
       toast({
@@ -851,8 +1515,11 @@ export function GameClient() {
       guessesRemaining,
       isComplete,
       mode,
+      onlineVersus,
       pendingFinalSteal,
+      pendingVersusObjectionReview,
       puzzle,
+      selectedCell,
       toast,
       turnTimeLeft,
       buildPersistedVersusState,
@@ -980,6 +1647,15 @@ export function GameClient() {
           verdict: payload.verdict,
           onSteal: pendingVersusObjectionReview.isVersusSteal,
         })
+
+        if (isCurrentOnlineMatch) {
+          void onlineVersus.sendEvent('objection', {
+            cellIndex: activeDetailCell,
+            verdict: payload.verdict,
+            updatedGuess: nextGuess,
+            isSteal: pendingVersusObjectionReview.isVersusSteal,
+          })
+        }
 
         if (payload.verdict === 'sustained') {
           const objectionCellIndex = activeDetailCell
@@ -1306,6 +1982,7 @@ export function GameClient() {
                   versusObjectionRule,
                   versusObjectionsUsed: nextVersusObjectionsUsed,
                   turnTimeLeft,
+                  turnDeadlineAt,
                 }
               : {}),
           },
@@ -1369,6 +2046,7 @@ export function GameClient() {
 
   useVersusTurnTimer({
     isVersusMode,
+    isOnlineMatch: isCurrentOnlineMatch,
     isLoading,
     loadedPuzzleMode,
     puzzleId: puzzle?.id ?? null,
@@ -1376,11 +2054,13 @@ export function GameClient() {
     winner,
     versusTimerOption,
     turnTimeLeft,
+    turnDeadlineAt,
     pendingFinalSteal,
     animationsEnabled,
     audioEnabled: versusAudioEnabled,
     activeTurnTimerKeyRef,
     setTurnTimeLeft,
+    setTurnDeadlineAt,
     onTurnExpired: (nextPlayer) => {
       setSelectedCell(null)
       setCurrentPlayer(nextPlayer)
@@ -1433,6 +2113,8 @@ export function GameClient() {
         }
         setGuesses(savedState.guesses as (CellGuess | null)[])
         setGuessesRemaining(savedState.guessesRemaining)
+        setSelectedCell(savedState.selectedCell ?? null)
+        setSearchQueryDraft(savedState.searchQuery ?? '')
         setCurrentPlayer(savedState.currentPlayer ?? 'x')
         setStealableCell(savedState.stealableCell ?? null)
         setWinner(savedState.winner ?? null)
@@ -1448,8 +2130,8 @@ export function GameClient() {
         })
         commitVersusEventLog(savedState.versusEventLog ?? [])
         setTurnTimeLeft(savedState.turnTimeLeft ?? null)
+        setTurnDeadlineAt(savedState.turnDeadlineAt ?? null)
         setLockImpactCell(null)
-        setSelectedCell(null)
         setShowResults(savedState.isComplete)
         setDetailCell(null)
         setIsLoading(false)
@@ -1462,7 +2144,15 @@ export function GameClient() {
       recordedVersusWinnerKeyRef.current = null
       setGuesses(Array(9).fill(null))
       setGuessesRemaining(gameMode === 'versus' ? MAX_GUESSES : MAX_GUESSES)
-      setCurrentPlayer('x')
+      setTurnDeadlineAt(null)
+      if (gameMode === 'versus') {
+        const startingPlayer =
+          nextVersusStartingPlayerRef.current ?? (Math.random() < 0.5 ? 'x' : 'o')
+        nextVersusStartingPlayerRef.current = null
+        setCurrentPlayer(startingPlayer)
+      } else {
+        setCurrentPlayer('x')
+      }
       setStealableCell(null)
       setWinner(null)
       setPendingFinalSteal(null)
@@ -1474,6 +2164,7 @@ export function GameClient() {
       setPendingVersusObjectionReview(null)
       setLockImpactCell(null)
       setSelectedCell(null)
+      setSearchQueryDraft('')
       setShowResults(false)
       setDetailCell(null)
 
@@ -1685,6 +2376,10 @@ export function GameClient() {
                     versusEventLog: [],
                     turnTimeLeft:
                       versusTimerOptionRef.current === 'none' ? null : versusTimerOptionRef.current,
+                    turnDeadlineAt:
+                      typeof versusTimerOptionRef.current === 'number'
+                        ? new Date(Date.now() + versusTimerOptionRef.current * 1000).toISOString()
+                        : null,
                   }
                 : {}),
             },
@@ -1695,6 +2390,7 @@ export function GameClient() {
         if (savedState && savedState.puzzleId === puzzleData.id) {
           setGuesses(savedState.guesses as (CellGuess | null)[])
           setGuessesRemaining(savedState.guessesRemaining)
+          setTurnDeadlineAt(savedState.turnDeadlineAt ?? null)
           if (savedState.isComplete) setShowResults(true)
         }
       } catch (error) {
@@ -1786,6 +2482,30 @@ export function GameClient() {
   ])
 
   useEffect(() => {
+    const isOnlineResumeInFlight =
+      onlineVersus.isResuming ||
+      onlineVersus.phase === 'joining' ||
+      onlineVersus.phase === 'creating'
+
+    const hasInviteJoinCode =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('join')?.length === 6
+
+    if (hasStableOnlineBoardLoaded) {
+      setIsLoading(false)
+      return
+    }
+
+    if (isOnlineResumeInFlight || (hasInviteJoinCode && onlineVersus.phase === 'idle')) {
+      setIsLoading(true)
+      return
+    }
+
+    if (isWaitingForOnlinePuzzle) {
+      setIsLoading(true)
+      return
+    }
+
     if (mode === 'practice' && showPracticeStartOptions) {
       setIsLoading(false)
       return
@@ -1824,6 +2544,10 @@ export function GameClient() {
     loadPuzzle,
     loadedPuzzleMode,
     mode,
+    hasStableOnlineBoardLoaded,
+    onlineVersus.isResuming,
+    onlineVersus.phase,
+    isWaitingForOnlinePuzzle,
     puzzle,
     showPracticeStartOptions,
     showVersusStartOptions,
@@ -1862,6 +2586,16 @@ export function GameClient() {
         const hasSavedVersusState = Boolean(loadGameState('versus')?.puzzle)
 
         if (!hasSavedVersusState) {
+          setVersusCategoryFilters({})
+          versusStealRuleRef.current = 'lower'
+          versusTimerOptionRef.current = 300
+          versusDisableDrawsRef.current = true
+          versusObjectionRuleRef.current = 'one'
+          setVersusStealRule('lower')
+          setVersusTimerOption(300)
+          setVersusDisableDraws(true)
+          setVersusObjectionRule('one')
+          setVersusObjectionsUsed({ x: 0, o: 0 })
           setLoadedPuzzleMode(null)
           setPuzzle(null)
           setGuesses(Array(9).fill(null))
@@ -1913,6 +2647,7 @@ export function GameClient() {
     disableDraws: boolean,
     objectionRule: VersusObjectionRule
   ) => {
+    resetOnlineVersusSession()
     setVersusCategoryFilters(filters)
     setVersusSetupError(null)
     versusStealRuleRef.current = stealRule
@@ -1980,6 +2715,8 @@ export function GameClient() {
 
     if (mode === 'versus') {
       if (isComplete) return
+      // In online matches, only the active player may interact
+      if (isCurrentOnlineMatch && onlineVersus.myRole !== currentPlayer) return
       if (pendingFinalSteal && index !== pendingFinalSteal.cellIndex) {
         return
       }
@@ -1996,6 +2733,7 @@ export function GameClient() {
       }
 
       setSelectedCell(index)
+      setSearchQueryDraft('')
       return
     }
 
@@ -2006,11 +2744,14 @@ export function GameClient() {
     }
     if (isComplete) return
     setSelectedCell(index)
+    setSearchQueryDraft('')
   }
 
   // Handle game selection
   const handleGameSelect = async (game: Game) => {
     if (selectedCell === null || !puzzle) return
+    // In online matches, only the active player may submit
+    if (mode === 'versus' && isCurrentOnlineMatch && onlineVersus.myRole !== currentPlayer) return
 
     const existingGuess = guesses[selectedCell]
     const isVersusSteal =
@@ -2148,6 +2889,19 @@ export function GameClient() {
           defendingScore: existingGuess.stealRating ?? null,
         })
 
+        if (isCurrentOnlineMatch) {
+          void onlineVersus.sendEvent('steal', {
+            cellIndex: selectedCell,
+            attackingGuess: newGuess,
+            successful: outcome.successful,
+            hadShowdownScores: outcome.hasShowdownScores,
+            attackingGameName: newGuess.gameName,
+            attackingScore: newGuess.stealRating ?? null,
+            defendingGameName: existingGuess.gameName,
+            defendingScore: existingGuess.stealRating ?? null,
+          })
+        }
+
         if (!outcome.successful) {
           const failureDescription = buildStealFailureDescription({
             pendingFinalSteal,
@@ -2231,6 +2985,7 @@ export function GameClient() {
       const newGuessesRemaining = postGuessState.nextGuessesRemaining
       setGuessesRemaining(newGuessesRemaining)
       setSelectedCell(null)
+      setSearchQueryDraft('')
 
       if (postGuessState.persistedState) {
         if (mode === 'versus') {
@@ -2252,6 +3007,12 @@ export function GameClient() {
             gameName: newGuess.gameName,
             viaObjection: false,
           })
+          if (isCurrentOnlineMatch) {
+            void onlineVersus.sendEvent('claim', {
+              cellIndex: selectedCell,
+              guess: newGuess,
+            })
+          }
         }
 
         setPendingFinalSteal(null)
@@ -2356,6 +3117,116 @@ export function GameClient() {
     }
   }
 
+  const handleEndOnlineMatch = useCallback(() => {
+    activePuzzleLoadControllerRef.current?.abort()
+
+    void (async () => {
+      if (onlineVersus.room && onlineVersus.phase !== 'idle' && onlineVersus.phase !== 'error') {
+        const result = await onlineVersus.markFinished()
+        if (!result.ok) {
+          toast({
+            title: 'Failed to end online match',
+            description: result.error ?? undefined,
+            variant: 'destructive',
+          })
+          return
+        }
+      }
+
+      clearGameState('versus')
+      resetOnlineVersusSession()
+      setLoadedPuzzleMode(null)
+      setPuzzle(null)
+      setGuesses(Array(9).fill(null))
+      setGuessesRemaining(MAX_GUESSES)
+      setCurrentPlayer('x')
+      setStealableCell(null)
+      setWinner(null)
+      setPendingFinalSteal(null)
+      setLockImpactCell(null)
+      setSelectedCell(null)
+      setSearchQueryDraft('')
+      setDetailCell(null)
+      setShowResults(false)
+      setShowVersusSetup(false)
+      setShowOnlineLobby(false)
+      setShowVersusStartOptions(true)
+      setIsLoading(false)
+      setTurnTimeLeft(null)
+      setTurnDeadlineAt(null)
+      setPendingVersusObjectionReview(null)
+      setVersusObjectionsUsed({ x: 0, o: 0 })
+      commitVersusEventLog([])
+    })()
+  }, [onlineVersus, resetOnlineVersusSession, toast, commitVersusEventLog])
+
+  const handleStartFreshOnlineMatch = useCallback(() => {
+    activePuzzleLoadControllerRef.current?.abort()
+
+    void (async () => {
+      if (
+        onlineVersus.room &&
+        onlineVersus.phase !== 'idle' &&
+        onlineVersus.phase !== 'error' &&
+        onlineVersus.phase !== 'finished'
+      ) {
+        const result = await onlineVersus.markFinished()
+        if (!result.ok) {
+          toast({
+            title: 'Failed to start a fresh online match',
+            description: result.error ?? undefined,
+            variant: 'destructive',
+          })
+          return
+        }
+      }
+
+      clearGameState('versus')
+      resetOnlineVersusSession()
+      setLoadedPuzzleMode(null)
+      setPuzzle(null)
+      setGuesses(Array(9).fill(null))
+      setGuessesRemaining(MAX_GUESSES)
+      setCurrentPlayer('x')
+      setStealableCell(null)
+      setWinner(null)
+      setPendingFinalSteal(null)
+      setLockImpactCell(null)
+      setSelectedCell(null)
+      setSearchQueryDraft('')
+      setDetailCell(null)
+      setShowResults(false)
+      setShowVersusSetup(false)
+      setShowVersusStartOptions(false)
+      setShowVersusWinnerBanner(false)
+      setShowVersusSummaryDetails(false)
+      setShowOnlineLobby(true)
+      setIsLoading(false)
+      setTurnTimeLeft(null)
+      setTurnDeadlineAt(null)
+      setPendingVersusObjectionReview(null)
+      setVersusObjectionsUsed({ x: 0, o: 0 })
+      commitVersusEventLog([])
+      onlineVersus.createRoom({
+        categoryFilters: versusCategoryFilters,
+        stealRule: versusStealRule,
+        timerOption: versusTimerOption,
+        disableDraws: versusDisableDraws,
+        objectionRule: versusObjectionRule,
+      })
+    })()
+  }, [
+    commitVersusEventLog,
+    onlineVersus,
+    resetOnlineVersusSession,
+    toast,
+    versusCategoryFilters,
+    versusDisableDraws,
+    versusObjectionRule,
+    versusStealRule,
+    versusTimerOption,
+  ])
+
   // Handle starting a fresh non-daily board
   const handleNewGame = () => {
     activePuzzleLoadControllerRef.current?.abort()
@@ -2367,11 +3238,63 @@ export function GameClient() {
       return
     }
 
+    if (onlineVersus.myRole) {
+      handleStartFreshOnlineMatch()
+      return
+    }
+
+    if (!isCurrentOnlineMatch) {
+      resetOnlineVersusSession()
+    }
+
     clearGameState('versus')
     setShowVersusStartOptions(false)
     skipNextVersusAutoLoadRef.current = true
     loadPuzzle('versus', versusCategoryFilters)
   }
+
+  const handleStartOnlineMatch = useCallback(() => {
+    activePuzzleLoadControllerRef.current?.abort()
+    clearGameState('versus')
+    resetOnlineVersusSession()
+    setLoadedPuzzleMode(null)
+    setPuzzle(null)
+    setGuesses(Array(9).fill(null))
+    setGuessesRemaining(MAX_GUESSES)
+    setCurrentPlayer('x')
+    setStealableCell(null)
+    setWinner(null)
+    setPendingFinalSteal(null)
+    setLockImpactCell(null)
+    setSelectedCell(null)
+    setSearchQueryDraft('')
+    setDetailCell(null)
+    setShowResults(false)
+    setShowVersusSetup(false)
+    setShowVersusStartOptions(false)
+    setTurnTimeLeft(null)
+    setTurnDeadlineAt(null)
+    setPendingVersusObjectionReview(null)
+    setVersusObjectionsUsed({ x: 0, o: 0 })
+    commitVersusEventLog([])
+    onlineVersus.createRoom({
+      categoryFilters: versusCategoryFilters,
+      stealRule: versusStealRule,
+      timerOption: versusTimerOption,
+      disableDraws: versusDisableDraws,
+      objectionRule: versusObjectionRule,
+    })
+    setShowOnlineLobby(true)
+  }, [
+    commitVersusEventLog,
+    onlineVersus,
+    resetOnlineVersusSession,
+    versusCategoryFilters,
+    versusDisableDraws,
+    versusObjectionRule,
+    versusStealRule,
+    versusTimerOption,
+  ])
 
   // Get categories for selected cell
   const { row: selectedRowCategory, col: selectedColCategory } = getCategoriesForCell(
@@ -2400,6 +3323,93 @@ export function GameClient() {
       )
     : []
 
+  // Single canonical mount — Dialog is portaled so it works regardless of which branch renders
+  const onlineLobbyEl = (
+    <OnlineVersusLobby
+      isOpen={showOnlineLobby}
+      phase={onlineVersus.phase}
+      room={onlineVersus.room}
+      myRole={onlineVersus.myRole}
+      errorMessage={onlineVersus.errorMessage}
+      onCreateRoom={() => {
+        onlineVersus.createRoom({
+          categoryFilters: versusCategoryFilters,
+          stealRule: versusStealRule,
+          timerOption: versusTimerOption,
+          disableDraws: versusDisableDraws,
+          objectionRule: versusObjectionRule,
+        })
+      }}
+      onJoinRoom={onlineVersus.joinRoom}
+      onDismiss={() => {
+        setShowOnlineLobby(false)
+        if (onlineVersus.phase === 'idle' || onlineVersus.phase === 'error') {
+          resetOnlineVersusSession()
+        }
+      }}
+    />
+  )
+
+  const onlineLoadingCopy = (() => {
+    if (onlineVersus.phase === 'joining') {
+      return {
+        title: 'Joining Match',
+        description: 'Connecting you to the room and restoring the shared board state.',
+        showProgress: false,
+        showAttempts: false,
+      }
+    }
+
+    if (onlineVersus.phase === 'creating') {
+      return {
+        title: 'Creating Match',
+        description: 'Setting up the room so you can share the invite.',
+        showProgress: false,
+        showAttempts: false,
+      }
+    }
+
+    if (hasActiveOnlineRoom && (!onlineVersus.room?.puzzle_id || !onlineVersus.room?.puzzle_data)) {
+      return {
+        title: 'Waiting For Board',
+        description:
+          onlineVersus.myRole === 'x'
+            ? 'Preparing the shared board for your online match.'
+            : 'Waiting for the host to finish preparing the shared board.',
+        showProgress: onlineVersus.myRole === 'x',
+        showAttempts: onlineVersus.myRole === 'x',
+      }
+    }
+
+    return null
+  })()
+  const showOnlineSyncBanner =
+    isVersusMode &&
+    onlineVersus.myRole !== null &&
+    puzzle !== null &&
+    hasStableOnlineBoardLoaded &&
+    (onlineVersus.isResuming ||
+      onlineVersus.phase === 'joining' ||
+      onlineVersus.phase === 'creating' ||
+      isWaitingForOnlinePuzzle)
+  const onlineSyncBannerText = (() => {
+    if (onlineVersus.phase === 'joining' || onlineVersus.isResuming) {
+      return 'Reconnecting to your online match...'
+    }
+
+    if (onlineVersus.phase === 'creating') {
+      return 'Finishing room setup...'
+    }
+
+    if (hasActiveOnlineRoom && (!onlineVersus.room?.puzzle_id || !onlineVersus.room?.puzzle_data)) {
+      return onlineVersus.myRole === 'x'
+        ? 'Preparing the shared board...'
+        : 'Waiting for the host to finish preparing the board...'
+    }
+
+    return 'Syncing match state...'
+  })()
+
   if (isLoading) {
     return (
       <PuzzleLoadingScreen
@@ -2407,6 +3417,10 @@ export function GameClient() {
         loadingStage={loadingStage}
         loadingProgress={loadingProgress}
         loadingAttempts={loadingAttempts}
+        titleOverride={onlineLoadingCopy?.title}
+        descriptionOverride={onlineLoadingCopy?.description}
+        showProgress={onlineLoadingCopy?.showProgress}
+        showAttempts={onlineLoadingCopy?.showAttempts}
       />
     )
   }
@@ -2417,67 +3431,96 @@ export function GameClient() {
       (mode === 'practice' && showPracticeStartOptions)
     ) {
       return (
-        <ModeStartScreen
-          mode={mode}
-          guessesRemaining={guessesRemaining}
-          score={score}
-          currentPlayer={currentPlayer}
-          winner={winner}
-          versusRecord={versusRecord}
-          versusObjectionsUsed={versusObjectionsUsed}
-          isHowToPlayOpen={showHowToPlay}
-          isAchievementsOpen={showAchievements}
-          hasActiveCustomSetup={hasActiveCustomSetup}
-          minimumCellOptions={resolvedMinimumCellOptions}
-          dailyResetLabel={dailyResetLabel}
-          showPracticeSetup={showPracticeSetup}
-          showVersusSetup={showVersusSetup}
-          practiceSetupError={practiceSetupError}
-          versusSetupError={versusSetupError}
-          practiceCategoryFilters={practiceCategoryFilters}
-          versusCategoryFilters={versusCategoryFilters}
-          versusStealRule={versusStealRule}
-          versusTimerOption={versusTimerOption}
-          versusDisableDraws={versusDisableDraws}
-          versusObjectionRule={versusObjectionRule}
-          onModeChange={handleModeChange}
-          onAchievementsOpen={() => setShowAchievements(true)}
-          onAchievementsClose={() => setShowAchievements(false)}
-          onHowToPlayOpen={() => setShowHowToPlay(true)}
-          onHowToPlayClose={() => setShowHowToPlay(false)}
-          onOpenPracticeSetup={() => setShowPracticeSetup(true)}
-          onOpenVersusSetup={() => setShowVersusSetup(true)}
-          onClosePracticeSetup={() => setShowPracticeSetup(false)}
-          onCloseVersusSetup={() => setShowVersusSetup(false)}
-          onStartStandard={() => {
-            if (mode === 'practice') {
-              setPracticeCategoryFilters({})
-              setPracticeSetupError(null)
-              setShowPracticeStartOptions(false)
-              skipNextPracticeAutoLoadRef.current = true
-              clearGameState('practice')
-              loadPuzzle('practice', {})
-              return
+        <>
+          <ModeStartScreen
+            mode={mode}
+            guessesRemaining={guessesRemaining}
+            score={score}
+            currentPlayer={currentPlayer}
+            winner={winner}
+            versusRecord={versusRecord}
+            versusObjectionsUsed={versusObjectionsUsed}
+            isHowToPlayOpen={showHowToPlay}
+            isAchievementsOpen={showAchievements}
+            hasActiveCustomSetup={hasActiveCustomSetup}
+            minimumCellOptions={resolvedMinimumCellOptions}
+            dailyResetLabel={dailyResetLabel}
+            showPracticeSetup={showPracticeSetup}
+            showVersusSetup={showVersusSetup}
+            practiceSetupError={practiceSetupError}
+            versusSetupError={versusSetupError}
+            practiceCategoryFilters={practiceCategoryFilters}
+            versusCategoryFilters={versusCategoryFilters}
+            versusStealRule={versusStealRule}
+            versusTimerOption={versusTimerOption}
+            versusDisableDraws={versusDisableDraws}
+            versusObjectionRule={versusObjectionRule}
+            onModeChange={handleModeChange}
+            onAchievementsOpen={() => setShowAchievements(true)}
+            onAchievementsClose={() => setShowAchievements(false)}
+            onHowToPlayOpen={() => setShowHowToPlay(true)}
+            onHowToPlayClose={() => setShowHowToPlay(false)}
+            onOpenPracticeSetup={() => setShowPracticeSetup(true)}
+            onOpenVersusSetup={() => setShowVersusSetup(true)}
+            onClosePracticeSetup={() => setShowPracticeSetup(false)}
+            onCloseVersusSetup={() => setShowVersusSetup(false)}
+            onHostOnlineMatch={
+              mode === 'versus'
+                ? () => {
+                    clearGameState('versus')
+                    resetOnlineVersusSession()
+                    onlineVersus.createRoom({
+                      categoryFilters: versusCategoryFilters,
+                      stealRule: versusStealRule,
+                      timerOption: versusTimerOption,
+                      disableDraws: versusDisableDraws,
+                      objectionRule: versusObjectionRule,
+                    })
+                    setShowOnlineLobby(true)
+                  }
+                : undefined
             }
+            onJoinOnlineMatch={
+              mode === 'versus'
+                ? () => {
+                    clearGameState('versus')
+                    resetOnlineVersusSession()
+                    setShowOnlineLobby(true)
+                  }
+                : undefined
+            }
+            onStartStandard={() => {
+              if (mode === 'practice') {
+                setPracticeCategoryFilters({})
+                setPracticeSetupError(null)
+                setShowPracticeStartOptions(false)
+                skipNextPracticeAutoLoadRef.current = true
+                clearGameState('practice')
+                loadPuzzle('practice', {})
+                return
+              }
 
-            setVersusCategoryFilters({})
-            setVersusSetupError(null)
-            versusStealRuleRef.current = 'lower'
-            versusTimerOptionRef.current = 300
-            versusDisableDrawsRef.current = true
-            versusObjectionRuleRef.current = 'one'
-            setVersusStealRule('lower')
-            setVersusTimerOption(300)
-            setVersusDisableDraws(true)
-            setVersusObjectionRule('one')
-            setShowVersusStartOptions(false)
-            skipNextVersusAutoLoadRef.current = true
-            clearGameState('versus')
-            loadPuzzle('versus', {})
-          }}
-          onApplyPracticeFilters={handleApplyPracticeFilters}
-          onApplyVersusFilters={handleApplyVersusFilters}
-        />
+              resetOnlineVersusSession()
+              setVersusCategoryFilters({})
+              setVersusSetupError(null)
+              versusStealRuleRef.current = 'lower'
+              versusTimerOptionRef.current = 300
+              versusDisableDrawsRef.current = true
+              versusObjectionRuleRef.current = 'one'
+              setVersusStealRule('lower')
+              setVersusTimerOption(300)
+              setVersusDisableDraws(true)
+              setVersusObjectionRule('one')
+              setShowVersusStartOptions(false)
+              skipNextVersusAutoLoadRef.current = true
+              clearGameState('versus')
+              loadPuzzle('versus', {})
+            }}
+            onApplyPracticeFilters={handleApplyPracticeFilters}
+            onApplyVersusFilters={handleApplyVersusFilters}
+          />
+          {onlineLobbyEl}
+        </>
       )
     }
 
@@ -2495,6 +3538,7 @@ export function GameClient() {
 
   return (
     <main id="top" className="min-h-screen py-6 px-4">
+      <DevReloadBadge />
       {animationsEnabled && activeEasterEgg && <EasterEggCelebration {...activeEasterEgg} />}
       {animationsEnabled && activePerfectCelebration && (
         <PerfectGridCelebration {...activePerfectCelebration} />
@@ -2514,6 +3558,7 @@ export function GameClient() {
           guessesRemaining={guessesRemaining}
           score={score}
           currentPlayer={isVersusMode ? currentPlayer : null}
+          myOnlineRole={onlineVersus.myRole}
           winner={isVersusMode ? winner : null}
           versusRecord={versusRecord}
           versusObjectionRule={versusObjectionRule}
@@ -2528,6 +3573,12 @@ export function GameClient() {
           onHowToPlay={() => setShowHowToPlay(true)}
           onDailyHistory={mode === 'daily' ? openDailyHistory : undefined}
           onNewGame={mode === 'practice' || mode === 'versus' ? handleNewGame : undefined}
+          onStartOnlineMatch={
+            mode === 'versus' && !onlineVersus.myRole ? handleStartOnlineMatch : undefined
+          }
+          onEndOnlineMatch={
+            mode === 'versus' && onlineVersus.myRole ? handleEndOnlineMatch : undefined
+          }
           onCustomizeGame={
             mode === 'practice'
               ? () => setShowPracticeSetup(true)
@@ -2537,6 +3588,13 @@ export function GameClient() {
           }
         />
       </div>
+
+      {showOnlineSyncBanner && (
+        <div className="mx-auto mb-4 flex w-full max-w-lg items-center gap-3 rounded-xl border border-sky-400/25 bg-sky-500/8 px-4 py-3 text-sm text-sky-100 shadow-sm">
+          <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-sky-300/40 border-t-sky-300" />
+          <p className="leading-snug text-sky-100/90">{onlineSyncBannerText}</p>
+        </div>
+      )}
 
       {puzzle.validation_status && puzzle.validation_status !== 'validated' && (
         <div className="max-w-lg mx-auto mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
@@ -2558,6 +3616,7 @@ export function GameClient() {
           stealableCell={isVersusMode ? stealableCell : null}
           finalStealCell={isVersusMode ? (pendingFinalSteal?.cellIndex ?? null) : null}
           currentPlayer={isVersusMode ? currentPlayer : null}
+          myOnlineRole={isVersusMode ? onlineVersus.myRole : null}
           score={!isVersusMode ? score : undefined}
           guessesRemaining={!isVersusMode ? guessesRemaining : undefined}
           winner={isVersusMode ? winner : null}
@@ -2591,8 +3650,12 @@ export function GameClient() {
           </DialogTitle>
           <DialogDescription className="sr-only">
             {winner === 'draw'
-              ? 'The versus match ended in a draw. Close this dialog to review the finished board or start a new match.'
-              : 'The versus match is over. Close this dialog to review the finished board or start a new match.'}
+              ? onlineVersus.myRole
+                ? 'The online match ended in a draw. Close this dialog to review the finished board or start a fresh online match.'
+                : 'The versus match ended in a draw. Close this dialog to review the finished board or start a new match.'
+              : onlineVersus.myRole
+                ? 'The online match is over. Close this dialog to review the finished board or start a fresh online match.'
+                : 'The versus match is over. Close this dialog to review the finished board or start a new match.'}
           </DialogDescription>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
             Match Over
@@ -2602,8 +3665,12 @@ export function GameClient() {
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             {winner === 'draw'
-              ? 'No line was completed before the board filled up.'
-              : 'Click outside to review the finished board, or start a new match.'}
+              ? onlineVersus.myRole
+                ? 'No line was completed before the board filled up. Start a fresh online room to play again.'
+                : 'No line was completed before the board filled up.'
+              : onlineVersus.myRole
+                ? 'Click outside to review the finished board, or start a fresh online room to play again.'
+                : 'Click outside to review the finished board, or start a new match.'}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
@@ -2616,7 +3683,7 @@ export function GameClient() {
               onClick={handleNewGame}
               className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              New Match
+              {onlineVersus.myRole ? 'New Online Match' : 'New Match'}
             </button>
           </div>
           <div className="mt-4 flex justify-center">
@@ -2656,6 +3723,7 @@ export function GameClient() {
 
       <GameSearch
         isOpen={selectedCell !== null}
+        initialQuery={searchQueryDraft}
         puzzleId={mode === 'daily' ? puzzle.id : undefined}
         hideScores={mode === 'versus'}
         confirmBeforeSelect={confirmBeforeSelect}
@@ -2666,7 +3734,11 @@ export function GameClient() {
         rowCategory={selectedRowCategory}
         colCategory={selectedColCategory}
         onSelect={handleGameSelect}
-        onClose={() => setSelectedCell(null)}
+        onQueryChange={setSearchQueryDraft}
+        onClose={() => {
+          setSelectedCell(null)
+          setSearchQueryDraft('')
+        }}
       />
 
       {!isVersusMode && (
@@ -2761,6 +3833,8 @@ export function GameClient() {
           objectionDisabledLabel={objectionDisabledLabel}
         />
       )}
+
+      {onlineLobbyEl}
 
       {/* Footer */}
       <footer className="max-w-lg mx-auto mt-8 text-center text-xs text-muted-foreground">

@@ -24,15 +24,29 @@ function renderModal(options?: {
       mode="versus"
       filters={options?.filters ?? {}}
       stealRule={options?.stealRule ?? 'lower'}
-      timerOption={options?.timerOption ?? 'none'}
-      disableDraws={options?.disableDraws ?? false}
-      objectionRule={options?.objectionRule ?? 'off'}
+      timerOption={options?.timerOption ?? 300}
+      disableDraws={options?.disableDraws ?? true}
+      objectionRule={options?.objectionRule ?? 'one'}
       onApply={() => {}}
     />
   )
 }
 
 describe('VersusSetupModal', () => {
+  it('uses the standard versus defaults for rules', async () => {
+    const user = userEvent.setup()
+    renderModal()
+
+    await user.click(screen.getByRole('button', { name: /Rules/i }))
+
+    const selects = screen.getAllByRole('combobox')
+    expect(selects[0]).toHaveTextContent('Lower score')
+    expect(selects[1]).toHaveTextContent('1 each')
+    expect(selects[2]).toHaveTextContent('Disabled')
+    expect(selects[3]).toHaveTextContent('5 min')
+    expect(screen.queryAllByText('Custom')).toHaveLength(0)
+  })
+
   it('shows Check All for families that default some fun categories off', async () => {
     const user = userEvent.setup()
     renderModal()
@@ -52,14 +66,14 @@ describe('VersusSetupModal', () => {
     const user = userEvent.setup()
     renderModal({
       stealRule: 'off',
-      objectionRule: 'one',
+      objectionRule: 'off',
       timerOption: 60,
-      disableDraws: true,
+      disableDraws: false,
     })
 
     await user.click(screen.getByRole('button', { name: /Rules/i }))
 
-    expect(screen.getByText('Custom')).toBeInTheDocument()
+    expect(screen.getAllByText('Custom').length).toBeGreaterThan(0)
   })
 
   it('marks Categories as custom when a family differs from its default selection even if all are enabled', async () => {

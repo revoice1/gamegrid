@@ -221,9 +221,9 @@ export function VersusSetupModal({
   const resetToDefault = () => {
     setDraftFilters({})
     setDraftStealRule('lower')
-    setDraftTimerOption('none')
-    setDraftDisableDraws(false)
-    setDraftObjectionRule('off')
+    setDraftTimerOption(300)
+    setDraftDisableDraws(true)
+    setDraftObjectionRule('one')
   }
 
   const canApply = enabledFamilyCount >= 4 && totalSelectedCategories >= 6
@@ -252,9 +252,9 @@ export function VersusSetupModal({
   const appliedFilters = buildAppliedFilters()
   const hasCustomCategories = Object.keys(appliedFilters).length > 0
   const hasCustomStealRule = draftStealRule !== 'lower'
-  const hasCustomObjectionRule = draftObjectionRule !== 'off'
-  const hasCustomDrawRule = draftDisableDraws !== false
-  const hasCustomTimerRule = draftTimerOption !== 'none'
+  const hasCustomObjectionRule = draftObjectionRule !== 'one'
+  const hasCustomDrawRule = draftDisableDraws !== true
+  const hasCustomTimerRule = draftTimerOption !== 300
   const hasCustomRules =
     hasCustomStealRule || hasCustomObjectionRule || hasCustomDrawRule || hasCustomTimerRule
 

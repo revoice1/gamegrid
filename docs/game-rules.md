@@ -17,7 +17,9 @@
 - The board is stored in Supabase and reused after the first successful generation.
 - Daily progress is tied to an anonymous browser session and also mirrored locally so the current browser can restore in-progress boards quickly.
 - Older stored daily boards can be opened from the daily archive later so players can catch up on missed boards, including their own saved progress for those boards when that same browser session returns.
+- The archive now presents those stored boards in a calendar view, with separate cues for the board currently open and the actual current UTC daily.
 - Daily completions are recorded for stats and rarity scoring.
+- Daily results can surface streak progress, best streak, total daily completions, and perfect boards for that anonymous browser session.
 
 ### Practice
 
@@ -93,11 +95,13 @@ flowchart TD
 - Custom versus can set objections to `Off`, `1 each`, or `3 each`.
 - Objection usage is tracked per player per match.
 - Versus objections use a sealed review modal so the full metadata payload is not exposed mid-match.
+- Standard versus defaults now use `1 each`.
 
 ### Draw Rules
 
 - Custom versus can leave draws enabled or disable them.
 - When draws are disabled, a full board with no line awards the match to the player with more claimed cells.
+- Standard versus defaults start with draws disabled.
 
 ### Final Steal
 
@@ -106,6 +110,7 @@ flowchart TD
 - The target cell gets a stronger pulse so the board reads as a focused last-chance state.
 - If versus alarms are disabled, the visual threat treatment should be quiet or absent.
 - Versus audio now has its own toggle, so heartbeat and future sound cues can be muted independently of visual alarms.
+- Standard versus defaults also start with a `5 min` turn timer and `Lower score` steals.
 
 ## Completion States
 
@@ -121,6 +126,7 @@ flowchart TD
 - Custom versus can disable draws and award the match to the player with more claimed cells when a
   full board has no line.
 - The winner panel should be dismissible without hiding the finished board.
+- The winner panel can expand into a post-game summary with rules used, claim counts, real steal totals, review totals, score reveals, and the full list of picked games.
 
 ## Achievements And Easter Eggs
 

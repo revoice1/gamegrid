@@ -9,9 +9,9 @@ import type {
 export function useVersusSetupState() {
   const [versusCategoryFilters, setVersusCategoryFilters] = useState<VersusCategoryFilters>({})
   const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('lower')
-  const [versusTimerOption, setVersusTimerOption] = useState<VersusTurnTimerOption>('none')
-  const [versusDisableDraws, setVersusDisableDraws] = useState(false)
-  const [versusObjectionRule, setVersusObjectionRule] = useState<VersusObjectionRule>('off')
+  const [versusTimerOption, setVersusTimerOption] = useState<VersusTurnTimerOption>(300)
+  const [versusDisableDraws, setVersusDisableDraws] = useState(true)
+  const [versusObjectionRule, setVersusObjectionRule] = useState<VersusObjectionRule>('one')
   const [showVersusSetup, setShowVersusSetup] = useState(false)
   const [showVersusStartOptions, setShowVersusStartOptions] = useState(false)
   const [versusSetupError, setVersusSetupError] = useState<string | null>(null)

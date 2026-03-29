@@ -386,6 +386,12 @@ test('daily results modal keeps copy and playerbase features', async ({ page }) 
       body: JSON.stringify({
         cellStats: {},
         totalCompletions: 42,
+        dailySummary: {
+          currentStreak: 3,
+          bestStreak: 8,
+          completedCount: 17,
+          perfectCount: 4,
+        },
       }),
     })
   })
@@ -404,6 +410,8 @@ test('daily results modal keeps copy and playerbase features', async ({ page }) 
 
   const resultsDialog = page.getByRole('dialog')
   await expect(resultsDialog.getByRole('heading', { name: 'Daily Results' })).toBeVisible()
+  await expect(resultsDialog.getByText('Current Streak')).toBeVisible()
+  await expect(resultsDialog.getByText('Best Streak')).toBeVisible()
   await expect(resultsDialog.getByRole('button', { name: 'Copy Results' })).toBeVisible()
   await expect(resultsDialog.getByRole('button', { name: 'All Players' })).toBeVisible()
 })

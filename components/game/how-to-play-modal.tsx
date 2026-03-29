@@ -1,6 +1,12 @@
 'use client'
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
 interface HowToPlayModalProps {
@@ -188,7 +194,7 @@ function VersusHowToPlay() {
             <p className="font-medium">Locks and Stealable Cells</p>
             <p className="text-sm text-muted-foreground">
               Locked cells show a lock badge because they are no longer stealable. The only open
-              steal target is the opponent’s freshest claim.
+              steal target is the opponent's freshest claim.
             </p>
           </div>
         </div>
@@ -200,7 +206,7 @@ function VersusHowToPlay() {
           <div>
             <p className="font-medium">Steal Rating Rules</p>
             <p className="text-sm text-muted-foreground">
-              Steals compare each game’s hidden rating. Depending on the custom rule, either the
+              Steals compare each game's hidden rating. Depending on the custom rule, either the
               lower-rated or higher-rated game wins the square.
             </p>
           </div>
@@ -277,6 +283,11 @@ export function HowToPlayModal({
           <DialogTitle className="text-center text-xl font-bold">
             {mode === 'versus' ? 'How to Play Versus' : 'How to Play'}
           </DialogTitle>
+          <DialogDescription className="text-center text-sm text-muted-foreground">
+            {mode === 'versus'
+              ? 'Rules and reminders for local head-to-head play.'
+              : 'Rules and reminders for daily and practice boards.'}
+          </DialogDescription>
         </DialogHeader>
 
         {mode === 'versus' ? (
@@ -294,6 +305,12 @@ export function HowToPlayModal({
             Game data powered by IGDB
           </p>
           <div className="mb-4 flex flex-wrap justify-center gap-2">
+            <a
+              href="/changelog"
+              className="inline-flex items-center rounded-full border border-border bg-secondary/30 px-3 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+            >
+              Changelog
+            </a>
             <a
               href="https://github.com/revoice1/gamegrid/issues/new?template=bug_report.yml"
               target="_blank"

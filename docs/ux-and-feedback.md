@@ -39,10 +39,14 @@
 ## Results
 
 - Daily results can include copy/share and playerbase-oriented stats.
+- Daily results can also surface a compact streak summary so players see ongoing progress without leaving the modal.
 - Daily mode can surface an archive picker for older stored boards.
 - Daily archive entries should feel like "catch up on missed boards," not a separate replay mode.
+- The archive should read as a real calendar, not a generic list, and should clearly distinguish `Open` from the real `Today`.
 - Practice results should stay local and lighter.
 - Versus end-state UI should allow players to keep inspecting the board after the match ends.
+- The versus winner dialog should stay compact by default, then reveal the deeper post-game summary only after an explicit `View Summary` action.
+- The expanded versus summary can show result, rules used, claim counts, real steal outcomes, review outcomes, score reveals, and the full pick list with available scores.
 
 ## Session Model
 

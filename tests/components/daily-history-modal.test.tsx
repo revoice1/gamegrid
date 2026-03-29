@@ -18,7 +18,7 @@ describe('DailyHistoryModal', () => {
     expect(screen.getByText('No archived dailies yet.')).toBeInTheDocument()
   })
 
-  it('renders archived boards and selects one when clicked', () => {
+  it('renders archived boards in a calendar and selects one when clicked', () => {
     const onSelect = vi.fn()
 
     render(
@@ -38,16 +38,33 @@ describe('DailyHistoryModal', () => {
             isCompleted: true,
             guessCount: 9,
           },
+          {
+            id: 'daily-2026-03-26',
+            date: '2026-03-26',
+            guessCount: 3,
+          },
+          {
+            id: 'daily-2026-02-14',
+            date: '2026-02-14',
+          },
         ]}
       />
     )
 
-    expect(screen.getByText('2026-03-28')).toBeInTheDocument()
-    expect(screen.getByText('Current')).toBeInTheDocument()
-    expect(screen.getByText('2026-03-27')).toBeInTheDocument()
+    expect(screen.getByText('March 2026')).toBeInTheDocument()
+    expect(screen.getByText('February 2026')).toBeInTheDocument()
     expect(screen.getByText('Completed')).toBeInTheDocument()
+    expect(screen.getByText('In Progress')).toBeInTheDocument()
+    expect(screen.getByText('Not Started')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Open marks the board you have loaded right now. Today marks the real current daily.'
+    )
+    expect(screen.getByRole('button', { name: '2026-03-28, Current board' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2026-03-27, Completed' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2026-03-26, In progress' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2026-02-14, Not started' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /2026-03-27/i }))
+    fireEvent.click(screen.getByRole('button', { name: '2026-03-27, Completed' }))
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'daily-2026-03-27',

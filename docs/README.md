@@ -16,6 +16,7 @@ Use them as the fast path for questions like:
 - What does search intentionally hide or reveal?
 - How does the objection / judgment flow work?
 - How does daily archive / anonymous session restore work?
+- Where should player-facing updates and change notes live?
 - Which parts of the product still feel unsettled?
 
 Start here:

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Check, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -72,21 +72,44 @@ function normalizeSearchResultTitle(name: string): string {
   return name.trim().toLocaleLowerCase()
 }
 
-function getDuplicateDisplayTitle(game: SearchResultGame, isDuplicateTitle: boolean): string {
-  if (!isDuplicateTitle) {
-    return game.name
-  }
-
+function getPreferredDuplicateSuffix(game: SearchResultGame): string | null {
   const preferredPlatform = game.disambiguationPlatform
     ? getPlatformDisplayLabel(game.disambiguationPlatform)
     : getPreferredPlatform(game)
 
   if (!preferredPlatform) {
+    return null
+  }
+
+  return game.hasSameNamePortFamily ? `${preferredPlatform}+Ports` : preferredPlatform
+}
+
+function getDuplicateDisplayTitle(
+  game: SearchResultGame,
+  isDuplicateTitle: boolean,
+  duplicateSuffixCounts: Map<string, number>
+): string {
+  if (!isDuplicateTitle) {
     return game.name
   }
 
-  const suffix = game.hasSameNamePortFamily ? `${preferredPlatform}+Ports` : preferredPlatform
-  return `${game.name} (${suffix})`
+  const suffix = getPreferredDuplicateSuffix(game)
+  if (suffix) {
+    const suffixKey = `${normalizeSearchResultTitle(game.name)}::${suffix}`
+    if ((duplicateSuffixCounts.get(suffixKey) ?? 0) === 1) {
+      return `${game.name} (${suffix})`
+    }
+  }
+
+  if (game.disambiguationYear) {
+    return `${game.name} (${game.disambiguationYear})`
+  }
+
+  if (suffix) {
+    return `${game.name} (${suffix})`
+  }
+
+  return game.name
 }
 
 interface GameSearchProps {
@@ -134,17 +157,37 @@ export function GameSearch({
     pendingConfirmationId !== null
       ? (results.find((game) => game.id === pendingConfirmationId) ?? null)
       : null
-  const duplicateTitleKeys = new Set(
-    Object.entries(
-      results.reduce<Record<string, number>>((counts, game) => {
-        const key = normalizeSearchResultTitle(game.name)
-        counts[key] = (counts[key] ?? 0) + 1
-        return counts
-      }, {})
+  const duplicateTitleKeys = useMemo(() => {
+    return new Set(
+      Object.entries(
+        results.reduce<Record<string, number>>((counts, game) => {
+          const key = normalizeSearchResultTitle(game.name)
+          counts[key] = (counts[key] ?? 0) + 1
+          return counts
+        }, {})
+      )
+        .filter(([, count]) => count > 1)
+        .map(([key]) => key)
     )
-      .filter(([, count]) => count > 1)
-      .map(([key]) => key)
-  )
+  }, [results])
+
+  const duplicateSuffixCounts = useMemo(() => {
+    return results.reduce((counts, game) => {
+      const titleKey = normalizeSearchResultTitle(game.name)
+      if (!duplicateTitleKeys.has(titleKey)) {
+        return counts
+      }
+
+      const suffix = getPreferredDuplicateSuffix(game)
+      if (!suffix) {
+        return counts
+      }
+
+      const suffixKey = `${titleKey}::${suffix}`
+      counts.set(suffixKey, (counts.get(suffixKey) ?? 0) + 1)
+      return counts
+    }, new Map<string, number>())
+  }, [duplicateTitleKeys, results])
 
   // Focus input when opened
   useEffect(() => {
@@ -496,7 +539,7 @@ export function GameSearch({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium text-foreground">
-                          {getDuplicateDisplayTitle(game, isDuplicateTitle)}
+                          {getDuplicateDisplayTitle(game, isDuplicateTitle, duplicateSuffixCounts)}
                         </p>
                         {metadata.length > 0 && (
                           <div className="relative mt-1">

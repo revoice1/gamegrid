@@ -3410,7 +3410,7 @@ export function GameClient() {
     return 'Syncing match state...'
   })()
 
-  if (isLoading) {
+  if (isLoading && !showOnlineLobby) {
     return (
       <PuzzleLoadingScreen
         mode={mode}
@@ -3426,6 +3426,15 @@ export function GameClient() {
   }
 
   if (!puzzle) {
+    if (showOnlineLobby) {
+      return (
+        <>
+          <main id="top" className="min-h-screen px-4 py-6" />
+          {onlineLobbyEl}
+        </>
+      )
+    }
+
     if (
       (mode === 'versus' && showVersusStartOptions) ||
       (mode === 'practice' && showPracticeStartOptions)
@@ -3683,7 +3692,7 @@ export function GameClient() {
               onClick={handleNewGame}
               className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              {onlineVersus.myRole ? 'New Online Match' : 'New Match'}
+              {onlineVersus.myRole ? 'New Online Room' : 'New Match'}
             </button>
           </div>
           <div className="mt-4 flex justify-center">

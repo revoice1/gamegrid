@@ -335,7 +335,7 @@ export function GameHeader({
                 >
                   {mode === 'versus'
                     ? myOnlineRole
-                      ? 'New Online Match'
+                      ? 'New Online Room'
                       : 'New Match'
                     : 'New Game'}
                 </Button>

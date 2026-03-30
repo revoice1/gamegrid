@@ -252,7 +252,7 @@ export function GameHeader({
 
         {(mode === 'practice' || mode === 'versus') && (
           <div className="mb-2 text-center">
-            <div className="grid w-full max-w-[40rem] grid-cols-2 gap-1.5 px-1 min-[520px]:grid-cols-[auto_auto] min-[520px]:justify-center sm:flex sm:w-auto sm:max-w-full sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
+            <div className="flex w-full flex-wrap items-center justify-center gap-1.5 px-1 sm:gap-2">
               {mode === 'versus' && (
                 <div className="flex items-center justify-center gap-1.5 sm:gap-2">
                   <div className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-secondary/35 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:gap-2 sm:px-3 sm:text-[11px]">
@@ -315,7 +315,9 @@ export function GameHeader({
                 <span className="tracking-[0.12em]">Pool</span>
                 <span className="tracking-[0.12em] text-foreground">{poolLabel}</span>
               </div>
+            </div>
 
+            <div className="mt-2 grid w-full max-w-[28rem] grid-cols-1 gap-1.5 px-1 min-[520px]:grid-cols-2 sm:flex sm:w-auto sm:max-w-full sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
               {onCustomizeGame && (
                 <Button
                   variant="outline"
@@ -336,9 +338,19 @@ export function GameHeader({
                   {mode === 'versus' ? 'New Match' : 'New Game'}
                 </Button>
               )}
+              {mode === 'versus' && !myOnlineRole && onStartOnlineMatch && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onStartOnlineMatch}
+                  className="h-8 w-full min-w-[9rem] border-sky-500/35 px-2.5 text-xs text-sky-300 hover:bg-sky-500/10 hover:text-sky-200 sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
+                >
+                  Play Online
+                </Button>
+              )}
             </div>
 
-            {mode === 'versus' && (myOnlineRole || onStartOnlineMatch || onEndOnlineMatch) && (
+            {mode === 'versus' && (myOnlineRole || onEndOnlineMatch) && (
               <div className="mt-2 flex w-full max-w-[40rem] flex-wrap items-center justify-center gap-1.5 px-1 sm:gap-2">
                 {myOnlineRole && (
                   <div className="inline-flex h-8 items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/8 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:gap-2 sm:px-3 sm:text-[11px]">
@@ -363,16 +375,6 @@ export function GameHeader({
                     {winner !== null && myOnlineRole === 'x'
                       ? 'Continue In Room'
                       : 'New Online Room'}
-                  </Button>
-                )}
-                {!myOnlineRole && onStartOnlineMatch && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onStartOnlineMatch}
-                    className="h-8 min-w-[9rem] border-sky-500/35 px-2.5 text-xs text-sky-300 hover:bg-sky-500/10 hover:text-sky-200 sm:h-9 sm:px-3 sm:text-sm"
-                  >
-                    Play Online
                   </Button>
                 )}
                 {myOnlineRole && onEndOnlineMatch && (

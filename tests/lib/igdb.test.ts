@@ -494,6 +494,29 @@ describe('igdbGameMatchesCategory', () => {
     ).toBe(true)
   })
 
+  it('matches EA Sports under the Electronic Arts company bucket', () => {
+    expect(
+      igdbGameMatchesCategory(
+        {
+          ...baseGame,
+          developers: [],
+          publishers: [],
+          igdb: {
+            ...baseGame.igdb!,
+            companies: ['EA Sports'],
+            keywords: [],
+          },
+        },
+        {
+          type: 'company',
+          id: 'electronic-arts',
+          name: 'Electronic Arts',
+          slug: 'electronic-arts',
+        }
+      )
+    ).toBe(true)
+  })
+
   it('rejects categories the game does not satisfy', () => {
     expect(igdbGameMatchesCategory(baseGame, { type: 'theme', id: 1, name: 'Action' })).toBe(false)
   })

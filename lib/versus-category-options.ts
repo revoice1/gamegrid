@@ -135,6 +135,7 @@ const STANDARD_COMPANY_CATEGORIES: Category[] = [
     name: 'Electronic Arts',
     slug: 'electronic-arts',
     companyIds: [1],
+    companyNamePatterns: ['Electronic Arts', 'EA Sports'],
   },
   { type: 'company', id: 'konami', name: 'Konami', slug: 'konami', companyIds: [129] },
   {

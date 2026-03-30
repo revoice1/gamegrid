@@ -146,7 +146,10 @@ const PLATFORM_ALIAS_GROUPS: Record<string, string[]> = {
 const COMPANY_ALIAS_GROUPS: Record<string, { aliases?: string[]; prefixes?: string[] }> = {
   nintendo: { aliases: ['Nintendo'], prefixes: ['nintendo'] },
   sega: { aliases: ['Sega'], prefixes: ['sega'] },
-  'electronic-arts': { aliases: ['Electronic Arts'] },
+  'electronic arts': {
+    aliases: ['Electronic Arts', 'EA Sports'],
+    prefixes: ['ea sports'],
+  },
   konami: { aliases: ['Konami'], prefixes: ['konami'] },
   activision: {
     aliases: ['Activision', 'Activision Blizzard', 'Blizzard', 'Blizzard Entertainment'],

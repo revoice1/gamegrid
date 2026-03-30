@@ -252,7 +252,7 @@ export function GameHeader({
 
         {(mode === 'practice' || mode === 'versus') && (
           <div className="mb-2 text-center">
-            <div className="flex w-full max-w-[40rem] flex-wrap items-center justify-center gap-1.5 px-1 sm:gap-2">
+            <div className="grid w-full max-w-[40rem] grid-cols-2 gap-1.5 px-1 min-[520px]:grid-cols-[auto_auto] min-[520px]:justify-center sm:flex sm:w-auto sm:max-w-full sm:flex-wrap sm:items-center sm:justify-center sm:gap-2">
               {mode === 'versus' && (
                 <div className="flex items-center justify-center gap-1.5 sm:gap-2">
                   <div className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-secondary/35 px-2.5 text-[10px] font-medium uppercase text-muted-foreground sm:h-9 sm:gap-2 sm:px-3 sm:text-[11px]">
@@ -321,7 +321,7 @@ export function GameHeader({
                   variant="outline"
                   size="sm"
                   onClick={onCustomizeGame}
-                  className="h-8 min-w-[9rem] px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                  className="h-8 w-full min-w-[9rem] px-2.5 text-xs sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
                 >
                   {hasActiveCustomSetup ? 'Edit Setup' : 'Customize'}
                 </Button>
@@ -331,7 +331,7 @@ export function GameHeader({
                   variant="outline"
                   size="sm"
                   onClick={onNewGame}
-                  className="h-8 min-w-[9rem] px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                  className="h-8 w-full min-w-[9rem] px-2.5 text-xs sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
                 >
                   {mode === 'versus' ? 'New Match' : 'New Game'}
                 </Button>

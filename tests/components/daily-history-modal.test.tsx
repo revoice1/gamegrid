@@ -72,4 +72,40 @@ describe('DailyHistoryModal', () => {
       })
     )
   })
+
+  it('orders older months first so the newest month sits at the bottom', () => {
+    render(
+      <DailyHistoryModal
+        isOpen
+        onClose={() => {}}
+        onSelect={() => {}}
+        currentDate="2026-03-28"
+        entries={[
+          {
+            id: 'daily-2026-03-28',
+            date: '2026-03-28',
+          },
+          {
+            id: 'daily-2026-02-14',
+            date: '2026-02-14',
+          },
+          {
+            id: 'daily-2026-01-12',
+            date: '2026-01-12',
+          },
+        ]}
+      />
+    )
+
+    const januaryHeading = screen.getByText('January 2026')
+    const februaryHeading = screen.getByText('February 2026')
+    const marchHeading = screen.getByText('March 2026')
+
+    expect(januaryHeading.compareDocumentPosition(februaryHeading)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    expect(februaryHeading.compareDocumentPosition(marchHeading)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+  })
 })

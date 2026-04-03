@@ -16,9 +16,9 @@ const guess: CellGuess = {
   metacritic: 89,
   platforms: ['PlayStation 3', 'PC (Microsoft Windows)'],
   genres: ['Role-playing (RPG)', 'Shooter'],
-  developers: ['Eidos Montréal'],
+  developers: ['Eidos Montreal'],
   publishers: ['Square Enix'],
-  companies: ['Square Enix', 'Eidos Montréal'],
+  companies: ['Square Enix', 'Eidos Montreal'],
   gameModes: ['Single player'],
   perspectives: ['First person'],
   themes: ['Science fiction'],
@@ -44,6 +44,17 @@ describe('buildObjectionDataset', () => {
     expect(buildObjectionDataset(guess, rowCategory, colCategory)).toEqual({
       gameName: 'Deus Ex: Human Revolution',
       releaseYear: 2011,
+      appMetadata: {
+        genres: ['Role-playing (RPG)', 'Shooter'],
+        themes: ['Science fiction'],
+        perspectives: ['First person'],
+        gameModes: ['Single player'],
+        platforms: ['PlayStation 3', 'PC (Microsoft Windows)'],
+        companies: ['Square Enix', 'Eidos Montreal'],
+        developers: ['Eidos Montreal'],
+        publishers: ['Square Enix'],
+        tags: ['cyberpunk'],
+      },
       rowCategory: {
         name: 'Square Enix',
         type: 'company',
@@ -78,8 +89,22 @@ describe('OBJECTION_SYSTEM_PROMPT', () => {
     expect(OBJECTION_SYSTEM_PROMPT).toContain('Return JSON only')
     expect(OBJECTION_SYSTEM_PROMPT).toContain('"verdict":"sustained|overruled"')
     expect(OBJECTION_SYSTEM_PROMPT).toContain('familyNames')
-    expect(OBJECTION_SYSTEM_PROMPT).toContain('loose association')
-    expect(OBJECTION_SYSTEM_PROMPT).toContain('platform ownership')
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'Every game in the payload is a real, official game title'
+    )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'Use the category validation questions as the main standard'
+    )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'metadata is useful, but it is known to be incomplete, imperfect, or mismapped'
+    )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'If the selected game or any clearly related family variant directly fits both categories'
+    )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain('Do not require every variant to match')
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'Do not sustain based on loose association, technicalities, indirect relationships'
+    )
   })
 })
 

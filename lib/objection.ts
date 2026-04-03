@@ -13,6 +13,17 @@ export interface ObjectionJudgment {
 export interface ObjectionDataset {
   gameName: string
   releaseYear: number | null
+  appMetadata: {
+    genres: string[]
+    themes: string[]
+    perspectives: string[]
+    gameModes: string[]
+    platforms: string[]
+    companies: string[]
+    developers: string[]
+    publishers: string[]
+    tags: string[]
+  }
   rowCategory: {
     name: string
     type: Category['type']
@@ -70,7 +81,7 @@ function buildCategoryValidationQuestion(category: Category): string {
     case 'perspective':
       return `Is ${category.name} one of this game's recognized gameplay perspectives?`
     case 'genre':
-      return `Is this game commonly classified as ${category.name}?`
+      return `Is this game commonly and directly classified as ${category.name}? Do not infer broad parent genres or genre-adjacent relationships unless the metadata explicitly supports them.`
     case 'theme':
       return `Is ${category.name} a recognized theme of this game, not just a loose vibe or weak association?`
     case 'platform':
@@ -84,22 +95,26 @@ function buildCategoryValidationQuestion(category: Category): string {
 
 export const OBJECTION_SYSTEM_PROMPT = [
   'You are reviewing a disputed video-game category judgment for a puzzle game.',
+  'Every game in the payload is a real, official game title from the app. Do not question whether the game exists or whether it is an official release.',
   'Your job is to decide whether the selected game should count for BOTH listed categories.',
-  'Be conservative and prefer overruled when the evidence is weak or ambiguous.',
-  'Sustain only when the game clearly and directly satisfies the category as a normal player would understand it.',
-  'Do not sustain based on loose association, technicalities, platform ownership, franchise adjacency, optional/minor features, or niche edge-case interpretations.',
-  'Do not over-weight incomplete app metadata.',
-  'Treat the JSON payload as the full case file for this turn.',
+  'Use the category validation questions as the main standard.',
+  'Judge category fit the way a normal informed player would understand it.',
+  'The `appMetadata` block contains relevant evidence from the app.',
+  'This metadata is useful, but it is known to be incomplete, imperfect, or mismapped in some cases.',
+  'Use it as supporting evidence, but do not treat it as automatically conclusive.',
+  'Do not blindly agree with the metadata if the category fit is still weak, indirect, or unclear.',
+  'Do not ignore the metadata either just because your memory is incomplete or older.',
   'The `familyNames` array contains alternate editions, ports, remasters, remakes, or expanded releases that belong to the same game family.',
-  'Use those family variants as supporting evidence when judging the selected game, especially when one release name is better known than another.',
-  'Do not require every variant to match the categories; use the family list to understand the broader identity of the game family.',
-  'If the selected game OR any clearly related variant in `familyNames` includes both categories, that is valid evidence in favor of sustained.',
-  'This includes special editions, expanded versions, ports, remasters, or alternate releases that add or expose a mode, perspective, platform, or company relationship relevant to the categories.',
-  'Do not reject solely because the base release is better known for a different mode or perspective if a listed family variant clearly includes the disputed category.',
+  'Use those family variants as supporting context when one release name is better known than another.',
+  'If the selected game or any clearly related family variant directly fits both categories, that is valid evidence in favor of sustained.',
+  'Do not require every variant to match. Use them to understand the broader identity of the game family.',
+  'Sustain only when the game or a clearly related family variant directly fits both categories.',
+  'Do not sustain based on loose association, technicalities, indirect relationships, platform ownership, franchise adjacency, optional/minor features, or niche edge-case interpretations.',
+  'If the evidence is mixed, indirect, surprising, or ambiguous, overrule.',
   'Return JSON only.',
   'Required JSON schema:',
   '{"verdict":"sustained|overruled","confidence":"low|medium|high","explanation":"string","suspectedMissingMetadata":"string|null"}',
-  'Use "sustained" only when the player is likely correct and the rejection is probably caused by incomplete or mismapped metadata.',
+  'Use "sustained" only when the player is likely correct and the app rejection may be caused by incomplete or mismapped metadata.',
   'Use "overruled" when the app rejection is probably correct or the evidence is too weak.',
   'Keep explanation under 45 words.',
 ].join('\n')
@@ -115,6 +130,17 @@ export function buildObjectionDataset(
   return {
     gameName: guess.gameName,
     releaseYear: getReleaseYear(guess.released),
+    appMetadata: {
+      genres: guess.genres ?? [],
+      themes: guess.themes ?? [],
+      perspectives: guess.perspectives ?? [],
+      gameModes: guess.gameModes ?? [],
+      platforms: guess.platforms ?? [],
+      companies: guess.companies ?? [],
+      developers: guess.developers ?? [],
+      publishers: guess.publishers ?? [],
+      tags: guess.tags ?? [],
+    },
     rowCategory: {
       name: rowCategory.name,
       type: rowCategory.type,

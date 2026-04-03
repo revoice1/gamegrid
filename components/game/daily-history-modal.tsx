@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -121,7 +122,7 @@ function buildCalendarSections(
     section.boardCount += 1
   }
 
-  return Array.from(sections.values()).sort((a, b) => b.key.localeCompare(a.key))
+  return Array.from(sections.values()).sort((a, b) => a.key.localeCompare(b.key))
 }
 
 function getStatusLegendClass(status: DailyArchiveStatus): string {
@@ -173,6 +174,20 @@ export function DailyHistoryModal({
   onSelect,
 }: DailyHistoryModalProps) {
   const calendarSections = buildCalendarSections(entries, currentDate)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isOpen || isLoading || entries.length === 0) {
+      return
+    }
+
+    const container = scrollContainerRef.current
+    if (!container) {
+      return
+    }
+
+    container.scrollTop = container.scrollHeight
+  }, [entries.length, isLoading, isOpen])
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -184,7 +199,7 @@ export function DailyHistoryModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[75vh] overflow-y-auto px-6 py-5">
+        <div ref={scrollContainerRef} className="max-h-[75vh] overflow-y-auto px-6 py-5">
           {isLoading ? (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-5 py-10 text-center">
               <p className="text-sm font-medium text-foreground">Loading archive...</p>

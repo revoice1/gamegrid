@@ -80,6 +80,8 @@ describe('OBJECTION_SYSTEM_PROMPT', () => {
     expect(OBJECTION_SYSTEM_PROMPT).toContain('familyNames')
     expect(OBJECTION_SYSTEM_PROMPT).toContain('loose association')
     expect(OBJECTION_SYSTEM_PROMPT).toContain('platform ownership')
+    expect(OBJECTION_SYSTEM_PROMPT).toContain('released after your training data cutoff')
+    expect(OBJECTION_SYSTEM_PROMPT).toContain('use internet research to verify them')
   })
 })
 

@@ -122,6 +122,10 @@ import {
 } from '@/hooks/use-versus-steal'
 
 const MAX_GUESSES = 9
+const DEFAULT_VERSUS_STEAL_RULE: VersusStealRule = 'lower'
+const DEFAULT_VERSUS_TIMER_OPTION: VersusTurnTimerOption = 300
+const DEFAULT_VERSUS_DISABLE_DRAWS = true
+const DEFAULT_VERSUS_OBJECTION_RULE: VersusObjectionRule = 'one'
 type GameMode = 'daily' | 'practice' | 'versus'
 
 interface ActiveStealShowdown {
@@ -210,6 +214,7 @@ interface PuzzleStreamMessage {
 }
 
 export function GameClient() {
+  const pendingVersusSetupIntentRef = useRef<'local' | 'online-host' | null>(null)
   const skipNextVersusAutoLoadRef = useRef(false)
   const skipNextPracticeAutoLoadRef = useRef(false)
   const skipNextVersusSavedStateRestoreRef = useRef(false)
@@ -2725,7 +2730,6 @@ export function GameClient() {
     disableDraws: boolean,
     objectionRule: VersusObjectionRule
   ) => {
-    resetOnlineVersusSession()
     setVersusCategoryFilters(filters)
     setVersusSetupError(null)
     versusStealRuleRef.current = stealRule
@@ -2737,6 +2741,44 @@ export function GameClient() {
     setVersusDisableDraws(disableDraws)
     setVersusObjectionRule(objectionRule)
     setShowVersusSetup(false)
+    const setupIntent = pendingVersusSetupIntentRef.current
+    pendingVersusSetupIntentRef.current = null
+
+    if (setupIntent === 'online-host') {
+      activePuzzleLoadControllerRef.current?.abort()
+      clearGameState('versus')
+      resetOnlineVersusSession()
+      setLoadedPuzzleMode(null)
+      setPuzzle(null)
+      setGuesses(Array(9).fill(null))
+      setGuessesRemaining(MAX_GUESSES)
+      setCurrentPlayer('x')
+      setStealableCell(null)
+      setWinner(null)
+      setPendingFinalSteal(null)
+      setLockImpactCell(null)
+      setSelectedCell(null)
+      setSearchQueryDraft('')
+      setDetailCell(null)
+      setShowResults(false)
+      setShowVersusStartOptions(false)
+      setTurnTimeLeft(null)
+      setTurnDeadlineAt(null)
+      setPendingVersusObjectionReview(null)
+      setVersusObjectionsUsed({ x: 0, o: 0 })
+      commitVersusEventLog([])
+      setShowOnlineLobby(true)
+      onlineVersus.createRoom({
+        categoryFilters: filters,
+        stealRule,
+        timerOption,
+        disableDraws,
+        objectionRule,
+      })
+      return
+    }
+
+    resetOnlineVersusSession()
     setShowVersusStartOptions(false)
     skipNextVersusAutoLoadRef.current = true
     clearGameState('versus')
@@ -3441,7 +3483,55 @@ export function GameClient() {
     commitVersusEventLog([])
   }, [commitVersusEventLog, resetOnlineVersusSession])
 
+  const hostOnlineMatchWithSettings = useCallback(
+    (
+      categoryFilters: VersusCategoryFilters,
+      stealRule: VersusStealRule,
+      timerOption: VersusTurnTimerOption,
+      disableDraws: boolean,
+      objectionRule: VersusObjectionRule
+    ) => {
+      setVersusCategoryFilters(categoryFilters)
+      setVersusSetupError(null)
+      versusStealRuleRef.current = stealRule
+      versusTimerOptionRef.current = timerOption
+      versusDisableDrawsRef.current = disableDraws
+      versusObjectionRuleRef.current = objectionRule
+      setVersusStealRule(stealRule)
+      setVersusTimerOption(timerOption)
+      setVersusDisableDraws(disableDraws)
+      setVersusObjectionRule(objectionRule)
+      prepareForOnlineMatchStart()
+      setShowOnlineLobby(true)
+      onlineVersus.createRoom({
+        categoryFilters,
+        stealRule,
+        timerOption,
+        disableDraws,
+        objectionRule,
+      })
+    },
+    [onlineVersus, prepareForOnlineMatchStart]
+  )
+
+  const handleHostStandardOnlineMatch = useCallback(() => {
+    pendingVersusSetupIntentRef.current = null
+    hostOnlineMatchWithSettings(
+      {},
+      DEFAULT_VERSUS_STEAL_RULE,
+      DEFAULT_VERSUS_TIMER_OPTION,
+      DEFAULT_VERSUS_DISABLE_DRAWS,
+      DEFAULT_VERSUS_OBJECTION_RULE
+    )
+  }, [hostOnlineMatchWithSettings])
+
+  const handleHostCustomOnlineMatch = useCallback(() => {
+    pendingVersusSetupIntentRef.current = 'online-host'
+    setShowVersusSetup(true)
+  }, [])
+
   const handleStartOnlineMatch = useCallback(() => {
+    pendingVersusSetupIntentRef.current = null
     setShowVersusSetup(false)
     setShowVersusStartOptions(false)
     setShowOnlineLobby(true)
@@ -3627,32 +3717,20 @@ export function GameClient() {
             onHowToPlayOpen={() => setShowHowToPlay(true)}
             onHowToPlayClose={() => setShowHowToPlay(false)}
             onOpenPracticeSetup={() => setShowPracticeSetup(true)}
-            onOpenVersusSetup={() => setShowVersusSetup(true)}
+            onOpenVersusSetup={() => {
+              pendingVersusSetupIntentRef.current = 'local'
+              setShowVersusSetup(true)
+            }}
             onClosePracticeSetup={() => setShowPracticeSetup(false)}
-            onCloseVersusSetup={() => setShowVersusSetup(false)}
-            onHostOnlineMatch={
-              mode === 'versus'
-                ? () => {
-                    prepareForOnlineMatchStart()
-                    onlineVersus.createRoom({
-                      categoryFilters: versusCategoryFilters,
-                      stealRule: versusStealRule,
-                      timerOption: versusTimerOption,
-                      disableDraws: versusDisableDraws,
-                      objectionRule: versusObjectionRule,
-                    })
-                    setShowOnlineLobby(true)
-                  }
-                : undefined
+            onCloseVersusSetup={() => {
+              pendingVersusSetupIntentRef.current = null
+              setShowVersusSetup(false)
+            }}
+            onHostOnlineStandardMatch={
+              mode === 'versus' ? handleHostStandardOnlineMatch : undefined
             }
-            onJoinOnlineMatch={
-              mode === 'versus'
-                ? () => {
-                    prepareForOnlineMatchStart()
-                    setShowOnlineLobby(true)
-                  }
-                : undefined
-            }
+            onHostOnlineCustomMatch={mode === 'versus' ? handleHostCustomOnlineMatch : undefined}
+            onJoinOnlineMatch={mode === 'versus' ? handleStartOnlineMatch : undefined}
             onStartStandard={() => {
               if (mode === 'practice') {
                 setPracticeCategoryFilters({})
@@ -3667,14 +3745,14 @@ export function GameClient() {
               resetOnlineVersusSession()
               setVersusCategoryFilters({})
               setVersusSetupError(null)
-              versusStealRuleRef.current = 'lower'
-              versusTimerOptionRef.current = 300
-              versusDisableDrawsRef.current = true
-              versusObjectionRuleRef.current = 'one'
-              setVersusStealRule('lower')
-              setVersusTimerOption(300)
-              setVersusDisableDraws(true)
-              setVersusObjectionRule('one')
+              versusStealRuleRef.current = DEFAULT_VERSUS_STEAL_RULE
+              versusTimerOptionRef.current = DEFAULT_VERSUS_TIMER_OPTION
+              versusDisableDrawsRef.current = DEFAULT_VERSUS_DISABLE_DRAWS
+              versusObjectionRuleRef.current = DEFAULT_VERSUS_OBJECTION_RULE
+              setVersusStealRule(DEFAULT_VERSUS_STEAL_RULE)
+              setVersusTimerOption(DEFAULT_VERSUS_TIMER_OPTION)
+              setVersusDisableDraws(DEFAULT_VERSUS_DISABLE_DRAWS)
+              setVersusObjectionRule(DEFAULT_VERSUS_OBJECTION_RULE)
               setShowVersusStartOptions(false)
               skipNextVersusAutoLoadRef.current = true
               clearGameState('versus')
@@ -3747,7 +3825,10 @@ export function GameClient() {
             mode === 'practice'
               ? () => setShowPracticeSetup(true)
               : mode === 'versus'
-                ? () => setShowVersusSetup(true)
+                ? () => {
+                    pendingVersusSetupIntentRef.current = 'local'
+                    setShowVersusSetup(true)
+                  }
                 : undefined
           }
         />
@@ -3971,7 +4052,10 @@ export function GameClient() {
 
       <VersusSetupModal
         isOpen={showVersusSetup}
-        onClose={() => setShowVersusSetup(false)}
+        onClose={() => {
+          pendingVersusSetupIntentRef.current = null
+          setShowVersusSetup(false)
+        }}
         mode="versus"
         errorMessage={versusSetupError}
         filters={versusCategoryFilters}

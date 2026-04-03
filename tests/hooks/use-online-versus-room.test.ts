@@ -361,8 +361,8 @@ describe('useOnlineVersusRoom', () => {
             guessesRemaining: number
             currentPlayer: 'x' | 'o'
             winner: null
-            stealableCell: null
-            pendingFinalSteal: null
+            stealableCell: number | null
+            pendingFinalSteal: { defender: 'x' | 'o'; cellIndex: number } | null
             objectionsUsed: { x: number; o: number }
             turnDeadlineAt: string | null
             turnDurationSeconds: number | null
@@ -515,6 +515,40 @@ describe('useOnlineVersusRoom', () => {
       await waitFor(() => {
         expect(result.current.room?.state_data).toEqual(snapshot)
       })
+    })
+
+    it('skips event-history replay when the refreshed room already has state_data', async () => {
+      const snapshot = {
+        puzzleId: 'p1',
+        guesses: Array(9).fill(null),
+        guessesRemaining: 5,
+        currentPlayer: 'o' as const,
+        winner: null,
+        stealableCell: 4,
+        pendingFinalSteal: { defender: 'x' as const, cellIndex: 4 },
+        objectionsUsed: { x: 0, o: 0 },
+        turnDeadlineAt: '2026-04-02T20:00:30.000Z',
+        turnDurationSeconds: 20,
+      }
+
+      const { fetchSpy } = await joinActiveRoomWithRouter(snapshot)
+      const beforeVisibility = fetchSpy.mock.calls.length
+
+      act(() => {
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          value: 'visible',
+        })
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      await waitFor(() => {
+        const urls = fetchSpy.mock.calls.slice(beforeVisibility).map((call) => String(call[0]))
+        expect(urls).toContain('/api/versus/room/ABCD')
+      })
+
+      const urls = fetchSpy.mock.calls.slice(beforeVisibility).map((call) => String(call[0]))
+      expect(urls).not.toContain('/api/versus/room-events/room-1')
     })
   })
 

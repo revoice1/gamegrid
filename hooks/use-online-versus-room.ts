@@ -109,7 +109,8 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   // forward-declaration ordering problem (both are useCallback, the helpers are
   // declared after subscribeToRoom in the file).
   const fetchEventHistoryRef = useRef<(roomId: string) => Promise<void>>(async () => {})
-  const fetchRoomStateRef = useRef<(code: string) => Promise<void>>(async () => {})
+  const fetchRoomStateRef = useRef<(code: string) => Promise<VersusRoom | null>>(async () => null)
+  const catchUpRoomRef = useRef<(roomId: string, code: string) => Promise<void>>(async () => {})
 
   useEffect(() => {
     roomRef.current = room
@@ -184,10 +185,9 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
           return
         }
         // Reconnected after a drop (phone sleep, network blip, etc.).
-        // Fetch event history to fill the gap and refresh the room row so
-        // snapshot-only fields like turnDeadlineAt are also current.
-        void fetchEventHistoryRef.current(targetRoom.id)
-        void fetchRoomStateRef.current(targetRoom.code)
+        // Refresh the room row first. If the host has a fresh snapshot, prefer
+        // that authoritative state over replaying old events on top of it.
+        void catchUpRoomRef.current(targetRoom.id, targetRoom.code)
       })
 
     channelRef.current = channel
@@ -239,15 +239,35 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   const fetchRoomState = useCallback(async (code: string) => {
     try {
       const res = await fetch(`/api/versus/room/${code}`)
-      if (!res.ok) return
+      if (!res.ok) return null
       const json = await res.json()
-      if (json.room) setRoom(json.room as VersusRoom)
+      if (json.room) {
+        const nextRoom = json.room as VersusRoom
+        setRoom(nextRoom)
+        return nextRoom
+      }
     } catch {
       /* non-fatal */
     }
+
+    return null
   }, [])
 
   fetchRoomStateRef.current = fetchRoomState
+
+  const catchUpRoom = useCallback(async (roomId: string, code: string) => {
+    const refreshedRoom = await fetchRoomStateRef.current(code)
+
+    // If the room already has a canonical snapshot, prefer hydrating from it
+    // rather than replaying missed history over the top of newer state.
+    if (refreshedRoom?.state_data) {
+      return
+    }
+
+    await fetchEventHistoryRef.current(roomId)
+  }, [])
+
+  catchUpRoomRef.current = catchUpRoom
 
   // ── Reload resume ─────────────────────────────────────────────────────────
   // On mount, check localStorage for an in-progress room and rejoin it.
@@ -294,8 +314,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
       if (document.visibilityState !== 'visible') return
       const room = roomRef.current
       if (!room || room.status !== 'active') return
-      void fetchEventHistoryRef.current(room.id)
-      void fetchRoomStateRef.current(room.code)
+      void catchUpRoomRef.current(room.id, room.code)
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)

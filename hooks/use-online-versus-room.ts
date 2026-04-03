@@ -382,15 +382,26 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     const currentRoom = roomRef.current
     if (!currentRoom) return { ok: false, error: 'Not in a match.' }
 
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 8000)
+
     try {
-      const res = await fetch(`/api/versus/room/${currentRoom.code}/finish`, { method: 'POST' })
+      const res = await fetch(`/api/versus/room/${currentRoom.code}/finish`, {
+        method: 'POST',
+        signal: controller.signal,
+      })
       const json = await res.json()
       if (!res.ok || json.error) return { ok: false, error: json.error ?? 'Failed to end match.' }
       setPhase('finished')
       clearRoomEntry()
       return { ok: true, error: null }
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return { ok: false, error: 'Request timed out.' }
+      }
       return { ok: false, error: 'Network error.' }
+    } finally {
+      window.clearTimeout(timeout)
     }
   }, [])
 
@@ -399,19 +410,28 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
       const currentRoom = roomRef.current
       if (!currentRoom) return { ok: false, error: 'Not in a match.' }
 
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 8000)
+
       try {
         const res = await fetch(`/api/versus/room/${currentRoom.code}/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ snapshot }),
+          signal: controller.signal,
         })
         const json = await res.json()
         if (!res.ok || json.error) {
           return { ok: false, error: json.error ?? 'Failed to save match state.' }
         }
         return { ok: true, error: null }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return { ok: false, error: 'Request timed out.' }
+        }
         return { ok: false, error: 'Network error.' }
+      } finally {
+        window.clearTimeout(timeout)
       }
     },
     []

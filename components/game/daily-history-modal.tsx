@@ -191,7 +191,7 @@ export function DailyHistoryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl border-border bg-card/95 p-0 backdrop-blur-sm">
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden border-border bg-card/95 p-0 backdrop-blur-sm">
         <DialogHeader className="border-b border-border px-6 py-5">
           <DialogTitle className="text-2xl font-bold text-foreground">Daily Archive</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -199,7 +199,41 @@ export function DailyHistoryModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div ref={scrollContainerRef} className="max-h-[75vh] overflow-y-auto px-6 py-5">
+        {entries.length > 0 && !isLoading && !errorMessage ? (
+          <div className="border-b border-border px-6 py-4">
+            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-secondary/12 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">
+                  Archive Calendar
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <div
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getStatusLegendClass('completed')}`}
+                  >
+                    Completed
+                  </div>
+                  <div
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getStatusLegendClass('in-progress')}`}
+                  >
+                    In Progress
+                  </div>
+                  <div
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getStatusLegendClass('not-started')}`}
+                  >
+                    Not Started
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Open</span> marks the board you have
+                loaded right now. <span className="font-medium text-foreground">Today</span> marks
+                the real current daily.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {isLoading ? (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-5 py-10 text-center">
               <p className="text-sm font-medium text-foreground">Loading archive...</p>
@@ -218,29 +252,6 @@ export function DailyHistoryModal({
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex flex-wrap gap-2">
-                <div
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getStatusLegendClass('completed')}`}
-                >
-                  Completed
-                </div>
-                <div
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getStatusLegendClass('in-progress')}`}
-                >
-                  In Progress
-                </div>
-                <div
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getStatusLegendClass('not-started')}`}
-                >
-                  Not Started
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Open</span> marks the board you have
-                loaded right now. <span className="font-medium text-foreground">Today</span> marks
-                the real current daily.
-              </p>
-
               {calendarSections.map((section) => (
                 <section
                   key={section.key}

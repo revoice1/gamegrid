@@ -100,6 +100,9 @@ describe('OBJECTION_SYSTEM_PROMPT', () => {
     expect(OBJECTION_SYSTEM_PROMPT).toContain(
       'If the selected game or any clearly related family variant directly fits both categories'
     )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'If a clearly related family edition or expansion officially adds the disputed category fit'
+    )
     expect(OBJECTION_SYSTEM_PROMPT).toContain('Do not require every variant to match')
     expect(OBJECTION_SYSTEM_PROMPT).toContain(
       'do not require the perspective to be the default camera'

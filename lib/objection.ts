@@ -105,6 +105,7 @@ export const OBJECTION_SYSTEM_PROMPT = [
   'Do not ignore the metadata either just because your memory is incomplete or older.',
   'The `familyNames` array contains alternate editions, ports, remasters, remakes, or expanded releases that belong to the same game family.',
   'Use those family variants as supporting context when one release name is better known than another.',
+  'If a clearly related family edition or expansion officially adds the disputed category fit, treat that as valid support for sustained.',
   'If the selected game or any clearly related family variant directly fits both categories, that is valid evidence in favor of sustained.',
   'For perspective categories, do not require the perspective to be the default camera if an official mode/toggle supports substantial or full-game play in that perspective.',
   'Do not require every variant to match. Use them to understand the broader identity of the game family.',

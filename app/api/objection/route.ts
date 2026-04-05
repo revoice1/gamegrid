@@ -10,31 +10,10 @@ import {
 import type { Category, CellGuess } from '@/lib/types'
 
 const GEMINI_KEY = process.env.GEMINI_KEY
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'models/gemini-3.1-flash-lite-preview'
+const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview'
 const ENABLE_SEARCH_GROUNDING = process.env.GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING !== '0'
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const PINNED_THINKING_LEVEL = 'HIGH' as const
-
-function normalizeGeminiModelName(model: string): string {
-  return model.replace(/^models\//, '').trim()
-}
-
-function getGeminiModelCandidates(): string[] {
-  const configured = normalizeGeminiModelName(GEMINI_MODEL)
-
-  return Array.from(
-    new Set(
-      [
-        configured,
-        'gemini-2.5-flash',
-        'gemini-2.5-pro',
-        'gemini-3.1-flash-lite-preview',
-        'gemini-2.5-flash-lite',
-        'gemini-flash-lite-latest',
-      ].filter(Boolean)
-    )
-  )
-}
 
 export async function POST(request: NextRequest) {
   if (!GEMINI_KEY) {
@@ -136,110 +115,109 @@ export async function POST(request: NextRequest) {
       : [{ label: 'standard', body: requestBodyBase }]
 
     for (const requestVariant of requestVariants) {
-      for (const model of getGeminiModelCandidates()) {
+      const model = GEMINI_MODEL
+      if (IS_DEV) {
+        logInfo('Gemini objection outbound request', {
+          model,
+          variant: requestVariant.label,
+          requestBody: requestVariant.body,
+        })
+      } else {
+        logInfo('Gemini objection request', {
+          model,
+          variant: requestVariant.label,
+          gameId: body.guess.gameId,
+          rowCategory: body.rowCategory.name,
+          colCategory: body.colCategory.name,
+          familyCount: dataset.familyNames.length,
+          familyNamesPreview,
+          familyNamesRemainder,
+          promptBytes: datasetForPrompt.length,
+          thinkingLevel: PINNED_THINKING_LEVEL,
+        })
+      }
+      const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`
+      if (IS_DEV) {
+        logInfo('Gemini objection HTTP request', {
+          url: requestUrl.replace(/key=[^&]+/, 'key=REDACTED'),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: requestVariant.body,
+        })
+      }
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestVariant.body),
+      })
+
+      if (response.ok) {
+        const payload = (await response.json()) as unknown
+        const extractedText = extractGeminiText(payload)
+        const parsedJudgment = extractedText ? normalizeObjectionResponse(extractedText) : null
         if (IS_DEV) {
-          logInfo('Gemini objection outbound request', {
+          logInfo('Gemini objection raw response', {
             model,
             variant: requestVariant.label,
-            requestBody: requestVariant.body,
+            payload: JSON.stringify(payload, null, 2),
+            extractedText,
+            parsedJudgment,
+          })
+          logInfo('Gemini objection verdict', {
+            model,
+            variant: requestVariant.label,
+            verdict: parsedJudgment?.verdict ?? null,
+            confidence: parsedJudgment?.confidence ?? null,
+            explanation: parsedJudgment?.explanation ?? null,
+            suspectedMissingMetadata: parsedJudgment?.suspectedMissingMetadata ?? null,
           })
         } else {
-          logInfo('Gemini objection request', {
+          logInfo('Gemini objection verdict', {
             model,
             variant: requestVariant.label,
-            gameId: body.guess.gameId,
-            rowCategory: body.rowCategory.name,
-            colCategory: body.colCategory.name,
-            familyCount: dataset.familyNames.length,
-            familyNamesPreview,
-            familyNamesRemainder,
-            promptBytes: datasetForPrompt.length,
-            thinkingLevel: PINNED_THINKING_LEVEL,
+            verdict: parsedJudgment?.verdict ?? null,
+            confidence: parsedJudgment?.confidence ?? null,
+            explanation: parsedJudgment?.explanation ?? null,
+            suspectedMissingMetadata: parsedJudgment?.suspectedMissingMetadata ?? null,
           })
         }
-        const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`
-        if (IS_DEV) {
-          logInfo('Gemini objection HTTP request', {
-            url: requestUrl.replace(/key=[^&]+/, 'key=REDACTED'),
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: requestVariant.body,
-          })
-        }
-
-        const response = await fetch(requestUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestVariant.body),
+        geminiResponse = new Response(JSON.stringify(payload), {
+          status: response.status,
+          headers: { 'Content-Type': 'application/json' },
         })
+        break
+      }
 
-        if (response.ok) {
-          const payload = (await response.json()) as unknown
-          const extractedText = extractGeminiText(payload)
-          const parsedJudgment = extractedText ? normalizeObjectionResponse(extractedText) : null
-          if (IS_DEV) {
-            logInfo('Gemini objection raw response', {
-              model,
-              variant: requestVariant.label,
-              payload: JSON.stringify(payload, null, 2),
-              extractedText,
-              parsedJudgment,
-            })
-            logInfo('Gemini objection verdict', {
-              model,
-              variant: requestVariant.label,
-              verdict: parsedJudgment?.verdict ?? null,
-              confidence: parsedJudgment?.confidence ?? null,
-              explanation: parsedJudgment?.explanation ?? null,
-              suspectedMissingMetadata: parsedJudgment?.suspectedMissingMetadata ?? null,
-            })
-          } else {
-            logInfo('Gemini objection verdict', {
-              model,
-              variant: requestVariant.label,
-              verdict: parsedJudgment?.verdict ?? null,
-              confidence: parsedJudgment?.confidence ?? null,
-              explanation: parsedJudgment?.explanation ?? null,
-              suspectedMissingMetadata: parsedJudgment?.suspectedMissingMetadata ?? null,
-            })
-          }
-          geminiResponse = new Response(JSON.stringify(payload), {
-            status: response.status,
-            headers: { 'Content-Type': 'application/json' },
-          })
-          break
-        }
+      lastErrorText = await response.text()
+      logWarn('Gemini objection request failed', {
+        model,
+        variant: requestVariant.label,
+        status: response.status,
+        body: IS_DEV ? lastErrorText : undefined,
+      })
 
-        lastErrorText = await response.text()
-        logWarn('Gemini objection request failed', {
+      if (requestVariant.label === 'grounded' && response.status === 429) {
+        logWarn('Gemini grounded request hit rate limit; falling back to standard variant', {
           model,
           variant: requestVariant.label,
           status: response.status,
-          body: IS_DEV ? lastErrorText : undefined,
         })
-
-        if (requestVariant.label === 'grounded' && response.status === 429) {
-          logWarn('Gemini grounded request hit rate limit; trying next model', {
-            model,
-            variant: requestVariant.label,
-            status: response.status,
-          })
-          continue
-        }
-
-        if (response.status === 404) {
-          continue
-        }
-
-        if (requestVariant.label === 'grounded') {
-          continue
-        }
-
-        geminiResponse = response
         break
       }
+
+      if (response.status === 404) {
+        continue
+      }
+
+      if (requestVariant.label === 'grounded') {
+        break
+      }
+
+      geminiResponse = response
+      break
 
       if (geminiResponse?.ok) {
         break
@@ -267,7 +245,7 @@ export async function POST(request: NextRequest) {
         IS_DEV
           ? payload
           : {
-              modelCandidates: getGeminiModelCandidates(),
+              model: GEMINI_MODEL,
             }
       )
       return NextResponse.json(

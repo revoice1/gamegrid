@@ -119,6 +119,7 @@ export function useVersusTurnTimer({
       return
     }
 
+    const hadInitializedTurn = initializedTurnTimerKeyRef.current !== null
     initializedTurnTimerKeyRef.current = turnTimerKey
     if (isOnlineMatch) {
       const hasHydratedCurrentTurnDeadline =
@@ -132,7 +133,7 @@ export function useVersusTurnTimer({
       activeTurnTimerKeyRef.current = turnTimerKey
     } else {
       activeTurnTimerKeyRef.current = turnTimerKey
-      if (turnTimeLeft === null || turnTimeLeft <= 0) {
+      if (hadInitializedTurn || turnTimeLeft === null || turnTimeLeft <= 0) {
         setTurnTimeLeft(versusTimerOption)
       }
       setTurnDeadlineAt(null)

@@ -3890,6 +3890,7 @@ export function GameClient() {
           alarmsEnabled={!isVersusMode || versusAlarmsEnabled}
           animationsEnabled={animationsEnabled}
           lockImpactCell={isVersusMode ? lockImpactCell : null}
+          stealRule={isVersusMode ? versusStealRule : 'off'}
           isGameOver={isComplete}
           onCellClick={handleCellClick}
         />

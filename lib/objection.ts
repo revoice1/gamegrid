@@ -78,7 +78,7 @@ function buildCategoryValidationQuestion(category: Category): string {
     case 'game_mode':
       return `Does this game have ${category.name} as a real supported mode of play? Do not count trivial side features, metadata quirks, or weak indirect multiplayer associations.`
     case 'perspective':
-      return `Is ${category.name} one of this game's recognized gameplay perspectives? Count official modes/toggles that enable substantial gameplay (or a full campaign) in the named perspective, even when another camera style is the default.`
+      return `Is ${category.name} one of this game's recognized gameplay perspectives? Count official modes/toggles that enable substantial gameplay (or a full campaign) in the named perspective, even when another camera style is the default. Do not require combat to feel optimal in that perspective if official story progression is still meaningfully playable.`
     case 'genre':
       return `Is this game commonly and directly classified as ${category.name}? Do not infer broad parent genres or genre-adjacent relationships unless the metadata explicitly supports them.`
     case 'theme':
@@ -109,6 +109,7 @@ export const OBJECTION_SYSTEM_PROMPT = [
   'If a clearly related family edition or expansion officially adds the disputed category fit, treat that as valid support for sustained.',
   'If the selected game or any clearly related family variant directly fits both categories, that is valid evidence in favor of sustained.',
   'For perspective categories, do not require the perspective to be the default camera if an official mode/toggle supports substantial or full-game play in that perspective.',
+  'For perspective categories, do not overrule only because the mode is considered a novelty or less effective for combat when the official mode still supports meaningful story/world gameplay.',
   'Do not require every variant to match. Use them to understand the broader identity of the game family.',
   'Sustain only when the game or a clearly related family variant directly fits both categories.',
   'Do not sustain based on loose association, technicalities, indirect relationships, platform ownership, franchise adjacency, optional/minor features, or niche edge-case interpretations.',

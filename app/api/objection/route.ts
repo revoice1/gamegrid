@@ -11,6 +11,7 @@ import type { Category, CellGuess } from '@/lib/types'
 
 const GEMINI_KEY = process.env.GEMINI_KEY
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'models/gemini-3.1-flash-lite-preview'
+const GEMINI_THINKING_LEVEL = process.env.GEMINI_THINKING_LEVEL ?? 'high'
 const IS_DEV = process.env.NODE_ENV !== 'production'
 
 function normalizeGeminiModelName(model: string): string {
@@ -30,6 +31,34 @@ function getGeminiModelCandidates(): string[] {
       ].filter(Boolean)
     )
   )
+}
+
+function buildGeminiRequestBody(
+  dataset: ReturnType<typeof buildObjectionDataset>,
+  withThinking: boolean
+) {
+  return {
+    systemInstruction: {
+      parts: [{ text: OBJECTION_SYSTEM_PROMPT }],
+    },
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: JSON.stringify(dataset, null, 2) }],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: 'application/json',
+      ...(withThinking
+        ? {
+            thinkingConfig: {
+              thinkingLevel: GEMINI_THINKING_LEVEL,
+            },
+          }
+        : {}),
+    },
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -57,31 +86,19 @@ export async function POST(request: NextRequest) {
     )
     let geminiResponse: Response | null = null
     let lastErrorText = ''
-    const requestBody = {
-      systemInstruction: {
-        parts: [{ text: OBJECTION_SYSTEM_PROMPT }],
-      },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: JSON.stringify(dataset, null, 2) }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: 'application/json',
-      },
-    }
-
     for (const model of getGeminiModelCandidates()) {
+      let requestBody = buildGeminiRequestBody(dataset, true)
+      let thinkingEnabled = true
       if (IS_DEV) {
         logInfo('Gemini objection request payload', {
           model,
+          thinkingEnabled,
           body: JSON.stringify(requestBody, null, 2),
         })
       } else {
         logInfo('Gemini objection request', {
           model,
+          thinkingEnabled,
           gameId: body.guess.gameId,
           rowCategory: body.rowCategory.name,
           colCategory: body.colCategory.name,
@@ -89,7 +106,7 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      const response = await fetch(
+      let response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
         {
           method: 'POST',
@@ -99,6 +116,34 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify(requestBody),
         }
       )
+
+      let responseBodyText = response.ok ? '' : await response.text()
+      if (
+        !response.ok &&
+        thinkingEnabled &&
+        response.status === 400 &&
+        /thinking/i.test(responseBodyText)
+      ) {
+        thinkingEnabled = false
+        requestBody = buildGeminiRequestBody(dataset, false)
+
+        logWarn('Gemini objection request retrying without thinking config', {
+          model,
+          status: response.status,
+        })
+
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          }
+        )
+        responseBodyText = response.ok ? '' : await response.text()
+      }
 
       if (response.ok) {
         const payload = (await response.json()) as unknown
@@ -125,9 +170,10 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      lastErrorText = await response.text()
+      lastErrorText = responseBodyText
       logWarn('Gemini objection request failed', {
         model,
+        thinkingEnabled,
         status: response.status,
         body: IS_DEV ? lastErrorText : undefined,
       })

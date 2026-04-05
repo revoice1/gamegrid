@@ -61,7 +61,7 @@ describe('useVersusTurnTimer', () => {
       {
         initialProps: {
           isLoading: false,
-          turnTimeLeft: null,
+          turnTimeLeft: null as number | null,
         },
       }
     )

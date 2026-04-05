@@ -34,7 +34,10 @@ interface ModeStartScreenProps {
   practiceSetupError: string | null
   versusSetupError: string | null
   practiceCategoryFilters: VersusCategoryFilters
+  practiceMinimumValidOptions: number | null
   versusCategoryFilters: VersusCategoryFilters
+  versusMinimumValidOptions: number | null
+  minimumValidOptionsDefault: number
   versusStealRule: VersusStealRule
   versusTimerOption: VersusTurnTimerOption
   versusDisableDraws: boolean
@@ -58,14 +61,16 @@ interface ModeStartScreenProps {
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
     disableDraws: boolean,
-    objectionRule: VersusObjectionRule
+    objectionRule: VersusObjectionRule,
+    minimumValidOptionsOverride: number | null
   ) => void
   onApplyVersusFilters: (
     filters: VersusCategoryFilters,
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
     disableDraws: boolean,
-    objectionRule: VersusObjectionRule
+    objectionRule: VersusObjectionRule,
+    minimumValidOptionsOverride: number | null
   ) => void
 }
 
@@ -86,7 +91,10 @@ export function ModeStartScreen({
   practiceSetupError,
   versusSetupError,
   practiceCategoryFilters,
+  practiceMinimumValidOptions,
   versusCategoryFilters,
+  versusMinimumValidOptions,
+  minimumValidOptionsDefault,
   versusStealRule,
   versusTimerOption,
   versusDisableDraws,
@@ -328,6 +336,8 @@ export function ModeStartScreen({
         timerOption="none"
         disableDraws={false}
         objectionRule="off"
+        minimumValidOptionsDefault={minimumValidOptionsDefault}
+        minimumValidOptionsOverride={practiceMinimumValidOptions}
         onApply={onApplyPracticeFilters}
       />
 
@@ -341,6 +351,8 @@ export function ModeStartScreen({
         timerOption={versusTimerOption}
         disableDraws={versusDisableDraws}
         objectionRule={versusObjectionRule}
+        minimumValidOptionsDefault={minimumValidOptionsDefault}
+        minimumValidOptionsOverride={versusMinimumValidOptions}
         onApply={onApplyVersusFilters}
       />
 

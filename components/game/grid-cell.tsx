@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { usePulse } from '@/hooks/use-pulse'
 import { cn } from '@/lib/utils'
 import type { CellGuess, PuzzleCellMetadata } from '@/lib/types'
+import type { VersusStealRule } from './versus-setup-modal'
 import Image from 'next/image'
 
 interface GridCellProps {
@@ -24,6 +25,7 @@ interface GridCellProps {
   isFinalStealTarget?: boolean
   isFinalStealDimmed?: boolean
   isDisabled: boolean
+  stealRule?: VersusStealRule
   onClick: () => void
 }
 
@@ -62,12 +64,19 @@ export function GridCell({
   isFinalStealTarget = false,
   isFinalStealDimmed = false,
   isDisabled,
+  stealRule = 'off',
   onClick,
 }: GridCellProps) {
   const hasGuess = guess !== null
   const isSustainedObjection = Boolean(guess?.isCorrect && guess?.objectionVerdict === 'sustained')
+  const revealedShowdownMetricValue =
+    stealRule === 'fewer_reviews' || stealRule === 'more_reviews'
+      ? guess?.stealRatingCount
+      : guess?.stealRating
   const showRevealedShowdownScore = Boolean(
-    guess?.showdownScoreRevealed && guess?.stealRating !== null && guess?.stealRating !== undefined
+    guess?.showdownScoreRevealed &&
+    revealedShowdownMetricValue !== null &&
+    revealedShowdownMetricValue !== undefined
   )
   const isButtonDisabled = isDisabled && !hasGuess
   const cellAlarmState = alarmsEnabled
@@ -186,7 +195,7 @@ export function GridCell({
           </div>
           {showRevealedShowdownScore && (
             <div className="absolute bottom-1 left-1 z-[2] rounded-md border border-black/35 bg-black/72 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.28)]">
-              {guess.stealRating}
+              {revealedShowdownMetricValue}
             </div>
           )}
           {!guess.isCorrect && (

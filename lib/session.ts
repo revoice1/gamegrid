@@ -43,6 +43,16 @@ export function getSessionId(): string {
 const DAILY_STATE_KEY = 'gamegrid_daily_state'
 const PRACTICE_STATE_KEY = 'gamegrid_practice_state'
 const VERSUS_STATE_KEY = 'gamegrid_versus_state'
+const CURRENT_SAVE_STATE_VERSION = 2
+const VALID_VERSUS_STEAL_RULES = new Set([
+  'off',
+  'lower',
+  'higher',
+  'fewer_reviews',
+  'more_reviews',
+])
+const VALID_VERSUS_TIMER_OPTIONS = new Set(['none', 20, 60, 120, 300])
+const VALID_VERSUS_OBJECTION_RULES = new Set(['off', 'one', 'three'])
 
 function getUtcDateKey(): string {
   return new Date().toISOString().split('T')[0]
@@ -61,6 +71,7 @@ export interface CellGuessRecord {
   released?: string | null
   metacritic?: number | null
   stealRating?: number | null
+  stealRatingCount?: number | null
   genres?: string[]
   platforms?: string[]
   developers?: string[]
@@ -81,6 +92,7 @@ export interface CellGuessRecord {
 }
 
 export interface SavedGameState {
+  version?: number
   puzzleId: string
   puzzle?: Puzzle
   guesses: (CellGuess | CellGuessRecord | null)[]
@@ -97,7 +109,9 @@ export interface SavedGameState {
     cellIndex: number
   } | null
   versusCategoryFilters?: Record<string, string[]>
-  versusStealRule?: 'off' | 'lower' | 'higher'
+  practiceMinimumValidOptions?: number | null
+  versusMinimumValidOptions?: number | null
+  versusStealRule?: 'off' | 'lower' | 'higher' | 'fewer_reviews' | 'more_reviews'
   versusTimerOption?: 'none' | 20 | 60 | 120 | 300
   versusDisableDraws?: boolean
   versusObjectionRule?: 'off' | 'one' | 'three'
@@ -118,6 +132,161 @@ function getStateKey(mode: PersistedMode, dailyDate?: string): string {
   return VERSUS_STATE_KEY
 }
 
+function sanitizeIntegerOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return null
+  }
+  return value
+}
+
+function sanitizeCategoryFilters(value: unknown): Record<string, string[]> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  const sanitizedEntries = Object.entries(value).map(([key, rawValues]) => [
+    key,
+    Array.isArray(rawValues)
+      ? rawValues.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+  ])
+
+  return Object.fromEntries(sanitizedEntries)
+}
+
+function isPuzzleSnapshotCompatible(value: unknown): value is Puzzle {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+
+  const puzzle = value as Record<string, unknown>
+  return (
+    typeof puzzle.id === 'string' &&
+    Array.isArray(puzzle.row_categories) &&
+    puzzle.row_categories.length === 3 &&
+    Array.isArray(puzzle.col_categories) &&
+    puzzle.col_categories.length === 3
+  )
+}
+
+function sanitizeSavedGameState(rawState: unknown): SavedGameState | null {
+  if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+    return null
+  }
+
+  const state = rawState as Record<string, unknown>
+  if (typeof state.puzzleId !== 'string' || !Array.isArray(state.guesses)) {
+    return null
+  }
+
+  const sanitized: SavedGameState = {
+    version: CURRENT_SAVE_STATE_VERSION,
+    puzzleId: state.puzzleId,
+    guesses: state.guesses
+      .slice(0, 9)
+      .map((guess) => (guess && typeof guess === 'object' ? guess : null)),
+    guessesRemaining:
+      typeof state.guessesRemaining === 'number' && Number.isFinite(state.guessesRemaining)
+        ? state.guessesRemaining
+        : 9,
+    isComplete: Boolean(state.isComplete),
+  }
+  const isLegacyState =
+    typeof state.version !== 'number' || state.version < CURRENT_SAVE_STATE_VERSION
+
+  if (isPuzzleSnapshotCompatible(state.puzzle)) {
+    sanitized.puzzle = state.puzzle
+  } else if (isLegacyState && state.puzzle !== undefined) {
+    sanitized.guesses = Array(9).fill(null)
+    sanitized.guessesRemaining = 9
+    sanitized.isComplete = false
+  }
+
+  if (typeof state.date === 'string') sanitized.date = state.date
+  if (typeof state.selectedCell === 'number') sanitized.selectedCell = state.selectedCell
+  if (typeof state.searchQuery === 'string' || state.searchQuery === null) {
+    sanitized.searchQuery = state.searchQuery
+  }
+  if (state.currentPlayer === 'x' || state.currentPlayer === 'o') {
+    sanitized.currentPlayer = state.currentPlayer
+  }
+  if (typeof state.stealableCell === 'number' || state.stealableCell === null) {
+    sanitized.stealableCell = state.stealableCell
+  }
+  if (
+    state.winner === 'x' ||
+    state.winner === 'o' ||
+    state.winner === 'draw' ||
+    state.winner === null
+  ) {
+    sanitized.winner = state.winner
+  }
+  if (state.pendingFinalSteal && typeof state.pendingFinalSteal === 'object') {
+    const pendingFinalSteal = state.pendingFinalSteal as Record<string, unknown>
+    if (
+      (pendingFinalSteal.defender === 'x' || pendingFinalSteal.defender === 'o') &&
+      typeof pendingFinalSteal.cellIndex === 'number'
+    ) {
+      sanitized.pendingFinalSteal = {
+        defender: pendingFinalSteal.defender,
+        cellIndex: pendingFinalSteal.cellIndex,
+      }
+    }
+  } else if (state.pendingFinalSteal === null) {
+    sanitized.pendingFinalSteal = null
+  }
+
+  if ('versusCategoryFilters' in state) {
+    sanitized.versusCategoryFilters = sanitizeCategoryFilters(state.versusCategoryFilters)
+  }
+  if ('practiceMinimumValidOptions' in state) {
+    sanitized.practiceMinimumValidOptions = sanitizeIntegerOrNull(state.practiceMinimumValidOptions)
+  }
+  if ('versusMinimumValidOptions' in state) {
+    sanitized.versusMinimumValidOptions = sanitizeIntegerOrNull(state.versusMinimumValidOptions)
+  }
+  if (
+    typeof state.versusStealRule === 'string' &&
+    VALID_VERSUS_STEAL_RULES.has(state.versusStealRule)
+  ) {
+    sanitized.versusStealRule = state.versusStealRule as SavedGameState['versusStealRule']
+  }
+  if (VALID_VERSUS_TIMER_OPTIONS.has(state.versusTimerOption as never)) {
+    sanitized.versusTimerOption = state.versusTimerOption as SavedGameState['versusTimerOption']
+  }
+  if (typeof state.versusDisableDraws === 'boolean') {
+    sanitized.versusDisableDraws = state.versusDisableDraws
+  }
+  if (
+    typeof state.versusObjectionRule === 'string' &&
+    VALID_VERSUS_OBJECTION_RULES.has(state.versusObjectionRule)
+  ) {
+    sanitized.versusObjectionRule =
+      state.versusObjectionRule as SavedGameState['versusObjectionRule']
+  }
+  if (state.versusObjectionsUsed && typeof state.versusObjectionsUsed === 'object') {
+    const objectionsUsed = state.versusObjectionsUsed as Record<string, unknown>
+    sanitized.versusObjectionsUsed = {
+      x: typeof objectionsUsed.x === 'number' ? objectionsUsed.x : 0,
+      o: typeof objectionsUsed.o === 'number' ? objectionsUsed.o : 0,
+    }
+  }
+  if (Array.isArray(state.versusEventLog)) {
+    sanitized.versusEventLog = state.versusEventLog as VersusEventRecord[]
+  }
+  if (typeof state.turnTimeLeft === 'number' || state.turnTimeLeft === null) {
+    sanitized.turnTimeLeft = state.turnTimeLeft
+  }
+  if (typeof state.turnDeadlineAt === 'string' || state.turnDeadlineAt === null) {
+    sanitized.turnDeadlineAt = state.turnDeadlineAt
+  }
+
+  return sanitized
+}
+
 export function saveGameState(
   state: SavedGameState,
   mode: PersistedMode,
@@ -127,7 +296,12 @@ export function saveGameState(
 
   const resolvedDailyDate = dailyDate ?? state.puzzle?.date ?? state.date ?? getUtcDateKey()
   const key = getStateKey(mode, resolvedDailyDate)
-  const saveState = mode === 'daily' ? { ...state, date: resolvedDailyDate } : state
+  const versionedState: SavedGameState = {
+    ...state,
+    version: CURRENT_SAVE_STATE_VERSION,
+  }
+  const saveState =
+    mode === 'daily' ? { ...versionedState, date: resolvedDailyDate } : versionedState
   localStorage.setItem(key, JSON.stringify(saveState))
 }
 
@@ -141,7 +315,11 @@ export function loadGameState(mode: PersistedMode, dailyDate?: string): SavedGam
   if (!saved) return null
 
   try {
-    const state = JSON.parse(saved) as SavedGameState
+    const state = sanitizeSavedGameState(JSON.parse(saved))
+    if (!state) {
+      localStorage.removeItem(key)
+      return null
+    }
 
     if (mode === 'daily' && state.date !== resolvedDailyDate) {
       localStorage.removeItem(key)

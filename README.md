@@ -58,17 +58,20 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment Variables
 
-| Variable                         | Required | Description                                                                                                                   |
-| -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`       | Yes      | Supabase project URL                                                                                                          |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Yes      | Supabase anon key                                                                                                             |
-| `SUPABASE_SERVICE_ROLE_KEY`      | Yes      | Supabase service-role key, used only in server routes for privileged daily persistence updates                                |
-| `TWITCH_IGDB_CLIENT_ID`          | Yes      | IGDB API client ID via the Twitch developer console                                                                           |
-| `TWITCH_IGDB_CLIENT_SECRET`      | Yes      | IGDB API client secret                                                                                                        |
-| `PUZZLE_MIN_VALID_OPTIONS`       | No       | Minimum valid answers per cell, default `3`                                                                                   |
-| `PUZZLE_GENERATION_MAX_ATTEMPTS` | No       | Max candidate grids to try before failing, default `12`                                                                       |
-| `PUZZLE_VALIDATION_SAMPLE_SIZE`  | No       | IGDB matches sampled when validating each cell, default `40`                                                                  |
-| `ALLOWED_DEV_ORIGINS`            | No       | Comma-separated extra dev origins for remote local testing, for example `http://your-hostname:3000,http://your-local-ip:3000` |
+| Variable                                   | Required | Description                                                                                                                   |
+| ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`                 | Yes      | Supabase project URL                                                                                                          |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`            | Yes      | Supabase anon key                                                                                                             |
+| `SUPABASE_SERVICE_ROLE_KEY`                | Yes      | Supabase service-role key, used only in server routes for privileged daily persistence updates                                |
+| `TWITCH_IGDB_CLIENT_ID`                    | Yes      | IGDB API client ID via the Twitch developer console                                                                           |
+| `TWITCH_IGDB_CLIENT_SECRET`                | Yes      | IGDB API client secret                                                                                                        |
+| `GEMINI_KEY`                               | No       | Gemini API key used by `/api/objection` for objection review judgments                                                        |
+| `GEMINI_MODEL`                             | No       | Gemini model name override for objections (default: `gemini-flash-lite-latest`; `models/` prefix is normalized)               |
+| `GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING` | No       | Set to `0` to disable grounded objection requests (default enabled); grounded calls may require billing-enabled API access    |
+| `PUZZLE_MIN_VALID_OPTIONS`                 | No       | Minimum valid answers per cell, default `3`                                                                                   |
+| `PUZZLE_GENERATION_MAX_ATTEMPTS`           | No       | Max candidate grids to try before failing, default `12`                                                                       |
+| `PUZZLE_VALIDATION_SAMPLE_SIZE`            | No       | IGDB matches sampled when validating each cell, default `40`                                                                  |
+| `ALLOWED_DEV_ORIGINS`                      | No       | Comma-separated extra dev origins for remote local testing, for example `http://your-hostname:3000,http://your-local-ip:3000` |
 
 ## Database Setup
 
@@ -136,6 +139,12 @@ for live room/event updates, so the tables must be published for clients to stay
   dead intersections.
 - Practice and versus custom setup start from curated defaults and let players opt into additional
   categories.
+- Versus steals can compare either rating score (`lower` / `higher`) or review-count obscurity
+  (`fewer_reviews` / `more_reviews`), and the default steal rule is `fewer_reviews`.
+- Practice/versus custom setup includes a **Minimum Answers Per Cell** override that accepts only
+  integer values lower than `PUZZLE_MIN_VALID_OPTIONS`.
+- Local saved game state is versioned; when legacy snapshots are detected after schema changes, the
+  app safely resets incompatible cached puzzle/progress data instead of crashing.
 - Game data and guess validation are powered by IGDB.
 - Search results hide metadata that would directly overlap with active puzzle categories, while
   still disambiguating exact duplicate titles.

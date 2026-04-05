@@ -136,6 +136,12 @@ for live room/event updates, so the tables must be published for clients to stay
   dead intersections.
 - Practice and versus custom setup start from curated defaults and let players opt into additional
   categories.
+- Versus steals can compare either rating score (`lower` / `higher`) or review-count obscurity
+  (`fewer_reviews` / `more_reviews`), and the default steal rule is `fewer_reviews`.
+- Practice/versus custom setup includes a **Minimum Answers Per Cell** override that accepts only
+  integer values lower than `PUZZLE_MIN_VALID_OPTIONS`.
+- Local saved game state is versioned; when legacy snapshots are detected after schema changes, the
+  app safely resets incompatible cached puzzle/progress data instead of crashing.
 - Game data and guess validation are powered by IGDB.
 - Search results hide metadata that would directly overlap with active puzzle categories, while
   still disambiguating exact duplicate titles.

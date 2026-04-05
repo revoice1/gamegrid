@@ -303,11 +303,7 @@ export function VersusSetupModal({
   const hasCustomTimerRule = draftTimerOption !== 300
   const hasCustomMinimumRule = draftMinimumValidOptionsOverride !== null
   const hasCustomRules =
-    hasCustomStealRule ||
-    hasCustomObjectionRule ||
-    hasCustomDrawRule ||
-    hasCustomTimerRule ||
-    hasCustomMinimumRule
+    hasCustomStealRule || hasCustomObjectionRule || hasCustomDrawRule || hasCustomTimerRule
 
   const CustomIndicator = ({
     label = 'Custom',

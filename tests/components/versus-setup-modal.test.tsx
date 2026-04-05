@@ -20,6 +20,7 @@ function renderModal(options?: {
   objectionRule?: 'off' | 'one' | 'three'
   timerOption?: 'none' | 20 | 60 | 120 | 300
   disableDraws?: boolean
+  minimumValidOptionsOverride?: number | null
 }) {
   return render(
     <VersusSetupModal
@@ -32,7 +33,7 @@ function renderModal(options?: {
       disableDraws={options?.disableDraws ?? true}
       objectionRule={options?.objectionRule ?? 'one'}
       minimumValidOptionsDefault={6}
-      minimumValidOptionsOverride={null}
+      minimumValidOptionsOverride={options?.minimumValidOptionsOverride ?? null}
       onApply={() => {}}
     />
   )
@@ -83,6 +84,19 @@ describe('VersusSetupModal', () => {
     await user.click(screen.getByRole('button', { name: /Rules/i }))
 
     expect(screen.getAllByText('Custom').length).toBeGreaterThan(0)
+  })
+
+  it('does not mark Rules as custom when only minimum answers override is set', async () => {
+    const user = userEvent.setup()
+    renderModal({
+      minimumValidOptionsOverride: 4,
+    })
+
+    await user.click(screen.getByRole('button', { name: /Rules/i }))
+
+    const rulesTrigger = screen.getByRole('button', { name: /Rules/i })
+    expect(rulesTrigger).not.toHaveTextContent('Custom')
+    expect(screen.getByText('Minimum Answers Per Cell')).toBeInTheDocument()
   })
 
   it('marks Categories as custom when a family differs from its default selection even if all are enabled', async () => {

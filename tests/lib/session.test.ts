@@ -70,4 +70,31 @@ describe('session game-state persistence', () => {
 
     expect(loadGameState('practice')).toBeNull()
   })
+
+  it('sanitizes legacy/corrupt saved values instead of crashing consumers', () => {
+    localStorage.setItem(
+      'gamegrid_versus_state',
+      JSON.stringify({
+        puzzleId: 'versus-puzzle',
+        guesses: Array(12).fill({ gameId: 1 }),
+        guessesRemaining: 7,
+        isComplete: false,
+        versusStealRule: 'legacy_rule',
+        versusTimerOption: 15,
+        versusObjectionRule: 'legacy',
+        practiceMinimumValidOptions: 'bad',
+        versusMinimumValidOptions: 4.5,
+      })
+    )
+
+    const restored = loadGameState('versus')
+
+    expect(restored).not.toBeNull()
+    expect(restored?.guesses).toHaveLength(9)
+    expect(restored?.versusStealRule).toBeUndefined()
+    expect(restored?.versusTimerOption).toBeUndefined()
+    expect(restored?.versusObjectionRule).toBeUndefined()
+    expect(restored?.practiceMinimumValidOptions).toBeNull()
+    expect(restored?.versusMinimumValidOptions).toBeNull()
+  })
 })

@@ -22,7 +22,6 @@ const guess: CellGuess = {
   gameModes: ['Single player'],
   perspectives: ['First person'],
   themes: ['Science fiction'],
-  tags: ['cyberpunk'],
   matchedRow: false,
   matchedCol: true,
 }
@@ -53,7 +52,6 @@ describe('buildObjectionDataset', () => {
         companies: ['Square Enix', 'Eidos Montreal'],
         developers: ['Eidos Montreal'],
         publishers: ['Square Enix'],
-        tags: ['cyberpunk'],
       },
       rowCategory: {
         name: 'Square Enix',

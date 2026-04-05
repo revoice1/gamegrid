@@ -22,7 +22,6 @@ export interface ObjectionDataset {
     companies: string[]
     developers: string[]
     publishers: string[]
-    tags: string[]
   }
   rowCategory: {
     name: string
@@ -140,7 +139,6 @@ export function buildObjectionDataset(
       companies: guess.companies ?? [],
       developers: guess.developers ?? [],
       publishers: guess.publishers ?? [],
-      tags: guess.tags ?? [],
     },
     rowCategory: {
       name: rowCategory.name,

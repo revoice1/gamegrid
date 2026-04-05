@@ -8,7 +8,8 @@ import type {
 
 export function useVersusSetupState() {
   const [versusCategoryFilters, setVersusCategoryFilters] = useState<VersusCategoryFilters>({})
-  const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('lower')
+  const [versusMinimumValidOptions, setVersusMinimumValidOptions] = useState<number | null>(null)
+  const [versusStealRule, setVersusStealRule] = useState<VersusStealRule>('fewer_reviews')
   const [versusTimerOption, setVersusTimerOption] = useState<VersusTurnTimerOption>(300)
   const [versusDisableDraws, setVersusDisableDraws] = useState(true)
   const [versusObjectionRule, setVersusObjectionRule] = useState<VersusObjectionRule>('one')
@@ -19,6 +20,8 @@ export function useVersusSetupState() {
   return {
     versusCategoryFilters,
     setVersusCategoryFilters,
+    versusMinimumValidOptions,
+    setVersusMinimumValidOptions,
     versusStealRule,
     setVersusStealRule,
     versusTimerOption,

@@ -18,9 +18,11 @@ import {
   resolveAnonymousSession,
 } from '@/lib/server-session'
 import { buildGenerationPlans } from '@/lib/puzzle-generation-plans'
+import { sanitizeMinValidOptionsOverride } from '@/lib/min-valid-options'
+import { getMinValidOptionsDefaultFromEnv } from '@/lib/min-valid-options-server'
 import type { Category, PuzzleCellMetadata } from '@/lib/types'
 
-const MIN_VALID_OPTIONS_PER_CELL = Number(process.env.PUZZLE_MIN_VALID_OPTIONS ?? '3')
+const MIN_VALID_OPTIONS_PER_CELL = getMinValidOptionsDefaultFromEnv()
 const MAX_GENERATION_ATTEMPTS = Number(process.env.PUZZLE_GENERATION_MAX_ATTEMPTS ?? '12')
 const VALIDATION_SAMPLE_SIZE = Number(process.env.PUZZLE_VALIDATION_SAMPLE_SIZE ?? '40')
 
@@ -96,11 +98,24 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const mode = searchParams.get('mode') || 'daily'
   const rawFilters = searchParams.get('filters')
+  const rawMinValidOptions = searchParams.get('minValidOptions')
   const supabase = await createClient()
   const resolvedSession = resolveAnonymousSession(request, getLegacySessionIdFromRequest(request))
   const allowedCategoryIds = rawFilters
     ? (JSON.parse(rawFilters) as PuzzleCategoryFilters)
     : undefined
+  const parsedMinValidOptions = rawMinValidOptions ? Number(rawMinValidOptions) : Number.NaN
+  const requestedMinValidOptions = Number.isFinite(parsedMinValidOptions)
+    ? parsedMinValidOptions
+    : null
+  const sanitizedMinValidOptionsOverride = sanitizeMinValidOptionsOverride(
+    requestedMinValidOptions,
+    MIN_VALID_OPTIONS_PER_CELL
+  )
+  const minValidOptionsPerCellBase =
+    mode !== 'daily' && sanitizedMinValidOptionsOverride !== null
+      ? sanitizedMinValidOptionsOverride
+      : MIN_VALID_OPTIONS_PER_CELL
 
   const encoder = new TextEncoder()
   const stream = new TransformStream<string, Uint8Array>({
@@ -157,7 +172,7 @@ export async function GET(request: NextRequest) {
 
       await send({ type: 'progress', pct: 2, message: 'Starting puzzle generation...' })
 
-      const plans = buildGenerationPlans(MIN_VALID_OPTIONS_PER_CELL, MAX_GENERATION_ATTEMPTS)
+      const plans = buildGenerationPlans(minValidOptionsPerCellBase, MAX_GENERATION_ATTEMPTS)
       type GeneratedCategories = {
         rows: Category[]
         cols: Category[]
@@ -200,10 +215,10 @@ export async function GET(request: NextRequest) {
             rows,
             cols,
             validationStatus:
-              plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL ? 'relaxed' : 'validated',
+              plan.minValidOptionsPerCell !== minValidOptionsPerCellBase ? 'relaxed' : 'validated',
             validationMessage:
-              plan.minValidOptionsPerCell !== MIN_VALID_OPTIONS_PER_CELL
-                ? `Generated with relaxed validation (${plan.minValidOptionsPerCell}+ valid options per cell instead of ${MIN_VALID_OPTIONS_PER_CELL}+).`
+              plan.minValidOptionsPerCell !== minValidOptionsPerCellBase
+                ? `Generated with relaxed validation (${plan.minValidOptionsPerCell}+ valid options per cell instead of ${minValidOptionsPerCellBase}+).`
                 : null,
             cellMetadata,
           }

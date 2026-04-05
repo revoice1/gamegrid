@@ -73,6 +73,7 @@ import {
   type VersusTurnTimerOption,
 } from './versus-setup-modal'
 import { clearGameState, loadGameState, saveGameState, type SavedGameState } from '@/lib/session'
+import { sanitizeMinValidOptionsOverride } from '@/lib/min-valid-options'
 import {
   useAnimationPreference,
   useSearchConfirmPreference,
@@ -122,7 +123,7 @@ import {
 } from '@/hooks/use-versus-steal'
 
 const MAX_GUESSES = 9
-const DEFAULT_VERSUS_STEAL_RULE: VersusStealRule = 'lower'
+const DEFAULT_VERSUS_STEAL_RULE: VersusStealRule = 'fewer_reviews'
 const DEFAULT_VERSUS_TIMER_OPTION: VersusTurnTimerOption = 300
 const DEFAULT_VERSUS_DISABLE_DRAWS = true
 const DEFAULT_VERSUS_OBJECTION_RULE: VersusObjectionRule = 'one'
@@ -166,6 +167,14 @@ interface ActiveJudgmentVerdict {
 }
 
 const STEAL_SHOWDOWN_DURATION_MS = 3400
+
+function getStealShowdownMetric(guess: CellGuess, rule: Exclude<VersusStealRule, 'off'>) {
+  if (rule === 'fewer_reviews' || rule === 'more_reviews') {
+    return guess.stealRatingCount ?? null
+  }
+
+  return guess.stealRating ?? null
+}
 
 interface PendingFinalSteal {
   defender: TicTacToePlayer
@@ -213,7 +222,7 @@ interface PuzzleStreamMessage {
   passed?: boolean
 }
 
-export function GameClient() {
+export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptionsDefault: number }) {
   const pendingVersusSetupIntentRef = useRef<'local' | 'online-host' | null>(null)
   const skipNextVersusAutoLoadRef = useRef(false)
   const skipNextPracticeAutoLoadRef = useRef(false)
@@ -228,6 +237,11 @@ export function GameClient() {
   const lastSavedOnlineSnapshotRef = useRef<string | null>(null)
   const lastAppliedOnlineSnapshotRef = useRef<string | null>(null)
   const attemptedInviteJoinCodeRef = useRef<string | null>(null)
+  const sanitizeMinimumValidOptions = useCallback(
+    (value: number | null | undefined) =>
+      sanitizeMinValidOptionsOverride(value, minimumValidOptionsDefault),
+    [minimumValidOptionsDefault]
+  )
   const { mode, setMode, loadedPuzzleMode, setLoadedPuzzleMode } = useGameModeState()
   const {
     puzzle,
@@ -259,6 +273,8 @@ export function GameClient() {
   const {
     practiceCategoryFilters,
     setPracticeCategoryFilters,
+    practiceMinimumValidOptions,
+    setPracticeMinimumValidOptions,
     showPracticeSetup,
     setShowPracticeSetup,
     showPracticeStartOptions,
@@ -269,6 +285,8 @@ export function GameClient() {
   const {
     versusCategoryFilters,
     setVersusCategoryFilters,
+    versusMinimumValidOptions,
+    setVersusMinimumValidOptions,
     versusStealRule,
     setVersusStealRule,
     versusTimerOption,
@@ -466,8 +484,16 @@ export function GameClient() {
 
     // Apply room.settings as the authoritative rules for this match.
     // This is critical for the guest — their local settings are irrelevant.
-    const { categoryFilters, stealRule, timerOption, disableDraws, objectionRule } = room.settings
+    const {
+      categoryFilters,
+      stealRule,
+      timerOption,
+      disableDraws,
+      objectionRule,
+      minimumValidOptionsOverride,
+    } = room.settings
     setVersusCategoryFilters(categoryFilters)
+    setVersusMinimumValidOptions(minimumValidOptionsOverride ?? null)
     setVersusStealRule(stealRule)
     setVersusTimerOption(timerOption)
     setVersusDisableDraws(disableDraws)
@@ -570,7 +596,7 @@ export function GameClient() {
       // Host generates the puzzle; after generation, the host should call
       // onlineVersus.setPuzzle() to push it to the room for the guest to load
       skipNextVersusAutoLoadRef.current = true
-      loadPuzzle('versus', categoryFilters)
+      loadPuzzle('versus', categoryFilters, undefined, minimumValidOptionsOverride ?? null)
     }
   }, [
     hasActiveOnlineRoom,
@@ -805,9 +831,14 @@ export function GameClient() {
         const attackingGuess = { ...stealPayload.attackingGuess, owner: event.player }
         const successful = stealPayload.successful
         const defendingGuess = guessesRef.current[cellIndex]
+        const activeStealRule =
+          versusStealRuleRef.current === 'off' ? 'lower' : versusStealRuleRef.current
+        const defendingScore = defendingGuess
+          ? getStealShowdownMetric(defendingGuess, activeStealRule)
+          : null
+        const attackingScore = getStealShowdownMetric(attackingGuess, activeStealRule)
         const hasShowdownScores =
-          typeof defendingGuess?.stealRating === 'number' &&
-          typeof attackingGuess.stealRating === 'number'
+          typeof defendingScore === 'number' && typeof attackingScore === 'number'
         const suppressReplayEffects = onlineVersus.isHydratingHistory
         const showdownDuration =
           !suppressReplayEffects && animationsEnabled && hasShowdownScores
@@ -819,10 +850,10 @@ export function GameClient() {
             burstId: Date.now(),
             durationMs: showdownDuration,
             defenderName: defendingGuess?.gameName ?? 'Defender',
-            defenderScore: defendingGuess!.stealRating!,
+            defenderScore: defendingScore!,
             attackerName: attackingGuess.gameName,
-            attackerScore: attackingGuess.stealRating!,
-            rule: versusStealRuleRef.current === 'higher' ? 'higher' : 'lower',
+            attackerScore: attackingScore!,
+            rule: activeStealRule,
             successful,
           })
         }
@@ -977,8 +1008,10 @@ export function GameClient() {
 
     return 0
   }, [])
-  const hasActivePracticeCustomSetup = hasNonEmptyFilters(practiceCategoryFilters)
-  const hasActiveVersusCustomSetup = hasNonEmptyFilters(versusCategoryFilters)
+  const hasActivePracticeCustomSetup =
+    hasNonEmptyFilters(practiceCategoryFilters) || practiceMinimumValidOptions !== null
+  const hasActiveVersusCustomSetup =
+    hasNonEmptyFilters(versusCategoryFilters) || versusMinimumValidOptions !== null
   const hasActiveCustomSetup =
     mode === 'practice'
       ? hasActivePracticeCustomSetup
@@ -1051,6 +1084,7 @@ export function GameClient() {
         winner,
         pendingFinalSteal,
         versusCategoryFilters,
+        versusMinimumValidOptions,
         versusStealRule,
         versusTimerOption,
         versusDisableDraws,
@@ -1075,6 +1109,7 @@ export function GameClient() {
       turnDeadlineAt,
       turnTimeLeft,
       versusCategoryFilters,
+      versusMinimumValidOptions,
       versusDisableDraws,
       versusObjectionRule,
       versusObjectionsUsed,
@@ -1173,7 +1208,7 @@ export function GameClient() {
         defenderScore: options?.defenderScore ?? 82,
         attackerName: 'Challenger',
         attackerScore: options?.attackerScore ?? 76,
-        rule: versusStealRule === 'higher' ? 'higher' : 'lower',
+        rule: versusStealRule === 'off' ? 'lower' : versusStealRule,
         successful: options?.successful ?? true,
         lowEffects: animationQuality === 'low',
       })
@@ -1525,7 +1560,9 @@ export function GameClient() {
         title: options?.fromOverruledObjection
           ? 'Objection overruled'
           : invalidGuessResolution.title,
-        description: invalidGuessResolution.description,
+        description: options?.fromOverruledObjection
+          ? `Judge Gemini overruled the objection. ${invalidGuessResolution.description}`
+          : invalidGuessResolution.description,
       })
     },
     [
@@ -1698,7 +1735,7 @@ export function GameClient() {
           const objectionPlayer = pendingVersusObjectionReview.player
 
           if (pendingVersusObjectionReview.isVersusSteal) {
-            const effectiveStealRule = versusStealRule === 'higher' ? 'higher' : 'lower'
+            const effectiveStealRule = versusStealRule === 'off' ? 'lower' : versusStealRule
             const defendingGuess = guesses[objectionCellIndex]
 
             if (defendingGuess) {
@@ -1712,15 +1749,17 @@ export function GameClient() {
               })
               const showdownDuration =
                 animationsEnabled && stealOutcome.hasShowdownScores ? STEAL_SHOWDOWN_DURATION_MS : 0
+              const defendingScore = getStealShowdownMetric(defendingGuess, effectiveStealRule)
+              const attackingScore = getStealShowdownMetric(nextGuess, effectiveStealRule)
 
               if (stealOutcome.hasShowdownScores) {
                 setActiveStealShowdown({
                   burstId: Date.now(),
                   durationMs: showdownDuration,
                   defenderName: defendingGuess.gameName,
-                  defenderScore: defendingGuess.stealRating!,
+                  defenderScore: defendingScore!,
                   attackerName: nextGuess.gameName,
-                  attackerScore: nextGuess.stealRating!,
+                  attackerScore: attackingScore!,
                   rule: effectiveStealRule,
                   successful: stealOutcome.successful,
                 })
@@ -1735,9 +1774,9 @@ export function GameClient() {
                 viaObjection: true,
                 hadShowdownScores: stealOutcome.hasShowdownScores,
                 finalSteal: pendingFinalSteal?.cellIndex === objectionCellIndex,
-                attackingScore: nextGuess.stealRating ?? null,
+                attackingScore,
                 defendingGameName: defendingGuess.gameName,
-                defendingScore: defendingGuess.stealRating ?? null,
+                defendingScore,
               })
 
               setPendingVersusObjectionReview(null)
@@ -1751,9 +1790,9 @@ export function GameClient() {
                   selectedCell: objectionCellIndex,
                   hasShowdownScores: stealOutcome.hasShowdownScores,
                   gameName: nextGuess.gameName,
-                  attackingScore: nextGuess.stealRating,
+                  attackingScore,
                   defendingGameName: defendingGuess.gameName,
-                  defendingScore: defendingGuess.stealRating,
+                  defendingScore,
                   versusStealRule: effectiveStealRule,
                   currentPlayer: objectionPlayer,
                 })
@@ -2012,6 +2051,7 @@ export function GameClient() {
                   winner,
                   pendingFinalSteal,
                   versusCategoryFilters,
+                  versusMinimumValidOptions,
                   versusStealRule,
                   versusTimerOption,
                   versusDisableDraws,
@@ -2043,7 +2083,11 @@ export function GameClient() {
 
       toast({
         title: payload.verdict === 'sustained' ? 'Objection sustained' : 'Objection overruled',
-        description: payload.explanation ?? 'The courtroom judge returned a verdict.',
+        description:
+          payload.explanation ??
+          (payload.verdict === 'overruled'
+            ? 'Judge Gemini overruled the objection.'
+            : 'Judge Gemini sustained the objection.'),
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Judgment failed.'
@@ -2141,7 +2185,8 @@ export function GameClient() {
     async (
       gameMode: GameMode,
       customFilters?: VersusCategoryFilters,
-      requestedDailyDate?: string
+      requestedDailyDate?: string,
+      customMinimumValidOptions?: number | null
     ) => {
       if (isPuzzleLoadInFlightRef.current) {
         return
@@ -2161,6 +2206,15 @@ export function GameClient() {
           : gameMode === 'practice'
             ? (customFilters ?? practiceCategoryFilters)
             : undefined
+      const effectiveMinimumValidOptions =
+        gameMode === 'versus'
+          ? (customMinimumValidOptions ?? versusMinimumValidOptions)
+          : gameMode === 'practice'
+            ? (customMinimumValidOptions ?? practiceMinimumValidOptions)
+            : null
+      const sanitizedEffectiveMinimumValidOptions = sanitizeMinimumValidOptions(
+        effectiveMinimumValidOptions
+      )
 
       if (shouldIgnoreSavedVersusState) {
         clearGameState('versus')
@@ -2190,7 +2244,13 @@ export function GameClient() {
         setWinner(savedState.winner ?? null)
         setPendingFinalSteal(savedState.pendingFinalSteal ?? null)
         setVersusCategoryFilters((savedState.versusCategoryFilters as VersusCategoryFilters) ?? {})
-        setVersusStealRule(savedState.versusStealRule ?? 'lower')
+        setPracticeMinimumValidOptions(
+          sanitizeMinimumValidOptions(savedState.practiceMinimumValidOptions ?? null)
+        )
+        setVersusMinimumValidOptions(
+          sanitizeMinimumValidOptions(savedState.versusMinimumValidOptions ?? null)
+        )
+        setVersusStealRule(savedState.versusStealRule ?? DEFAULT_VERSUS_STEAL_RULE)
         setVersusTimerOption(savedState.versusTimerOption ?? 300)
         setVersusDisableDraws(savedState.versusDisableDraws ?? true)
         setVersusObjectionRule(savedState.versusObjectionRule ?? 'one')
@@ -2288,6 +2348,9 @@ export function GameClient() {
           if (gameMode === 'versus' || gameMode === 'practice') {
             if (effectiveFilters && Object.keys(effectiveFilters).length > 0) {
               params.set('filters', JSON.stringify(effectiveFilters))
+            }
+            if (typeof sanitizedEffectiveMinimumValidOptions === 'number') {
+              params.set('minValidOptions', String(sanitizedEffectiveMinimumValidOptions))
             }
           }
 
@@ -2439,6 +2502,7 @@ export function GameClient() {
                     winner: null,
                     pendingFinalSteal: null,
                     versusCategoryFilters: effectiveFilters ?? {},
+                    versusMinimumValidOptions: sanitizedEffectiveMinimumValidOptions ?? null,
                     versusStealRule: versusStealRuleRef.current,
                     versusTimerOption: versusTimerOptionRef.current,
                     versusDisableDraws: versusDisableDrawsRef.current,
@@ -2505,7 +2569,16 @@ export function GameClient() {
         setIsLoading(false)
       }
     },
-    [activeDailyDate, practiceCategoryFilters, toast, versusCategoryFilters]
+    [
+      activeDailyDate,
+      minimumValidOptionsDefault,
+      practiceCategoryFilters,
+      practiceMinimumValidOptions,
+      sanitizeMinimumValidOptions,
+      toast,
+      versusCategoryFilters,
+      versusMinimumValidOptions,
+    ]
   )
 
   const handleDailyArchiveSelect = useCallback(
@@ -2650,6 +2723,8 @@ export function GameClient() {
         setPracticeSetupError(null)
 
         if (!hasSavedPracticeState) {
+          setPracticeCategoryFilters({})
+          setPracticeMinimumValidOptions(null)
           setLoadedPuzzleMode(null)
           setPuzzle(null)
           setGuesses(Array(9).fill(null))
@@ -2670,11 +2745,12 @@ export function GameClient() {
 
         if (!hasSavedVersusState) {
           setVersusCategoryFilters({})
-          versusStealRuleRef.current = 'lower'
+          setVersusMinimumValidOptions(null)
+          versusStealRuleRef.current = DEFAULT_VERSUS_STEAL_RULE
           versusTimerOptionRef.current = 300
           versusDisableDrawsRef.current = true
           versusObjectionRuleRef.current = 'one'
-          setVersusStealRule('lower')
+          setVersusStealRule(DEFAULT_VERSUS_STEAL_RULE)
           setVersusTimerOption(300)
           setVersusDisableDraws(true)
           setVersusObjectionRule('one')
@@ -2708,19 +2784,24 @@ export function GameClient() {
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
     disableDraws: boolean,
-    objectionRule: VersusObjectionRule
+    objectionRule: VersusObjectionRule,
+    minimumValidOptionsOverride: number | null
   ) => {
     void stealRule
     void timerOption
     void disableDraws
     void objectionRule
+    const sanitizedMinimumValidOptionsOverride = sanitizeMinimumValidOptions(
+      minimumValidOptionsOverride
+    )
     setPracticeCategoryFilters(filters)
+    setPracticeMinimumValidOptions(sanitizedMinimumValidOptionsOverride)
     setPracticeSetupError(null)
     setShowPracticeSetup(false)
     setShowPracticeStartOptions(false)
     skipNextPracticeAutoLoadRef.current = true
     clearGameState('practice')
-    loadPuzzle('practice', filters)
+    loadPuzzle('practice', filters, undefined, sanitizedMinimumValidOptionsOverride)
   }
 
   const handleApplyVersusFilters = (
@@ -2728,9 +2809,14 @@ export function GameClient() {
     stealRule: VersusStealRule,
     timerOption: VersusTurnTimerOption,
     disableDraws: boolean,
-    objectionRule: VersusObjectionRule
+    objectionRule: VersusObjectionRule,
+    minimumValidOptionsOverride: number | null
   ) => {
+    const sanitizedMinimumValidOptionsOverride = sanitizeMinimumValidOptions(
+      minimumValidOptionsOverride
+    )
     setVersusCategoryFilters(filters)
+    setVersusMinimumValidOptions(sanitizedMinimumValidOptionsOverride)
     setVersusSetupError(null)
     versusStealRuleRef.current = stealRule
     versusTimerOptionRef.current = timerOption
@@ -2774,6 +2860,7 @@ export function GameClient() {
         timerOption,
         disableDraws,
         objectionRule,
+        minimumValidOptionsOverride: sanitizedMinimumValidOptionsOverride,
       })
       return
     }
@@ -2782,7 +2869,7 @@ export function GameClient() {
     setShowVersusStartOptions(false)
     skipNextVersusAutoLoadRef.current = true
     clearGameState('versus')
-    loadPuzzle('versus', filters)
+    loadPuzzle('versus', filters, undefined, sanitizedMinimumValidOptionsOverride)
   }
 
   const hydrateGuessDetails = useCallback(
@@ -2977,8 +3064,9 @@ export function GameClient() {
           pendingFinalSteal: pendingFinalSteal as PendingVersusSteal | null,
           selectedCell,
         })
-        const defendingScore = existingGuess.stealRating
-        const attackingScore = newGuess.stealRating
+        const effectiveStealRule = versusStealRule
+        const defendingScore = getStealShowdownMetric(existingGuess, effectiveStealRule)
+        const attackingScore = getStealShowdownMetric(newGuess, effectiveStealRule)
         const showdownDuration =
           animationsEnabled && outcome.hasShowdownScores ? STEAL_SHOWDOWN_DURATION_MS : 0
 
@@ -2990,7 +3078,7 @@ export function GameClient() {
             defenderScore: defendingScore!,
             attackerName: game.name,
             attackerScore: attackingScore!,
-            rule: versusStealRule === 'higher' ? 'higher' : 'lower',
+            rule: effectiveStealRule,
             successful: outcome.successful,
           })
         }
@@ -3004,9 +3092,9 @@ export function GameClient() {
           viaObjection: false,
           hadShowdownScores: outcome.hasShowdownScores,
           finalSteal: pendingFinalSteal?.cellIndex === selectedCell,
-          attackingScore: newGuess.stealRating ?? null,
+          attackingScore,
           defendingGameName: existingGuess.gameName,
-          defendingScore: existingGuess.stealRating ?? null,
+          defendingScore,
         })
 
         if (isCurrentOnlineMatch) {
@@ -3028,9 +3116,9 @@ export function GameClient() {
             defender: failedStealResolution?.defender,
             hadShowdownScores: outcome.hasShowdownScores,
             attackingGameName: newGuess.gameName,
-            attackingScore: newGuess.stealRating ?? null,
+            attackingScore,
             defendingGameName: existingGuess.gameName,
-            defendingScore: existingGuess.stealRating ?? null,
+            defendingScore,
           })
         }
 
@@ -3043,7 +3131,7 @@ export function GameClient() {
             attackingScore,
             defendingGameName: existingGuess.gameName,
             defendingScore,
-            versusStealRule,
+            versusStealRule: effectiveStealRule,
             currentPlayer,
           })
 
@@ -3413,6 +3501,7 @@ export function GameClient() {
         timerOption: versusTimerOption,
         disableDraws: versusDisableDraws,
         objectionRule: versusObjectionRule,
+        minimumValidOptionsOverride: versusMinimumValidOptions,
       })
     })()
   }, [
@@ -3422,6 +3511,7 @@ export function GameClient() {
     toast,
     versusCategoryFilters,
     versusDisableDraws,
+    versusMinimumValidOptions,
     versusObjectionRule,
     versusStealRule,
     versusTimerOption,
@@ -3434,7 +3524,7 @@ export function GameClient() {
     if (mode === 'practice') {
       clearGameState('practice')
       skipNextPracticeAutoLoadRef.current = true
-      loadPuzzle('practice', practiceCategoryFilters)
+      loadPuzzle('practice', practiceCategoryFilters, undefined, practiceMinimumValidOptions)
       return
     }
 
@@ -3454,7 +3544,7 @@ export function GameClient() {
     clearGameState('versus')
     setShowVersusStartOptions(false)
     skipNextVersusAutoLoadRef.current = true
-    loadPuzzle('versus', versusCategoryFilters)
+    loadPuzzle('versus', versusCategoryFilters, undefined, versusMinimumValidOptions)
   }
 
   const prepareForOnlineMatchStart = useCallback(() => {
@@ -3489,9 +3579,14 @@ export function GameClient() {
       stealRule: VersusStealRule,
       timerOption: VersusTurnTimerOption,
       disableDraws: boolean,
-      objectionRule: VersusObjectionRule
+      objectionRule: VersusObjectionRule,
+      minimumValidOptionsOverride: number | null
     ) => {
+      const sanitizedMinimumValidOptionsOverride = sanitizeMinimumValidOptions(
+        minimumValidOptionsOverride
+      )
       setVersusCategoryFilters(categoryFilters)
+      setVersusMinimumValidOptions(sanitizedMinimumValidOptionsOverride)
       setVersusSetupError(null)
       versusStealRuleRef.current = stealRule
       versusTimerOptionRef.current = timerOption
@@ -3509,9 +3604,10 @@ export function GameClient() {
         timerOption,
         disableDraws,
         objectionRule,
+        minimumValidOptionsOverride: sanitizedMinimumValidOptionsOverride,
       })
     },
-    [onlineVersus, prepareForOnlineMatchStart]
+    [onlineVersus, prepareForOnlineMatchStart, sanitizeMinimumValidOptions]
   )
 
   const handleHostStandardOnlineMatch = useCallback(() => {
@@ -3521,7 +3617,8 @@ export function GameClient() {
       DEFAULT_VERSUS_STEAL_RULE,
       DEFAULT_VERSUS_TIMER_OPTION,
       DEFAULT_VERSUS_DISABLE_DRAWS,
-      DEFAULT_VERSUS_OBJECTION_RULE
+      DEFAULT_VERSUS_OBJECTION_RULE,
+      null
     )
   }, [hostOnlineMatchWithSettings])
 
@@ -3581,6 +3678,7 @@ export function GameClient() {
           timerOption: versusTimerOption,
           disableDraws: versusDisableDraws,
           objectionRule: versusObjectionRule,
+          minimumValidOptionsOverride: versusMinimumValidOptions,
         })
       }}
       onJoinRoom={(code) => {
@@ -3706,7 +3804,10 @@ export function GameClient() {
             practiceSetupError={practiceSetupError}
             versusSetupError={versusSetupError}
             practiceCategoryFilters={practiceCategoryFilters}
+            practiceMinimumValidOptions={practiceMinimumValidOptions}
             versusCategoryFilters={versusCategoryFilters}
+            versusMinimumValidOptions={versusMinimumValidOptions}
+            minimumValidOptionsDefault={minimumValidOptionsDefault}
             versusStealRule={versusStealRule}
             versusTimerOption={versusTimerOption}
             versusDisableDraws={versusDisableDraws}
@@ -3734,16 +3835,18 @@ export function GameClient() {
             onStartStandard={() => {
               if (mode === 'practice') {
                 setPracticeCategoryFilters({})
+                setPracticeMinimumValidOptions(null)
                 setPracticeSetupError(null)
                 setShowPracticeStartOptions(false)
                 skipNextPracticeAutoLoadRef.current = true
                 clearGameState('practice')
-                loadPuzzle('practice', {})
+                loadPuzzle('practice', {}, undefined, null)
                 return
               }
 
               resetOnlineVersusSession()
               setVersusCategoryFilters({})
+              setVersusMinimumValidOptions(null)
               setVersusSetupError(null)
               versusStealRuleRef.current = DEFAULT_VERSUS_STEAL_RULE
               versusTimerOptionRef.current = DEFAULT_VERSUS_TIMER_OPTION
@@ -3756,7 +3859,7 @@ export function GameClient() {
               setShowVersusStartOptions(false)
               skipNextVersusAutoLoadRef.current = true
               clearGameState('versus')
-              loadPuzzle('versus', {})
+              loadPuzzle('versus', {}, undefined, null)
             }}
             onApplyPracticeFilters={handleApplyPracticeFilters}
             onApplyVersusFilters={handleApplyVersusFilters}
@@ -3874,6 +3977,7 @@ export function GameClient() {
           alarmsEnabled={!isVersusMode || versusAlarmsEnabled}
           animationsEnabled={animationsEnabled}
           lockImpactCell={isVersusMode ? lockImpactCell : null}
+          stealRule={isVersusMode ? versusStealRule : 'off'}
           isGameOver={isComplete}
           onCellClick={handleCellClick}
         />
@@ -4047,6 +4151,8 @@ export function GameClient() {
         timerOption="none"
         disableDraws={false}
         objectionRule="off"
+        minimumValidOptionsDefault={minimumValidOptionsDefault}
+        minimumValidOptionsOverride={practiceMinimumValidOptions}
         onApply={handleApplyPracticeFilters}
       />
 
@@ -4063,6 +4169,8 @@ export function GameClient() {
         timerOption={versusTimerOption}
         disableDraws={versusDisableDraws}
         objectionRule={versusObjectionRule}
+        minimumValidOptionsDefault={minimumValidOptionsDefault}
+        minimumValidOptionsOverride={versusMinimumValidOptions}
         onApply={handleApplyVersusFilters}
       />
 

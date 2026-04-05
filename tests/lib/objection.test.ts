@@ -22,7 +22,6 @@ const guess: CellGuess = {
   gameModes: ['Single player'],
   perspectives: ['First person'],
   themes: ['Science fiction'],
-  tags: ['cyberpunk'],
   matchedRow: false,
   matchedCol: true,
 }
@@ -53,7 +52,6 @@ describe('buildObjectionDataset', () => {
         companies: ['Square Enix', 'Eidos Montreal'],
         developers: ['Eidos Montreal'],
         publishers: ['Square Enix'],
-        tags: ['cyberpunk'],
       },
       rowCategory: {
         name: 'Square Enix',
@@ -64,7 +62,8 @@ describe('buildObjectionDataset', () => {
       colCategory: {
         name: 'First person',
         type: 'perspective',
-        validationQuestion: "Is First person one of this game's recognized gameplay perspectives?",
+        validationQuestion:
+          "Is First person one of this game's recognized gameplay perspectives? Count official modes/toggles that enable substantial gameplay (or a full campaign) in the named perspective, even when another camera style is the default.",
       },
       appSignals: {
         matchedRow: false,
@@ -99,9 +98,21 @@ describe('OBJECTION_SYSTEM_PROMPT', () => {
       'metadata is useful, but it is known to be incomplete, imperfect, or mismapped'
     )
     expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'If model grounding/search evidence is available, prefer that evidence'
+    )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
       'If the selected game or any clearly related family variant directly fits both categories'
     )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'If a clearly related family edition or expansion officially adds the disputed category fit'
+    )
     expect(OBJECTION_SYSTEM_PROMPT).toContain('Do not require every variant to match')
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'do not require the perspective to be the default camera'
+    )
+    expect(OBJECTION_SYSTEM_PROMPT).toContain(
+      'Do not overrule only because a qualifying fit is optional, post-launch, less commonly used'
+    )
     expect(OBJECTION_SYSTEM_PROMPT).toContain(
       'Do not sustain based on loose association, technicalities, indirect relationships'
     )

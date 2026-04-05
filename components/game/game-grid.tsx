@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { GridCell } from './grid-cell'
 import { CategoryHeaderSimple } from './category-header'
+import type { VersusStealRule } from './versus-setup-modal'
 import type { IndexBadgeSlot } from '@/lib/route-index'
 import type { Category, CellGuess, PuzzleCellMetadata } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -29,6 +30,7 @@ interface GameGridProps {
   stealableCell?: number | null
   finalStealCell?: number | null
   lockImpactCell?: number | null
+  stealRule?: VersusStealRule
   onCellClick: (index: number) => void
 }
 
@@ -97,6 +99,7 @@ export function GameGrid({
   stealableCell = null,
   finalStealCell = null,
   lockImpactCell = null,
+  stealRule = 'off',
   onCellClick,
 }: GameGridProps) {
   const cellMetadataByIndex = useMemo(
@@ -342,6 +345,7 @@ export function GameGrid({
                   isFinalStealTarget={isFinalStealTarget}
                   isFinalStealDimmed={isFinalStealDimmed}
                   isDisabled={isGameOver}
+                  stealRule={stealRule}
                   onClick={() => onCellClick(cellIndex)}
                 />
               )

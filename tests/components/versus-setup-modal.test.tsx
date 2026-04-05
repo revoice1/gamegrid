@@ -1,7 +1,11 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { VersusSetupModal, type VersusCategoryFilters } from '@/components/game/versus-setup-modal'
+import {
+  VersusSetupModal,
+  type VersusCategoryFilters,
+  type VersusStealRule,
+} from '@/components/game/versus-setup-modal'
 import { CURATED_VERSUS_CATEGORY_FAMILIES } from '@/lib/versus-category-options'
 
 const companyFamily = CURATED_VERSUS_CATEGORY_FAMILIES.find((family) => family.key === 'company')
@@ -12,10 +16,11 @@ if (!companyFamily) {
 
 function renderModal(options?: {
   filters?: VersusCategoryFilters
-  stealRule?: 'off' | 'lower' | 'higher'
+  stealRule?: VersusStealRule
   objectionRule?: 'off' | 'one' | 'three'
   timerOption?: 'none' | 20 | 60 | 120 | 300
   disableDraws?: boolean
+  minimumValidOptionsOverride?: number | null
 }) {
   return render(
     <VersusSetupModal
@@ -23,10 +28,12 @@ function renderModal(options?: {
       onClose={() => {}}
       mode="versus"
       filters={options?.filters ?? {}}
-      stealRule={options?.stealRule ?? 'lower'}
+      stealRule={options?.stealRule ?? 'fewer_reviews'}
       timerOption={options?.timerOption ?? 300}
       disableDraws={options?.disableDraws ?? true}
       objectionRule={options?.objectionRule ?? 'one'}
+      minimumValidOptionsDefault={6}
+      minimumValidOptionsOverride={options?.minimumValidOptionsOverride ?? null}
       onApply={() => {}}
     />
   )
@@ -39,8 +46,11 @@ describe('VersusSetupModal', () => {
 
     await user.click(screen.getByRole('button', { name: /Rules/i }))
 
+    const minimumInput = screen.getByRole('spinbutton')
+    expect(minimumInput).toHaveAttribute('placeholder', 'Default (6)')
+
     const selects = screen.getAllByRole('combobox')
-    expect(selects[0]).toHaveTextContent('Lower score')
+    expect(selects[0]).toHaveTextContent('Fewer reviews')
     expect(selects[1]).toHaveTextContent('1 each')
     expect(selects[2]).toHaveTextContent('Disabled')
     expect(selects[3]).toHaveTextContent('5 min')
@@ -76,6 +86,19 @@ describe('VersusSetupModal', () => {
     expect(screen.getAllByText('Custom').length).toBeGreaterThan(0)
   })
 
+  it('does not mark Rules as custom when only minimum answers override is set', async () => {
+    const user = userEvent.setup()
+    renderModal({
+      minimumValidOptionsOverride: 4,
+    })
+
+    await user.click(screen.getByRole('button', { name: /Rules/i }))
+
+    const rulesTrigger = screen.getByRole('button', { name: /Rules/i })
+    expect(rulesTrigger).not.toHaveTextContent('Custom')
+    expect(screen.getByText('Minimum Answers Per Cell')).toBeInTheDocument()
+  })
+
   it('marks Categories as custom when a family differs from its default selection even if all are enabled', async () => {
     const user = userEvent.setup()
     renderModal({
@@ -90,11 +113,24 @@ describe('VersusSetupModal', () => {
     const companiesHeading = screen.getByText('Companies')
     const companiesSection = companiesHeading.closest('section')
 
-    expect(screen.getByText('Custom')).toBeInTheDocument()
+    expect(screen.getAllByText('Custom').length).toBeGreaterThan(0)
     expect(companiesSection).not.toBeNull()
     expect(within(companiesSection!).getByText('All 16 enabled')).toBeInTheDocument()
     expect(
       within(companiesSection!).queryByRole('button', { name: 'Check All' })
     ).not.toBeInTheDocument()
+  })
+
+  it('only accepts minimum-answer overrides lower than the default', async () => {
+    const user = userEvent.setup()
+    renderModal()
+
+    const minimumInput = screen.getByRole('spinbutton')
+    const applyButton = screen.getByRole('button', { name: 'Apply Filters' })
+
+    await user.type(minimumInput, '7')
+
+    expect(screen.getByText('Use a whole number from 1 to 5.')).toBeInTheDocument()
+    expect(applyButton).toBeDisabled()
   })
 })

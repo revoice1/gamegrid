@@ -22,7 +22,6 @@ export interface ObjectionDataset {
     companies: string[]
     developers: string[]
     publishers: string[]
-    tags: string[]
   }
   rowCategory: {
     name: string
@@ -79,7 +78,7 @@ function buildCategoryValidationQuestion(category: Category): string {
     case 'game_mode':
       return `Does this game have ${category.name} as a real supported mode of play? Do not count trivial side features, metadata quirks, or weak indirect multiplayer associations.`
     case 'perspective':
-      return `Is ${category.name} one of this game's recognized gameplay perspectives?`
+      return `Is ${category.name} one of this game's recognized gameplay perspectives? Count official modes/toggles that enable substantial gameplay (or a full campaign) in the named perspective, even when another camera style is the default.`
     case 'genre':
       return `Is this game commonly and directly classified as ${category.name}? Do not infer broad parent genres or genre-adjacent relationships unless the metadata explicitly supports them.`
     case 'theme':
@@ -102,11 +101,15 @@ export const OBJECTION_SYSTEM_PROMPT = [
   'The `appMetadata` block contains relevant evidence from the app.',
   'This metadata is useful, but it is known to be incomplete, imperfect, or mismapped in some cases.',
   'Use it as supporting evidence, but do not treat it as automatically conclusive.',
+  'If model grounding/search evidence is available, prefer that evidence over uncertain metadata-only assumptions.',
   'Do not blindly agree with the metadata if the category fit is still weak, indirect, or unclear.',
   'Do not ignore the metadata either just because your memory is incomplete or older.',
   'The `familyNames` array contains alternate editions, ports, remasters, remakes, or expanded releases that belong to the same game family.',
   'Use those family variants as supporting context when one release name is better known than another.',
+  'If a clearly related family edition or expansion officially adds the disputed category fit, treat that as valid support for sustained.',
   'If the selected game or any clearly related family variant directly fits both categories, that is valid evidence in favor of sustained.',
+  'For perspective categories, do not require the perspective to be the default camera if an official mode/toggle supports substantial or full-game play in that perspective.',
+  'Do not overrule only because a qualifying fit is optional, post-launch, less commonly used, or less optimal in some scenarios when it is still officially supported and meaningfully playable/relevant.',
   'Do not require every variant to match. Use them to understand the broader identity of the game family.',
   'Sustain only when the game or a clearly related family variant directly fits both categories.',
   'Do not sustain based on loose association, technicalities, indirect relationships, platform ownership, franchise adjacency, optional/minor features, or niche edge-case interpretations.',
@@ -139,7 +142,6 @@ export function buildObjectionDataset(
       companies: guess.companies ?? [],
       developers: guess.developers ?? [],
       publishers: guess.publishers ?? [],
-      tags: guess.tags ?? [],
     },
     rowCategory: {
       name: rowCategory.name,

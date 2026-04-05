@@ -32,6 +32,19 @@ function getThinkingBudgetFromLevel(level: string): number | null {
   }
 }
 
+function getThinkingLevelEnum(level: string): 'LOW' | 'MEDIUM' | 'HIGH' | null {
+  switch (level) {
+    case 'low':
+      return 'LOW'
+    case 'medium':
+      return 'MEDIUM'
+    case 'high':
+      return 'HIGH'
+    default:
+      return null
+  }
+}
+
 function normalizeGeminiModelName(model: string): string {
   return model.replace(/^models\//, '').trim()
 }
@@ -113,6 +126,7 @@ export async function POST(request: NextRequest) {
       Number.isFinite(THINKING_BUDGET_OVERRIDE) && THINKING_BUDGET_OVERRIDE > 0
         ? THINKING_BUDGET_OVERRIDE
         : getThinkingBudgetFromLevel(THINKING_LEVEL)
+    const effectiveThinkingLevel = getThinkingLevelEnum(THINKING_LEVEL)
 
     let geminiResponse: Response | null = null
     let lastErrorText = ''
@@ -120,7 +134,8 @@ export async function POST(request: NextRequest) {
       temperature: number
       responseMimeType: string
       thinkingConfig?: {
-        thinkingBudget: number
+        thinkingBudget?: number
+        thinkingLevel?: 'LOW' | 'MEDIUM' | 'HIGH'
       }
     } = {
       temperature: 0.1,
@@ -129,6 +144,8 @@ export async function POST(request: NextRequest) {
 
     if (effectiveThinkingBudget !== null) {
       generationConfig.thinkingConfig = { thinkingBudget: effectiveThinkingBudget }
+    } else if (effectiveThinkingLevel !== null) {
+      generationConfig.thinkingConfig = { thinkingLevel: effectiveThinkingLevel }
     }
 
     const requestBodyBase = {
@@ -183,6 +200,7 @@ export async function POST(request: NextRequest) {
             promptBytes: datasetForPrompt.length,
             thinkingLevel: THINKING_LEVEL || null,
             thinkingBudget: effectiveThinkingBudget,
+            thinkingLevelEnum: effectiveThinkingLevel,
           })
         }
         const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`

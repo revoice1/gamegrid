@@ -63,7 +63,7 @@ describe('buildObjectionDataset', () => {
         name: 'First person',
         type: 'perspective',
         validationQuestion:
-          "Is First person one of this game's recognized gameplay perspectives? Count official modes/toggles that enable substantial gameplay (or a full campaign) in the named perspective, even when another camera style is the default. Do not require combat to feel optimal in that perspective if official story progression is still meaningfully playable.",
+          "Is First person one of this game's recognized gameplay perspectives? Count official modes/toggles that enable substantial gameplay (or a full campaign) in the named perspective, even when another camera style is the default.",
       },
       appSignals: {
         matchedRow: false,
@@ -111,7 +111,7 @@ describe('OBJECTION_SYSTEM_PROMPT', () => {
       'do not require the perspective to be the default camera'
     )
     expect(OBJECTION_SYSTEM_PROMPT).toContain(
-      'do not overrule only because the mode is considered a novelty or less effective for combat'
+      'Do not overrule only because a qualifying fit is optional, post-launch, less commonly used'
     )
     expect(OBJECTION_SYSTEM_PROMPT).toContain(
       'Do not sustain based on loose association, technicalities, indirect relationships'

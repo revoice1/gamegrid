@@ -1,0 +1,54 @@
+{
+    "name": "GameGrid Dev Environment",
+    "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "moby": false
+        }
+    },
+    "forwardPorts": [
+        3000,
+        54321
+    ],
+    "portsAttributes": {
+        "3000": {
+            "label": "GameGrid (Next.js)",
+            "onAutoForward": "notify",
+            "host": "0.0.0.0"
+        },
+        "54321": {
+            "label": "Supabase Local API",
+            "onAutoForward": "silent"
+        }
+    },
+    "mounts": [
+        "source=gamegrid-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+        "source=gamegrid-npm-cache,target=/home/node/.npm,type=volume",
+        "source=gamegrid-playwright-cache,target=/home/node/.cache/ms-playwright,type=volume"
+    ],
+    "containerEnv": {
+        "NEXT_TELEMETRY_DISABLED": "1",
+        "PLAYWRIGHT_BROWSERS_PATH": "/home/node/.cache/ms-playwright"
+    },
+    "postCreateCommand": "npm ci && npx playwright install chromium",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "editor.formatOnSave": true,
+                "files.eol": "\n",
+                "eslint.validate": [
+                    "javascript",
+                    "javascriptreact",
+                    "typescript",
+                    "typescriptreact"
+                ]
+            },
+            "extensions": [
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "bradlc.vscode-tailwindcss",
+                "ms-playwright.playwright"
+            ]
+        }
+    }
+}

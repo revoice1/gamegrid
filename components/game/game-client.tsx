@@ -36,6 +36,10 @@ import {
   isGuessHydrated,
 } from './game-client-helpers'
 import {
+  hasRestorableVersusState,
+  shouldForegroundOnlineVersusSession,
+} from './game-client-online-helpers'
+import {
   buildLegacySessionHeaders,
   buildDailyStatsPayload,
   getPostGuessCompletionEffects,
@@ -427,6 +431,11 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     mode === 'versus' &&
     currentOnlineRoomPuzzleId !== null &&
     puzzle?.id === currentOnlineRoomPuzzleId
+  const shouldForegroundOnlineSession = shouldForegroundOnlineVersusSession({
+    mode,
+    showOnlineLobby,
+    isResumingOnlineVersus: onlineVersus.isResuming,
+  })
   const hasStableOnlineBoardLoaded =
     mode === 'versus' &&
     loadedPuzzleMode === 'versus' &&
@@ -527,7 +536,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   // When the online room becomes active, apply authoritative settings and reset board state
   useEffect(() => {
     const { room, myRole } = onlineVersus
-    if (!hasActiveOnlineRoom || !room) return
+    if (!hasActiveOnlineRoom || !room || !shouldForegroundOnlineSession) return
 
     // Apply room.settings as the authoritative rules for this match.
     // This is critical for the guest — their local settings are irrelevant.
@@ -649,9 +658,13 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   }, [
     hasActiveOnlineRoom,
     loadedPuzzleMode,
+    mode,
     onlineVersus.room?.puzzle_id,
     onlineVersus.room?.state_data,
+    onlineVersus.isResuming,
     puzzle,
+    shouldForegroundOnlineSession,
+    showOnlineLobby,
   ])
 
   // Tracks which room/match boundary has already had its puzzle published.
@@ -2683,9 +2696,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
 
   useEffect(() => {
     const isOnlineResumeInFlight =
-      onlineVersus.isResuming ||
-      onlineVersus.phase === 'joining' ||
-      onlineVersus.phase === 'creating'
+      shouldForegroundOnlineSession &&
+      (onlineVersus.isResuming ||
+        onlineVersus.phase === 'joining' ||
+        onlineVersus.phase === 'creating')
 
     const hasInviteJoinCode =
       typeof window !== 'undefined' &&
@@ -2701,7 +2715,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       return
     }
 
-    if (isWaitingForOnlinePuzzle) {
+    if (shouldForegroundOnlineSession && isWaitingForOnlinePuzzle) {
       setIsLoading(true)
       return
     }
@@ -2751,6 +2765,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     puzzle,
     showPracticeStartOptions,
     showVersusStartOptions,
+    shouldForegroundOnlineSession,
   ])
 
   // Handle mode change
@@ -2758,8 +2773,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     if (newMode !== mode) {
       activePuzzleLoadControllerRef.current?.abort()
 
-      if (onlineVersus.room && newMode !== 'versus') {
-        resetOnlineVersusSession()
+      if (newMode !== 'versus') {
+        setShowOnlineLobby(false)
       }
 
       if (newMode === 'practice') {
@@ -2789,7 +2804,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         setShowPracticeSetup(false)
         setPracticeSetupError(null)
         setVersusSetupError(null)
-        const hasSavedVersusState = Boolean(loadGameState('versus')?.puzzle)
+        const hasSavedVersusState = hasRestorableVersusState({
+          hasSavedVersusPuzzle: Boolean(loadGameState('versus')?.puzzle),
+          hasOnlineRoom: Boolean(onlineVersus.room),
+        })
 
         if (!hasSavedVersusState) {
           setVersusCategoryFilters({})

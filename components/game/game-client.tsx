@@ -4158,9 +4158,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         />
       )}
 
-      {showAchievements && (
-        <AchievementsModal isOpen onClose={() => setShowAchievements(false)} />
-      )}
+      {showAchievements && <AchievementsModal isOpen onClose={() => setShowAchievements(false)} />}
 
       {showPracticeSetup && (
         <VersusSetupModal

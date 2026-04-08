@@ -1,4 +1,4 @@
-import type { Category, CellGuess, Game, Puzzle } from '@/lib/types'
+import type { Category, CellGuess, Game, GuessValidationExplanation, Puzzle } from '@/lib/types'
 
 type GuessLookupResultGame = {
   slug?: string | null
@@ -22,6 +22,7 @@ export interface GuessLookupResult {
   valid?: boolean
   matchesRow?: boolean
   matchesCol?: boolean
+  validationExplanation?: GuessValidationExplanation | null
   game?: GuessLookupResultGame | null
 }
 
@@ -92,6 +93,8 @@ export function hydrateStoredGuess(existingGuess: CellGuess, result: GuessLookup
     companies: pickResolvedArray(result.game?.companies, existingGuess.companies ?? []),
     matchedRow: result.matchesRow,
     matchedCol: result.matchesCol,
+    validationExplanation:
+      result.validationExplanation ?? existingGuess.validationExplanation ?? null,
   }
 }
 
@@ -156,6 +159,7 @@ export function buildGuessFromSelection(options: {
     companies: resolvedMetadata.companies,
     matchedRow: result.matchesRow,
     matchedCol: result.matchesCol,
+    validationExplanation: result.validationExplanation ?? null,
     objectionUsed: false,
     objectionVerdict: null,
     objectionExplanation: null,
@@ -172,6 +176,11 @@ export function buildPersistedGuessSnapshot(guesses: Array<CellGuess | null>) {
           gameName: guess.gameName,
           gameImage: guess.gameImage,
           isCorrect: guess.isCorrect,
+          ...(guess.matchedRow !== undefined ? { matchedRow: guess.matchedRow } : {}),
+          ...(guess.matchedCol !== undefined ? { matchedCol: guess.matchedCol } : {}),
+          ...(guess.validationExplanation !== undefined
+            ? { validationExplanation: guess.validationExplanation }
+            : {}),
           objectionUsed: guess.objectionUsed ?? false,
           objectionVerdict: guess.objectionVerdict ?? null,
           objectionExplanation: guess.objectionExplanation ?? null,

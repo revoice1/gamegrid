@@ -105,6 +105,7 @@ import { useVersusSetupState } from '@/hooks/use-versus-setup-state'
 import { useVersusTurnTimer } from '@/hooks/use-versus-turn-timer'
 import type {
   OnlineVersusClaimPayload,
+  OnlineVersusEventType,
   OnlineVersusMissPayload,
   OnlineVersusObjectionPayload,
   OnlineVersusSnapshot,
@@ -438,6 +439,37 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       onlineVersus.phase === 'creating' ||
       (hasActiveOnlineRoom && (!onlineVersus.room?.puzzle_id || !onlineVersus.room?.puzzle_data)))
 
+  const sendOnlineEventWithRecovery = useCallback(
+    async (type: OnlineVersusEventType, payload: Record<string, unknown>) => {
+      const result = await onlineVersus.sendEvent(type, payload)
+      if (result.ok) {
+        return result
+      }
+
+      const description =
+        result.code === 'wrong_turn'
+          ? 'Your local turn state was stale, so the match was refreshed from the server.'
+          : result.code === 'cell_unavailable'
+            ? 'That square was already resolved elsewhere, so the board was refreshed.'
+            : result.code === 'steal_not_available'
+              ? 'That steal window was no longer open, so the board was refreshed.'
+              : result.code === 'objection_limit_reached'
+                ? 'Your objection count was already exhausted, so the match was refreshed.'
+                : result.code
+                  ? `${result.error ?? 'The match state changed on the server.'} The board was refreshed.`
+                  : (result.error ?? 'Failed to sync that move to the server.')
+
+      toast({
+        variant: result.code ? 'default' : 'destructive',
+        title: result.code ? 'Match updated' : 'Sync failed',
+        description,
+      })
+
+      return result
+    },
+    [onlineVersus, toast]
+  )
+
   const resetOnlineVersusSession = useCallback(() => {
     onlineVersus.reset()
     setShowOnlineLobby(false)
@@ -523,7 +555,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     setShowOnlineLobby(false)
 
     const roomSnapshot = room.state_data
-    const roomPrepKey = `${room.id}:${room.puzzle_id ?? 'pending'}`
+    const roomMatchKey = `${room.id}:${room.match_number}`
+    const roomPrepKey = `${roomMatchKey}:${room.puzzle_id ?? 'pending'}`
     const roomSnapshotSignature = roomSnapshot ? JSON.stringify(roomSnapshot) : null
     const hasMatchingLocalPuzzle =
       loadedPuzzleMode === 'versus' &&
@@ -621,7 +654,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     puzzle,
   ])
 
-  // Tracks which room ID has already had its puzzle published, preventing double-writes.
+  // Tracks which room/match boundary has already had its puzzle published.
   const publishedPuzzleRoomIdRef = useRef<string | null>(null)
   // Tracks online event IDs already applied to local state (prevents double-apply on re-renders).
   const appliedOnlineEventIdsRef = useRef(new Set<number>())
@@ -694,12 +727,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       room.puzzle_id !== null || // room already has a puzzle — do not overwrite
       !puzzle ||
       loadedPuzzleMode !== 'versus' ||
-      publishedPuzzleRoomIdRef.current === room.id // already published for this room
+      publishedPuzzleRoomIdRef.current === `${room.id}:${room.match_number}`
     ) {
       return
     }
 
-    publishedPuzzleRoomIdRef.current = room.id
+    publishedPuzzleRoomIdRef.current = `${room.id}:${room.match_number}`
 
     onlineVersus.setPuzzle(puzzle.id, puzzle).then((result) => {
       if (!result.ok) {
@@ -1555,7 +1588,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       }
 
       if (isCurrentOnlineMatch) {
-        void onlineVersus.sendEvent('miss', {
+        void sendOnlineEventWithRecovery('miss', {
           cellIndex: pendingVersusObjectionReview?.cellIndex ?? selectedCell,
           guessesRemaining: nextGuessesRemaining,
           resolutionKind: invalidGuessResolution.kind,
@@ -1727,7 +1760,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           const overruledGuessesRemaining =
             payload.verdict === 'overruled' ? Math.max(0, guessesRemaining - 1) : undefined
 
-          void onlineVersus.sendEvent('objection', {
+          void sendOnlineEventWithRecovery('objection', {
             cellIndex: activeDetailCell,
             verdict: payload.verdict,
             updatedGuess: nextGuess,
@@ -2170,7 +2203,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         setWinner(expirationResolution.defender)
 
         if (isCurrentOnlineMatch && pendingFinalSteal) {
-          void onlineVersus.sendEvent('miss', {
+          void sendOnlineEventWithRecovery('miss', {
             cellIndex: pendingFinalSteal.cellIndex,
             guessesRemaining,
             resolutionKind: 'defender-wins',
@@ -3122,7 +3155,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
                     nextPlayer: getNextPlayer(currentPlayer),
                   }
                 : null
-          void onlineVersus.sendEvent('steal', {
+          void sendOnlineEventWithRecovery('steal', {
             cellIndex: selectedCell,
             attackingGuess: newGuess,
             successful: outcome.successful,
@@ -3243,7 +3276,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
             viaObjection: false,
           })
           if (isCurrentOnlineMatch) {
-            void onlineVersus.sendEvent('claim', {
+            void sendOnlineEventWithRecovery('claim', {
               cellIndex: selectedCell,
               guess: newGuess,
             })

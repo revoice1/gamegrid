@@ -50,6 +50,7 @@ export interface VersusRoom {
   code: string
   created_at: string
   expires_at: string
+  match_number: number
   status: RoomStatus
   settings: RoomSettings
   puzzle_id: string | null
@@ -105,6 +106,7 @@ export interface OnlineVersusEvent {
   id: number
   room_id: string
   created_at: string
+  match_number: number
   player: RoomPlayer
   type: OnlineVersusEventType
   payload: Record<string, unknown>

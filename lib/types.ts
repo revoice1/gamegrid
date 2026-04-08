@@ -76,6 +76,39 @@ export interface PuzzleCellMetadata {
   difficultyLabel: string
 }
 
+export type MatchSource =
+  | 'direct-id'
+  | 'alias-name'
+  | 'merged-platform-bucket'
+  | 'release-date-family'
+  | 'company-id'
+  | 'company-alias'
+  | 'company-prefix'
+  | 'igdb-array'
+  | 'no-match'
+
+export interface CategoryMatchExplanation {
+  matched: boolean
+  categoryType: CategoryType
+  categoryName: string
+  matchSource: MatchSource
+  matchedValues: string[]
+  note?: string | null
+}
+
+export interface FamilyResolutionExplanation {
+  used: boolean
+  selectedGameId: number
+  selectedGameName: string
+  note?: string | null
+}
+
+export interface GuessValidationExplanation {
+  row: CategoryMatchExplanation
+  col: CategoryMatchExplanation
+  familyResolution: FamilyResolutionExplanation
+}
+
 export interface CellGuess {
   gameId: number
   gameName: string
@@ -100,6 +133,7 @@ export interface CellGuess {
   companies?: string[]
   matchedRow?: boolean
   matchedCol?: boolean
+  validationExplanation?: GuessValidationExplanation | null
   objectionUsed?: boolean
   objectionVerdict?: 'sustained' | 'overruled' | null
   objectionExplanation?: string | null

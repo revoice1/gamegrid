@@ -40,6 +40,8 @@ Run these migrations in order:
 ```text
 scripts/008_create_versus_tables.sql
 scripts/009_add_online_versus_room_state.sql
+scripts/010_expand_versus_event_types.sql
+scripts/011_add_online_versus_match_number.sql
 ```
 
 Then publish these tables to Supabase Realtime:
@@ -126,18 +128,20 @@ Both `saveSnapshot` and `markFinished` in `use-online-versus-room.ts` carry an 8
 
 The online loop is real enough to play, but these caveats still matter:
 
-- **Server-side gameplay validation** — the event route (`POST /api/versus/event`) currently only
-  checks room membership. Turn order, move legality, steal timing, and objection limits are not yet
-  enforced server-side. This is the main production blocker.
+- **Server-side gameplay validation is still room-row scoped** — the event route
+  (`POST /api/versus/event`) now rejects wrong-turn actions, illegal claims/steals, objection
+  overuse, and post-finish writes, and it also rejects stale requests from an older `match_number`.
+  The main remaining gaps are around broader room lifecycle modeling rather than move legality.
 - **No automatic guest finish trigger** — if the host disconnects before calling `markFinished`,
   the guest's board stays in the active phase. The guest can call `markFinished` manually but
   nothing triggers it automatically.
 - **Failed non-final snapshot has no auto-retry** — if `saveSnapshot` fails and no subsequent
   state change queues another save, that state version is never retried. The next move will produce
   a new save attempt. This is acceptable for now but is not "reliable eventual delivery."
-- **In-room continue still clears events** — the post-game host-side `Continue In Room` reset does
-  not use a true match boundary or ready-check handshake; it clears old events and reuses the same
-  invite code for the next board.
+- **In-room continue is boundary-safe but still lightweight** — `Continue In Room` now advances a
+  `match_number` on the room and scopes event replay/history to that boundary, so old events no
+  longer leak into the next game. It still does not have a ready-check handshake or richer rematch
+  lifecycle.
 - **`New Online Room`** remains the clean escape hatch when you want a fresh invite code.
 
 So the current feature should be treated as:
@@ -148,15 +152,18 @@ So the current feature should be treated as:
 
 ## Future Same-Room Rematch
 
-If online play should support multiple games under one invite code, the room needs a real match
-boundary inside it. Reusing the same room without scoping events and snapshot state per match will
-cause reload hydration and event replay to leak old games into new ones.
+Online play now carries a lightweight room-level match boundary via `match_number` on both
+`versus_rooms` and `versus_events`, and history fetches are scoped to the current match. That fixes
+the worst replay/hydration leak from the earlier "clear events and reuse the room" approach.
+
+There is still room to harden the rematch model further if the product should support richer
+multi-game sessions under one invite code.
 
 Recommended shape:
 
 - keep `versus_rooms` as the stable invite/lobby identity
-- add either a `versus_room_matches` table keyed by `room_id` plus `match_number`, or a
-  `match_number` column on both `versus_rooms` and `versus_events`
+- keep the current `match_number` boundary, or later move to a dedicated `versus_room_matches`
+  table keyed by `room_id` plus `match_number`
 - scope `puzzle_id`, `puzzle_data`, `state_data`, and event replay to the current match
 
 Minimum lifecycle:

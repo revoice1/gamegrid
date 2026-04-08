@@ -24,6 +24,7 @@ export type OnlineVersusPhase =
 export interface SendEventResult {
   ok: boolean
   error: string | null
+  code?: string | null
 }
 
 export interface UseOnlineVersusRoomReturn {
@@ -143,9 +144,12 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         },
         (payload) => {
           const updated = payload.new as VersusRoom
+          const previousMatchNumber = roomRef.current?.match_number ?? null
+          const didAdvanceMatch =
+            previousMatchNumber !== null && previousMatchNumber !== updated.match_number
           setRoom(updated)
           if (updated.status === 'active') {
-            if (updated.puzzle_id === null && updated.state_data === null) {
+            if (didAdvanceMatch || (updated.puzzle_id === null && updated.state_data === null)) {
               setEvents([])
             }
             setOpponentReady(true)
@@ -416,20 +420,32 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     ): Promise<SendEventResult> => {
       const currentRoom = roomRef.current
       const role = myRoleRef.current
-      if (!currentRoom || !role) return { ok: false, error: 'Not in a match.' }
+      if (!currentRoom || !role) return { ok: false, error: 'Not in a match.', code: null }
 
       try {
         const res = await fetch('/api/versus/event', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomId: currentRoom.id, player: role, type, payload }),
+          body: JSON.stringify({
+            roomId: currentRoom.id,
+            matchNumber: currentRoom.match_number,
+            player: role,
+            type,
+            payload,
+          }),
         })
         const json = await res.json()
-        if (!res.ok || json.error)
-          return { ok: false, error: json.error ?? 'Failed to send event.' }
-        return { ok: true, error: null }
+        if (!res.ok || json.error) {
+          await catchUpRoomRef.current(currentRoom.id, currentRoom.code)
+          return {
+            ok: false,
+            error: json.error ?? 'Failed to send event.',
+            code: typeof json.code === 'string' ? json.code : null,
+          }
+        }
+        return { ok: true, error: null, code: null }
       } catch {
-        return { ok: false, error: 'Network error.' }
+        return { ok: false, error: 'Network error.', code: null }
       }
     },
     []
@@ -444,7 +460,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         const res = await fetch(`/api/versus/room/${currentRoom.code}/puzzle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ puzzleId, puzzle }),
+          body: JSON.stringify({ puzzleId, puzzle, matchNumber: currentRoom.match_number }),
         })
         const json = await res.json()
         // 409 with "already set" is not an error from the client's perspective —
@@ -471,6 +487,8 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     try {
       const res = await fetch(`/api/versus/room/${currentRoom.code}/finish`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchNumber: currentRoom.match_number }),
         signal: controller.signal,
       })
       const json = await res.json()
@@ -500,7 +518,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         const res = await fetch(`/api/versus/room/${currentRoom.code}/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snapshot }),
+          body: JSON.stringify({ snapshot, matchNumber: currentRoom.match_number }),
           signal: controller.signal,
         })
         const json = await res.json()

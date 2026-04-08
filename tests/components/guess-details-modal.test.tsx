@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { GuessDetailsModal } from '@/components/game/guess-details-modal'
-import type { Category, CellGuess } from '@/lib/types'
+import type { Category, CellGuess, GuessValidationExplanation } from '@/lib/types'
 
 const rowCategory: Category = {
   type: 'perspective',
@@ -15,6 +15,31 @@ const colCategory: Category = {
   name: 'Square Enix',
 }
 
+const validationExplanation: GuessValidationExplanation = {
+  row: {
+    matched: true,
+    categoryType: 'perspective',
+    categoryName: 'First person',
+    matchSource: 'igdb-array',
+    matchedValues: ['First person'],
+    note: null,
+  },
+  col: {
+    matched: true,
+    categoryType: 'company',
+    categoryName: 'Square Enix',
+    matchSource: 'company-alias',
+    matchedValues: ['Square'],
+    note: null,
+  },
+  familyResolution: {
+    used: false,
+    selectedGameId: 1,
+    selectedGameName: 'Chrono Trigger',
+    note: null,
+  },
+}
+
 describe('GuessDetailsModal', () => {
   it('hides the objection panel for a normal correct pick with no review history', () => {
     const guess: CellGuess = {
@@ -24,6 +49,7 @@ describe('GuessDetailsModal', () => {
       isCorrect: true,
       matchedRow: true,
       matchedCol: true,
+      validationExplanation,
       objectionUsed: false,
       objectionVerdict: null,
       objectionExplanation: null,
@@ -41,6 +67,11 @@ describe('GuessDetailsModal', () => {
       />
     )
 
+    expect(screen.getByText('Why this counts')).toBeInTheDocument()
+    expect(
+      screen.getByText('Matched First person via IGDB metadata: First person.')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Matched Square Enix via company alias: Square.')).toBeInTheDocument()
     expect(screen.queryByText('Objection')).not.toBeInTheDocument()
   })
 
@@ -52,6 +83,23 @@ describe('GuessDetailsModal', () => {
       isCorrect: true,
       matchedRow: true,
       matchedCol: true,
+      validationExplanation: {
+        row: {
+          matched: false,
+          categoryType: 'perspective',
+          categoryName: 'First person',
+          matchSource: 'no-match',
+          matchedValues: [],
+          note: null,
+        },
+        col: validationExplanation.col,
+        familyResolution: {
+          used: true,
+          selectedGameId: 359,
+          selectedGameName: 'Final Fantasy XV',
+          note: 'Validated using merged original + official port family metadata.',
+        },
+      },
       released: '2016-11-29',
       metacritic: 79,
       objectionUsed: true,
@@ -76,6 +124,9 @@ describe('GuessDetailsModal', () => {
     )
 
     expect(screen.getByText('This pick counted for the cell after review.')).toBeInTheDocument()
+    expect(screen.getByText('Original validation')).toBeInTheDocument()
+    expect(screen.getByText('Did not match First person.')).toBeInTheDocument()
+    expect(screen.getByText('Family Resolution')).toBeInTheDocument()
     expect(screen.getByText('Objection sustained')).toBeDisabled()
     expect(screen.getByText('Sustained')).toBeInTheDocument()
     expect(screen.getByText(/Royal Edition adds a first-person mode/i)).toBeInTheDocument()
@@ -94,6 +145,30 @@ describe('GuessDetailsModal', () => {
       isCorrect: false,
       matchedRow: false,
       matchedCol: true,
+      validationExplanation: {
+        row: {
+          matched: true,
+          categoryType: 'perspective',
+          categoryName: 'First person',
+          matchSource: 'igdb-array',
+          matchedValues: ['First person'],
+          note: null,
+        },
+        col: {
+          matched: false,
+          categoryType: 'company',
+          categoryName: 'Square Enix',
+          matchSource: 'no-match',
+          matchedValues: [],
+          note: null,
+        },
+        familyResolution: {
+          used: false,
+          selectedGameId: 47,
+          selectedGameName: 'Myst',
+          note: null,
+        },
+      },
       objectionUsed: true,
       objectionVerdict: 'overruled',
       objectionExplanation: 'The game is first-person, but it is not published by Square Enix.',
@@ -115,6 +190,7 @@ describe('GuessDetailsModal', () => {
     )
 
     expect(screen.getByText('This pick was rejected for the cell.')).toBeInTheDocument()
+    expect(screen.getByText('Why this was rejected')).toBeInTheDocument()
     expect(screen.getByText('Overruled')).toBeInTheDocument()
     expect(screen.getByText(/not published by Square Enix/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Objection overruled' })).toBeDisabled()

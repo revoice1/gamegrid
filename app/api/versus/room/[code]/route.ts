@@ -8,7 +8,7 @@ import { resolveAnonymousSession, applyAnonymousSessionCookie } from '@/lib/serv
 // after a reconnect or visibility-change catch-up.
 
 const SAFE_ROOM_COLUMNS =
-  'id, code, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at'
+  'id, code, match_number, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const supabase = createAdminClient()
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const safeRoom = {
     id: room.id,
     code: room.code,
+    match_number: room.match_number,
     status: room.status,
     settings: room.settings,
     puzzle_id: room.puzzle_id,

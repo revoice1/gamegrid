@@ -13,7 +13,9 @@ export async function POST(
 
   const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
-    .select('id, code, host_session_id, guest_session_id, status, settings, state_data')
+    .select(
+      'id, code, host_session_id, guest_session_id, match_number, status, settings, state_data'
+    )
     .eq('code', upperCode)
     .single()
 
@@ -51,24 +53,10 @@ export async function POST(
     return NextResponse.json({ error: 'The room is not ready for another match.' }, { status: 409 })
   }
 
-  const { error: deleteEventsError } = await supabase
-    .from('versus_events')
-    .delete()
-    .eq('room_id', room.id)
-
-  if (deleteEventsError) {
-    console.error('[versus.room.continue] failed to clear prior events', {
-      code: upperCode,
-      roomId: room.id,
-      sessionId: session.sessionId,
-      error: deleteEventsError,
-    })
-    return NextResponse.json({ error: 'Failed to reset prior match events.' }, { status: 500 })
-  }
-
   const { data: updated, error: updateError } = await supabase
     .from('versus_rooms')
     .update({
+      match_number: room.match_number + 1,
       status: 'active',
       puzzle_id: null,
       puzzle_data: null,
@@ -77,7 +65,7 @@ export async function POST(
     })
     .eq('id', room.id)
     .select(
-      'id, code, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at'
+      'id, code, match_number, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at'
     )
     .single()
 

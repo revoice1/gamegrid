@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     .from('versus_rooms')
     .insert({ host_session_id: session.sessionId, settings: sanitizedSettings })
     .select(
-      'id, code, status, settings, expires_at, created_at, puzzle_id, puzzle_data, state_data'
+      'id, code, match_number, status, settings, expires_at, created_at, puzzle_id, puzzle_data, state_data'
     )
     .single()
 

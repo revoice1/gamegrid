@@ -55,6 +55,7 @@ const GuessRecordSchema = z.object({
   released: z.string().nullable().optional(),
   metacritic: z.number().nullable().optional(),
   stealRating: z.number().nullable().optional(),
+  stealRatingCount: z.number().nullable().optional(),
   genres: z.array(z.string()).optional(),
   platforms: z.array(z.string()).optional(),
   developers: z.array(z.string()).optional(),

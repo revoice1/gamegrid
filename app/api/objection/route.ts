@@ -258,29 +258,17 @@ export async function POST(request: NextRequest) {
         body: IS_DEV ? lastErrorText : undefined,
       })
 
-      if (requestVariant.label === 'grounded' && response.status === 429) {
-        logWarn('Gemini grounded request hit rate limit; falling back to standard variant', {
+      if (requestVariant.label === 'grounded') {
+        logWarn('Gemini grounded request failed; falling back to standard variant', {
           model,
           variant: requestVariant.label,
           status: response.status,
         })
-        break
-      }
-
-      if (response.status === 404) {
         continue
-      }
-
-      if (requestVariant.label === 'grounded') {
-        break
       }
 
       geminiResponse = response
       break
-
-      if (geminiResponse?.ok) {
-        break
-      }
     }
 
     if (!geminiResponse?.ok) {

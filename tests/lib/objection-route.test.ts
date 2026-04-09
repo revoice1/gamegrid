@@ -159,4 +159,50 @@ describe('/api/objection route', () => {
       tools: [{ googleSearch: {} }],
     })
   })
+
+  it('falls back to the standard request when the grounded variant fails', async () => {
+    process.env.GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING = '1'
+    process.env.GEMINI_OBJECTION_THINKING_LEVEL = 'minimal'
+
+    const requestBodies: Array<Record<string, unknown>> = []
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)))
+
+      if (requestBodies.length === 1) {
+        return new Response('grounded request failed', { status: 503 })
+      }
+
+      return buildGeminiResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toEqual({
+      verdict: 'overruled',
+      confidence: 'high',
+      explanation: 'The app rejection is probably correct.',
+      suspectedMissingMetadata: null,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(requestBodies[0]).toMatchObject({
+      generationConfig: {
+        thinkingConfig: {
+          thinkingLevel: 'MINIMAL',
+        },
+      },
+      tools: [{ googleSearch: {} }],
+    })
+    expect(requestBodies[1]).toMatchObject({
+      generationConfig: {
+        thinkingConfig: {
+          thinkingLevel: 'MINIMAL',
+        },
+      },
+    })
+    expect(requestBodies[1]).not.toHaveProperty('tools')
+  })
 })

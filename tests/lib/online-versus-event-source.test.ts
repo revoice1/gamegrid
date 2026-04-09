@@ -81,32 +81,64 @@ describe('online versus event source helpers', () => {
     expect(
       shouldReplayOnlineVersusSpectacle({
         eventSource: 'history',
-        alreadyApplied: true,
         alreadyShown: false,
+        previousProcessedSource: null,
       })
     ).toBe(false)
 
     expect(
       shouldReplayOnlineVersusSpectacle({
         eventSource: 'live',
-        alreadyApplied: true,
         alreadyShown: false,
+        previousProcessedSource: null,
       })
     ).toBe(true)
 
     expect(
       shouldReplayOnlineVersusSpectacle({
         eventSource: 'live-catchup',
-        alreadyApplied: true,
         alreadyShown: false,
+        previousProcessedSource: null,
       })
     ).toBe(true)
 
     expect(
       shouldReplayOnlineVersusSpectacle({
         eventSource: 'live',
-        alreadyApplied: true,
+        alreadyShown: false,
+        previousProcessedSource: 'history',
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live-catchup',
+        alreadyShown: false,
+        previousProcessedSource: 'history',
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live',
+        alreadyShown: false,
+        previousProcessedSource: 'live',
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live-catchup',
+        alreadyShown: false,
+        previousProcessedSource: 'live-catchup',
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live',
         alreadyShown: true,
+        previousProcessedSource: 'history',
       })
     ).toBe(false)
   })

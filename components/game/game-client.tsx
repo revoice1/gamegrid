@@ -119,6 +119,7 @@ import { useVersusTurnTimer } from '@/hooks/use-versus-turn-timer'
 import type {
   OnlineVersusClaimPayload,
   OnlineVersusEventType,
+  OnlineVersusEventSource,
   OnlineVersusMissPayload,
   OnlineVersusObjectionPayload,
   OnlineVersusSnapshot,
@@ -505,6 +506,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     publishedPuzzleRoomIdRef.current = null
     appliedOnlineEventIdsRef.current = new Set()
     shownOnlineStealShowdownIdsRef.current = new Set()
+    processedOnlineEventSourcesRef.current = new Map()
     locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
     finishedOnlineRoomIdRef.current = null
     preparedOnlineRoomKeyRef.current = null
@@ -607,6 +609,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       publishedPuzzleRoomIdRef.current = null
       appliedOnlineEventIdsRef.current = new Set()
       shownOnlineStealShowdownIdsRef.current = new Set()
+      processedOnlineEventSourcesRef.current = new Map()
       locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
       lastSavedOnlineSnapshotRef.current = roomSnapshotSignature
       lastAppliedOnlineSnapshotRef.current = null
@@ -691,6 +694,9 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   const appliedOnlineEventIdsRef = useRef(new Set<number>())
   // Tracks which steal events have already rendered a showdown overlay.
   const shownOnlineStealShowdownIdsRef = useRef(new Set<number>())
+  // Tracks the most recent source classification applied for each event so a
+  // steal showdown only replays when a previously historical event upgrades.
+  const processedOnlineEventSourcesRef = useRef(new Map<number, OnlineVersusEventSource>())
   // Tracks locally rendered online steals so their later server echoes do not
   // replay the same showdown on a subsequent rerender or catch-up pass.
   const locallyRenderedOnlineStealClientEventIdsRef = useRef(new Set<string>())
@@ -854,6 +860,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         event.source,
         onlineVersus.isHydratingHistory
       )
+      const previousProcessedSource = processedOnlineEventSourcesRef.current.get(event.id) ?? null
       const isOwnNonHistoryEvent = shouldSkipOwnOnlineVersusEventReplay(
         eventSource,
         event.player,
@@ -863,6 +870,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       // History replay still needs to rebuild "own" events after a join/reload.
       if (isOwnNonHistoryEvent && event.type !== 'steal') {
         appliedOnlineEventIdsRef.current.add(event.id)
+        processedOnlineEventSourcesRef.current.set(event.id, eventSource)
         continue
       }
 
@@ -958,6 +966,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           if (clientEventId) {
             locallyRenderedOnlineStealClientEventIdsRef.current.delete(clientEventId)
           }
+          processedOnlineEventSourcesRef.current.set(event.id, eventSource)
           continue
         }
 
@@ -971,8 +980,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           showdown.hasShowdownScores &&
           shouldReplayOnlineVersusSpectacle({
             eventSource,
-            alreadyApplied,
             alreadyShown: shownOnlineStealShowdownIdsRef.current.has(event.id),
+            previousProcessedSource,
           })
         ) {
           setActiveStealShowdown({
@@ -989,6 +998,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         }
 
         if (alreadyApplied) {
+          processedOnlineEventSourcesRef.current.set(event.id, eventSource)
           continue
         }
 
@@ -1111,6 +1121,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           }
         }
       }
+
+      processedOnlineEventSourcesRef.current.set(event.id, eventSource)
     }
   }, [
     onlineVersus.events,
@@ -3576,6 +3588,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       publishedPuzzleRoomIdRef.current = null
       appliedOnlineEventIdsRef.current = new Set()
       shownOnlineStealShowdownIdsRef.current = new Set()
+      processedOnlineEventSourcesRef.current = new Map()
       locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
       finishedOnlineRoomIdRef.current = null
       preparedOnlineRoomKeyRef.current = null

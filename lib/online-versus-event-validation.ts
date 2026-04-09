@@ -113,6 +113,7 @@ const ObjectionPayloadSchema = z.object({
 const StealPayloadSchema = z.object({
   cellIndex: z.number().int().min(0).max(8),
   attackingGuess: LooseCellGuessSchema,
+  clientEventId: z.string().min(1).optional(),
   successful: z.boolean(),
   resolutionKind: z.enum(['next-player', 'defender-wins']).optional(),
   nextPlayer: z.enum(['x', 'o']).optional(),

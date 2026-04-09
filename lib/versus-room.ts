@@ -92,6 +92,7 @@ export interface OnlineVersusObjectionPayload {
 export interface OnlineVersusStealPayload {
   cellIndex: number
   attackingGuess: CellGuess
+  clientEventId?: string
   successful: boolean
   resolutionKind?: 'next-player' | 'defender-wins'
   nextPlayer?: RoomPlayer

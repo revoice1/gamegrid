@@ -76,6 +76,7 @@ import { clearGameState, loadGameState, saveGameState, type SavedGameState } fro
 import {
   normalizeOnlineVersusEventSource,
   shouldReplayOnlineVersusSpectacle,
+  shouldSkipLocallyRenderedOwnOnlineVersusStealReplay,
   shouldSkipOwnOnlineVersusEventReplay,
   shouldSuppressOnlineVersusReplayEffects,
 } from '@/lib/online-versus-event-source'
@@ -195,6 +196,14 @@ interface ActiveJudgmentVerdict {
 }
 
 const STEAL_SHOWDOWN_DURATION_MS = 3400
+
+function createOnlineVersusStealClientEventId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+
+  return `steal_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
 
 interface PendingFinalSteal {
   defender: TicTacToePlayer
@@ -496,6 +505,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     publishedPuzzleRoomIdRef.current = null
     appliedOnlineEventIdsRef.current = new Set()
     shownOnlineStealShowdownIdsRef.current = new Set()
+    locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
     finishedOnlineRoomIdRef.current = null
     preparedOnlineRoomKeyRef.current = null
     lastSavedOnlineSnapshotRef.current = null
@@ -597,6 +607,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       publishedPuzzleRoomIdRef.current = null
       appliedOnlineEventIdsRef.current = new Set()
       shownOnlineStealShowdownIdsRef.current = new Set()
+      locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
       lastSavedOnlineSnapshotRef.current = roomSnapshotSignature
       lastAppliedOnlineSnapshotRef.current = null
     }
@@ -680,6 +691,9 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   const appliedOnlineEventIdsRef = useRef(new Set<number>())
   // Tracks which steal events have already rendered a showdown overlay.
   const shownOnlineStealShowdownIdsRef = useRef(new Set<number>())
+  // Tracks locally rendered online steals so their later server echoes do not
+  // replay the same showdown on a subsequent rerender or catch-up pass.
+  const locallyRenderedOnlineStealClientEventIdsRef = useRef(new Set<string>())
   // Mirror of guesses state for synchronous reads inside the online event effect.
   const guessesRef = useRef(guesses)
   // True while a saveSnapshot() call is in-flight; prevents concurrent saves racing.
@@ -906,13 +920,13 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         })
         applyResolution(resolution, steals ? cellIndex : null)
       } else if (event.type === 'steal') {
-        if (isOwnNonHistoryEvent && activeStealShowdownRef.current) {
-          continue
-        }
-
         const stealPayload = payload as unknown as OnlineVersusStealPayload
         const attackingGuess = { ...stealPayload.attackingGuess, owner: event.player }
         const successful = stealPayload.successful
+        const clientEventId =
+          typeof stealPayload.clientEventId === 'string' && stealPayload.clientEventId.length > 0
+            ? stealPayload.clientEventId
+            : null
         const defendingGuess = guessesRef.current[cellIndex]
         const activeStealRule =
           versusStealRuleRef.current === 'off' ? 'lower' : versusStealRuleRef.current
@@ -922,6 +936,25 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           attackingGuess,
           rule: activeStealRule,
         })
+        if (
+          shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+            source: eventSource,
+            eventPlayer: event.player,
+            myRole,
+            clientEventId,
+            locallyRenderedClientEventIds: locallyRenderedOnlineStealClientEventIdsRef.current,
+          }) ||
+          (isOwnNonHistoryEvent && activeStealShowdownRef.current)
+        ) {
+          if (showdown.hasShowdownScores) {
+            shownOnlineStealShowdownIdsRef.current.add(event.id)
+          }
+          if (clientEventId) {
+            locallyRenderedOnlineStealClientEventIdsRef.current.delete(clientEventId)
+          }
+          continue
+        }
+
         const suppressReplayEffects = shouldSuppressOnlineVersusReplayEffects(eventSource)
         const showdownDuration =
           !suppressReplayEffects && animationsEnabled && showdown.hasShowdownScores
@@ -3171,8 +3204,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         const attackingScore = getStealShowdownMetric(newGuess, effectiveStealRule)
         const showdownDuration =
           animationsEnabled && outcome.hasShowdownScores ? STEAL_SHOWDOWN_DURATION_MS : 0
+        const clientEventId = isCurrentOnlineMatch ? createOnlineVersusStealClientEventId() : null
 
         if (outcome.hasShowdownScores) {
+          if (clientEventId) {
+            locallyRenderedOnlineStealClientEventIdsRef.current.add(clientEventId)
+          }
           setActiveStealShowdown({
             burstId: Date.now(),
             durationMs: showdownDuration,
@@ -3216,6 +3253,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           void sendOnlineEventWithRecovery('steal', {
             cellIndex: selectedCell,
             attackingGuess: newGuess,
+            clientEventId: clientEventId ?? undefined,
             successful: outcome.successful,
             resolutionKind: failedStealResolution?.resolutionKind,
             nextPlayer: failedStealResolution?.nextPlayer,
@@ -3225,6 +3263,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
             attackingScore,
             defendingGameName: existingGuess.gameName,
             defendingScore,
+          }).then((result) => {
+            if (!result.ok && clientEventId) {
+              locallyRenderedOnlineStealClientEventIdsRef.current.delete(clientEventId)
+            }
           })
         }
 
@@ -3528,6 +3570,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       publishedPuzzleRoomIdRef.current = null
       appliedOnlineEventIdsRef.current = new Set()
       shownOnlineStealShowdownIdsRef.current = new Set()
+      locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
       finishedOnlineRoomIdRef.current = null
       preparedOnlineRoomKeyRef.current = null
       lastSavedOnlineSnapshotRef.current = null

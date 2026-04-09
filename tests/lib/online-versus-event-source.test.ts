@@ -3,6 +3,7 @@ import {
   classifyFetchedOnlineVersusEventSource,
   normalizeOnlineVersusEventSource,
   shouldReplayOnlineVersusSpectacle,
+  shouldSkipLocallyRenderedOwnOnlineVersusStealReplay,
   shouldSkipOwnOnlineVersusEventReplay,
   shouldSuppressOnlineVersusReplayEffects,
 } from '@/lib/online-versus-event-source'
@@ -115,6 +116,50 @@ describe('online versus event source helpers', () => {
     expect(shouldSkipOwnOnlineVersusEventReplay('live-catchup', 'o', 'o')).toBe(true)
     expect(shouldSkipOwnOnlineVersusEventReplay('history', 'o', 'o')).toBe(false)
     expect(shouldSkipOwnOnlineVersusEventReplay('live', 'x', 'o')).toBe(false)
+  })
+
+  it('skips own steal echoes that correspond to a locally rendered showdown', () => {
+    const locallyRenderedClientEventIds = new Set(['steal-123'])
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'live',
+        eventPlayer: 'o',
+        myRole: 'o',
+        clientEventId: 'steal-123',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'history',
+        eventPlayer: 'o',
+        myRole: 'o',
+        clientEventId: 'steal-123',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'live',
+        eventPlayer: 'x',
+        myRole: 'o',
+        clientEventId: 'steal-123',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'live-catchup',
+        eventPlayer: 'o',
+        myRole: 'o',
+        clientEventId: 'steal-456',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(false)
   })
 
   it('normalizes missing sources based on whether history hydration is active', () => {

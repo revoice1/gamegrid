@@ -63,3 +63,19 @@ export function shouldReplayOnlineVersusSpectacle(options: {
 
   return !alreadyApplied || eventSource === 'live' || eventSource === 'live-catchup'
 }
+
+export function shouldSkipLocallyRenderedOwnOnlineVersusStealReplay(options: {
+  source: OnlineVersusEventSource
+  eventPlayer: RoomPlayer
+  myRole: RoomPlayer
+  clientEventId: string | null
+  locallyRenderedClientEventIds: ReadonlySet<string>
+}): boolean {
+  const { source, eventPlayer, myRole, clientEventId, locallyRenderedClientEventIds } = options
+
+  if (source === 'history' || eventPlayer !== myRole || !clientEventId) {
+    return false
+  }
+
+  return locallyRenderedClientEventIds.has(clientEventId)
+}

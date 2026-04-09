@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { classifyFetchedOnlineVersusEventSource } from '@/lib/online-versus-event-source'
 import type {
   OnlineVersusEvent,
   OnlineVersusEventType,
@@ -24,6 +25,7 @@ export type OnlineVersusPhase =
 export interface SendEventResult {
   ok: boolean
   error: string | null
+  code?: string | null
 }
 
 export interface UseOnlineVersusRoomReturn {
@@ -99,6 +101,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
   const roomRef = useRef<VersusRoom | null>(null)
   const myRoleRef = useRef<RoomPlayer | null>(null)
+  const eventsRef = useRef<OnlineVersusEvent[]>([])
   // Set synchronously on mount (before any async fetch) if localStorage has an
   // in-progress room. The ?join= effect reads this to avoid a double-join race.
   const isResumingRef = useRef(loadRoomEntry() !== null)
@@ -118,6 +121,9 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   useEffect(() => {
     myRoleRef.current = myRole
   }, [myRole])
+  useEffect(() => {
+    eventsRef.current = events
+  }, [events])
 
   // ── Realtime subscription ─────────────────────────────────────────────────
 
@@ -143,9 +149,12 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         },
         (payload) => {
           const updated = payload.new as VersusRoom
+          const previousMatchNumber = roomRef.current?.match_number ?? null
+          const didAdvanceMatch =
+            previousMatchNumber !== null && previousMatchNumber !== updated.match_number
           setRoom(updated)
           if (updated.status === 'active') {
-            if (updated.puzzle_id === null && updated.state_data === null) {
+            if (didAdvanceMatch || (updated.puzzle_id === null && updated.state_data === null)) {
               setEvents([])
             }
             setOpponentReady(true)
@@ -169,11 +178,26 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         },
         (payload) => {
           setEvents((prev) => {
-            const incoming = payload.new as OnlineVersusEvent
-            // Deduplicate: Realtime can deliver an event that was already
-            // fetched during the initial history load
-            if (prev.some((e) => e.id === incoming.id)) return prev
-            return [...prev, incoming]
+            const incoming = {
+              ...(payload.new as OnlineVersusEvent),
+              source: 'live' as const,
+            }
+            const existingIndex = prev.findIndex((event) => event.id === incoming.id)
+            if (existingIndex === -1) {
+              return [...prev, incoming]
+            }
+
+            const existing = prev[existingIndex]
+            if (existing.source === 'live') {
+              return prev
+            }
+
+            const next = [...prev]
+            next[existingIndex] = {
+              ...existing,
+              source: 'live',
+            }
+            return next
           })
         }
       )
@@ -198,6 +222,11 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   // are not overwritten by the (slightly older) history snapshot.
 
   const fetchEventHistory = useCallback(async (roomId: string) => {
+    const replayStartedAtMs = Date.now()
+    const highestKnownEventIdAtReplayStart = eventsRef.current.reduce(
+      (highestId, event) => Math.max(highestId, event.id),
+      0
+    )
     setIsHydratingHistory(true)
     try {
       const res = await fetch(`/api/versus/room-events/${roomId}`)
@@ -209,7 +238,17 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         // Build a map of already-known events, then add any fetched ones missing from it
         const known = new Map(prev.map((e) => [e.id, e]))
         for (const e of fetched) {
-          if (!known.has(e.id)) known.set(e.id, e)
+          if (!known.has(e.id)) {
+            known.set(e.id, {
+              ...e,
+              source: classifyFetchedOnlineVersusEventSource({
+                createdAt: e.created_at,
+                replayStartedAtMs,
+                eventId: e.id,
+                highestKnownEventIdAtReplayStart,
+              }),
+            })
+          }
         }
         // Return sorted by id so order is deterministic regardless of arrival order
         return Array.from(known.values()).sort((a, b) => a.id - b.id)
@@ -256,14 +295,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   fetchRoomStateRef.current = fetchRoomState
 
   const catchUpRoom = useCallback(async (roomId: string, code: string) => {
-    const refreshedRoom = await fetchRoomStateRef.current(code)
-
-    // If the room already has a canonical snapshot, prefer hydrating from it
-    // rather than replaying missed history over the top of newer state.
-    if (refreshedRoom?.state_data) {
-      return
-    }
-
+    await fetchRoomStateRef.current(code)
     await fetchEventHistoryRef.current(roomId)
   }, [])
 
@@ -416,20 +448,32 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     ): Promise<SendEventResult> => {
       const currentRoom = roomRef.current
       const role = myRoleRef.current
-      if (!currentRoom || !role) return { ok: false, error: 'Not in a match.' }
+      if (!currentRoom || !role) return { ok: false, error: 'Not in a match.', code: null }
 
       try {
         const res = await fetch('/api/versus/event', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomId: currentRoom.id, player: role, type, payload }),
+          body: JSON.stringify({
+            roomId: currentRoom.id,
+            matchNumber: currentRoom.match_number,
+            player: role,
+            type,
+            payload,
+          }),
         })
         const json = await res.json()
-        if (!res.ok || json.error)
-          return { ok: false, error: json.error ?? 'Failed to send event.' }
-        return { ok: true, error: null }
+        if (!res.ok || json.error) {
+          await catchUpRoomRef.current(currentRoom.id, currentRoom.code)
+          return {
+            ok: false,
+            error: json.error ?? 'Failed to send event.',
+            code: typeof json.code === 'string' ? json.code : null,
+          }
+        }
+        return { ok: true, error: null, code: null }
       } catch {
-        return { ok: false, error: 'Network error.' }
+        return { ok: false, error: 'Network error.', code: null }
       }
     },
     []
@@ -444,7 +488,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         const res = await fetch(`/api/versus/room/${currentRoom.code}/puzzle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ puzzleId, puzzle }),
+          body: JSON.stringify({ puzzleId, puzzle, matchNumber: currentRoom.match_number }),
         })
         const json = await res.json()
         // 409 with "already set" is not an error from the client's perspective —
@@ -471,6 +515,8 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     try {
       const res = await fetch(`/api/versus/room/${currentRoom.code}/finish`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchNumber: currentRoom.match_number }),
         signal: controller.signal,
       })
       const json = await res.json()
@@ -500,7 +546,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         const res = await fetch(`/api/versus/room/${currentRoom.code}/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snapshot }),
+          body: JSON.stringify({ snapshot, matchNumber: currentRoom.match_number }),
           signal: controller.signal,
         })
         const json = await res.json()

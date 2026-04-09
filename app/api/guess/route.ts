@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const resolvedSession = resolveAnonymousSession(request)
 
     // Validate the guess
-    const { valid, game, matchesRow, matchesCol } = await validateIGDBGameForCell(
+    const { valid, game, matchesRow, matchesCol, explanation } = await validateIGDBGameForCell(
       gameId,
       rowCategory,
       colCategory
@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
           duplicate: false,
           matchesRow,
           matchesCol,
+          validationExplanation: explanation,
           game: serializeGameDetails(game),
         }),
         resolvedSession,
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
             duplicate: true,
             matchesRow: false,
             matchesCol: false,
+            validationExplanation: null,
             game: null,
           }),
           resolvedSession,
@@ -166,6 +168,7 @@ export async function POST(request: NextRequest) {
         duplicate: false,
         matchesRow,
         matchesCol,
+        validationExplanation: explanation,
         game: serializeGameDetails(game),
       }),
       resolvedSession,

@@ -83,6 +83,7 @@ export interface CellGuessRecord {
   companies?: string[]
   matchedRow?: boolean
   matchedCol?: boolean
+  validationExplanation?: CellGuess['validationExplanation']
   objectionUsed?: boolean
   objectionVerdict?: 'sustained' | 'overruled' | null
   objectionExplanation?: string | null

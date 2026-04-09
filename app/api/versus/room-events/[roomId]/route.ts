@@ -13,7 +13,7 @@ export async function GET(
   // Verify the requesting session is a participant in this room
   const { data: room, error: roomError } = await supabase
     .from('versus_rooms')
-    .select('host_session_id, guest_session_id, status')
+    .select('host_session_id, guest_session_id, match_number, status')
     .eq('id', roomId)
     .single()
 
@@ -39,8 +39,9 @@ export async function GET(
 
   const { data: events, error } = await supabase
     .from('versus_events')
-    .select('id, room_id, created_at, player, type, payload')
+    .select('id, room_id, created_at, match_number, player, type, payload')
     .eq('room_id', roomId)
+    .eq('match_number', room.match_number)
     .order('id', { ascending: true })
 
   if (error) {

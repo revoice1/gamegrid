@@ -29,6 +29,7 @@ function makeRoom(overrides: Record<string, unknown> = {}) {
     code: 'ABCD',
     created_at: '2026-04-02T00:00:00.000Z',
     expires_at: '2026-04-03T00:00:00.000Z',
+    match_number: 1,
     status: 'waiting',
     settings: {},
     puzzle_id: null,
@@ -218,10 +219,71 @@ describe('useOnlineVersusRoom', () => {
         await result.current.joinRoom('ABCD')
       })
 
-      vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
+      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
 
       const res = await result.current.sendEvent('claim', { cellIndex: 0 })
       expect(res.ok).toBe(true)
+      expect(res.code).toBeNull()
+      expect(fetchSpy).toHaveBeenLastCalledWith(
+        '/api/versus/event',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            roomId: 'room-1',
+            matchNumber: 1,
+            player: 'x',
+            type: 'claim',
+            payload: { cellIndex: 0 },
+          }),
+        })
+      )
+    })
+
+    it('returns the server rejection code and catches the room back up after a rejected event', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          return Promise.resolve(makeJsonResponse({ room: makeActiveRoom(), role: 'x' }))
+        }
+
+        if (url === '/api/versus/event') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: 'It is not your turn.', code: 'wrong_turn' }), {
+              status: 409,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          )
+        }
+
+        if (url === '/api/versus/room/ABCD') {
+          return Promise.resolve(makeJsonResponse({ room: makeActiveRoom() }))
+        }
+
+        if (url === '/api/versus/room-events/room-1') {
+          return Promise.resolve(makeJsonResponse({ events: [] }))
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      const res = await result.current.sendEvent('claim', { cellIndex: 0 })
+
+      expect(res).toEqual({
+        ok: false,
+        error: 'It is not your turn.',
+        code: 'wrong_turn',
+      })
+
+      const urls = fetchSpy.mock.calls.map((call) => String(call[0]))
+      expect(urls).toContain('/api/versus/room/ABCD')
+      expect(urls).toContain('/api/versus/room-events/room-1')
     })
   })
 
@@ -244,11 +306,21 @@ describe('useOnlineVersusRoom', () => {
         await result.current.joinRoom('ABCD')
       })
 
-      vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
+      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
 
       const res = await result.current.saveSnapshot(makeSnapshot())
       expect(res.ok).toBe(true)
       expect(res.error).toBeNull()
+      expect(fetchSpy).toHaveBeenLastCalledWith(
+        '/api/versus/room/ABCD/state',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            snapshot: makeSnapshot(),
+            matchNumber: 1,
+          }),
+        })
+      )
     })
 
     it('returns { ok: false, error: "Request timed out." } when the fetch is aborted', async () => {
@@ -517,7 +589,7 @@ describe('useOnlineVersusRoom', () => {
       })
     })
 
-    it('skips event-history replay when the refreshed room already has state_data', async () => {
+    it('still fetches event history when the refreshed room already has state_data', async () => {
       const snapshot = {
         puzzleId: 'p1',
         guesses: Array(9).fill(null),
@@ -545,10 +617,8 @@ describe('useOnlineVersusRoom', () => {
       await waitFor(() => {
         const urls = fetchSpy.mock.calls.slice(beforeVisibility).map((call) => String(call[0]))
         expect(urls).toContain('/api/versus/room/ABCD')
+        expect(urls).toContain('/api/versus/room-events/room-1')
       })
-
-      const urls = fetchSpy.mock.calls.slice(beforeVisibility).map((call) => String(call[0]))
-      expect(urls).not.toContain('/api/versus/room-events/room-1')
     })
   })
 

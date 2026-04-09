@@ -11,6 +11,7 @@ import type {
 
 export type RoomStatus = 'waiting' | 'active' | 'finished'
 export type RoomPlayer = 'x' | 'o'
+export type OnlineVersusEventSource = 'live' | 'history' | 'live-catchup'
 
 export interface RoomSettings {
   categoryFilters: VersusCategoryFilters
@@ -50,6 +51,7 @@ export interface VersusRoom {
   code: string
   created_at: string
   expires_at: string
+  match_number: number
   status: RoomStatus
   settings: RoomSettings
   puzzle_id: string | null
@@ -90,6 +92,7 @@ export interface OnlineVersusObjectionPayload {
 export interface OnlineVersusStealPayload {
   cellIndex: number
   attackingGuess: CellGuess
+  clientEventId?: string
   successful: boolean
   resolutionKind?: 'next-player' | 'defender-wins'
   nextPlayer?: RoomPlayer
@@ -105,7 +108,9 @@ export interface OnlineVersusEvent {
   id: number
   room_id: string
   created_at: string
+  match_number: number
   player: RoomPlayer
   type: OnlineVersusEventType
   payload: Record<string, unknown>
+  source?: OnlineVersusEventSource
 }

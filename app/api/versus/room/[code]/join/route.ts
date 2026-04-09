@@ -4,7 +4,7 @@ import { resolveAnonymousSession, applyAnonymousSessionCookie } from '@/lib/serv
 
 // Columns safe to return to the client — session IDs are never exposed
 const SAFE_ROOM_COLUMNS =
-  'id, code, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at'
+  'id, code, match_number, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at'
 
 export async function POST(
   request: NextRequest,
@@ -20,7 +20,7 @@ export async function POST(
   const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
     .select(
-      'id, code, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at, host_session_id, guest_session_id'
+      'id, code, match_number, status, settings, puzzle_id, puzzle_data, state_data, expires_at, created_at, host_session_id, guest_session_id'
     )
     .eq('code', upperCode)
     .single()
@@ -46,6 +46,7 @@ export async function POST(
   const safeRoom = {
     id: room.id,
     code: room.code,
+    match_number: room.match_number,
     status: room.status,
     settings: room.settings,
     puzzle_id: room.puzzle_id,

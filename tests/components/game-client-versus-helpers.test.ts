@@ -3,7 +3,10 @@ import {
   buildStealFailureDescription,
   getClaimCounts,
   getNextPlayer,
+  getOnlineVersusPlacementStateTransition,
+  getOnlineVersusStealShowdownData,
   getPlayerLabel,
+  getStealShowdownMetric,
   getVersusFullBoardResolution,
   getVersusInvalidGuessResolution,
   getVersusPlacementResolution,
@@ -28,6 +31,100 @@ describe('game client versus helpers', () => {
     expect(getNextPlayer('o')).toBe('x')
     expect(getPlayerLabel('x')).toBe('X')
     expect(getPlayerLabel('o')).toBe('O')
+  })
+
+  it('reads showdown metrics from guess metadata', () => {
+    expect(
+      getStealShowdownMetric(
+        {
+          ...makeOwnedGuess('x'),
+          stealRating: 81,
+          stealRatingCount: 240,
+        },
+        'lower'
+      )
+    ).toBe(81)
+
+    expect(
+      getStealShowdownMetric(
+        {
+          ...makeOwnedGuess('x'),
+          stealRating: 81,
+          stealRatingCount: 240,
+        },
+        'fewer_reviews'
+      )
+    ).toBe(240)
+  })
+
+  it('prefers payload-provided showdown scores for online steals', () => {
+    const showdown = getOnlineVersusStealShowdownData({
+      stealPayload: {
+        cellIndex: 4,
+        attackingGuess: {
+          ...makeOwnedGuess('o'),
+          gameName: 'Payload Guess',
+        },
+        successful: false,
+        hadShowdownScores: true,
+        attackingGameName: 'Payload Guess',
+        attackingScore: 72,
+        defendingGameName: 'Local Defender',
+        defendingScore: 88,
+      },
+      defendingGuess: {
+        ...makeOwnedGuess('x'),
+        gameName: 'Stale Defender',
+        stealRating: null,
+        stealRatingCount: null,
+      },
+      attackingGuess: {
+        ...makeOwnedGuess('o'),
+        gameName: 'Stale Attacker',
+        stealRating: null,
+        stealRatingCount: null,
+      },
+      rule: 'lower',
+    })
+
+    expect(showdown).toEqual({
+      hasShowdownScores: true,
+      attackingScore: 72,
+      defendingScore: 88,
+      attackerName: 'Payload Guess',
+      defenderName: 'Local Defender',
+    })
+  })
+
+  it('falls back to local guess metrics when payload scores are absent', () => {
+    const showdown = getOnlineVersusStealShowdownData({
+      stealPayload: {
+        cellIndex: 4,
+        attackingGuess: makeOwnedGuess('o'),
+        successful: false,
+      },
+      defendingGuess: {
+        ...makeOwnedGuess('x'),
+        gameName: 'Defender',
+        stealRating: 91,
+        stealRatingCount: 400,
+      },
+      attackingGuess: {
+        ...makeOwnedGuess('o'),
+        gameName: 'Attacker',
+        stealRating: 79,
+        stealRatingCount: 250,
+      },
+      rule: 'lower',
+    })
+
+    expect(showdown).toEqual({
+      hasShowdownScores: true,
+      attackingScore: 79,
+      defendingScore: 91,
+      attackerName: 'Attacker',
+      defenderName: 'Defender',
+    })
   })
 
   it('counts claimed cells by owner', () => {
@@ -310,6 +407,43 @@ describe('game client versus helpers', () => {
       nextPlayer: 'o',
       title: 'Last chance steal',
       description: 'O gets one chance to answer back on that square.',
+    })
+  })
+
+  it('keeps the repeated final steal square stealable for the joiner-side remote state', () => {
+    const resolution = getVersusPlacementResolution({
+      newGuesses: [
+        makeOwnedGuess('x'),
+        makeOwnedGuess('x'),
+        makeOwnedGuess('x'),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ],
+      currentPlayer: 'x',
+      selectedCell: 2,
+      isVersusSteal: true,
+      stealsEnabled: true,
+      disableDraws: false,
+    })
+
+    expect(
+      getOnlineVersusPlacementStateTransition({
+        resolution,
+        newStealable: 2,
+      })
+    ).toEqual({
+      winner: null,
+      pendingFinalSteal: {
+        defender: 'x',
+        cellIndex: 2,
+      },
+      stealableCell: 2,
+      nextPlayer: 'o',
+      shouldClearTurnDeadline: false,
     })
   })
 })

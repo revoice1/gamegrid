@@ -1,7 +1,14 @@
-import type { Category, Game, PuzzleCellMetadata } from './types'
+import type {
+  Category,
+  CategoryMatchExplanation,
+  Game,
+  GuessValidationExplanation,
+  PuzzleCellMetadata,
+} from './types'
 import {
   buildIGDBWhereClause,
   buildPuzzleCellMetadata,
+  explainIGDBGameMatch,
   getIntrinsicPairRejectionReason,
   getPairRejectionReason,
   igdbGameMatchesCategory,
@@ -98,12 +105,17 @@ interface IGDBTokenCache {
   expiresAt: number
 }
 
+interface ResolvedIGDBGameDetails {
+  selectedGame: Game
+  game: Game
+}
+
 // These caches are intentionally in-memory, so they help on warm Node instances
 // but are not shared across serverless cold starts or between regions.
 let tokenCache: IGDBTokenCache | null = null
 const igdbGameCache = new Map<number, Game | null>()
 const igdbRawGameCache = new Map<number, IGDBGame | null>()
-const igdbResolvedPortFamilyCache = new Map<number, Game | null>()
+const igdbResolvedPortFamilyCache = new Map<number, ResolvedIGDBGameDetails | null>()
 const DEFAULT_CELL_SAMPLE_SIZE = 40
 const DEFAULT_MIN_VALID_OPTIONS = 3
 const DEFAULT_MAX_GENERATION_ATTEMPTS = 12
@@ -1262,7 +1274,7 @@ export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {
   return mapped
 }
 
-async function getResolvedIGDBGameDetails(gameId: number): Promise<Game | null> {
+async function getResolvedIGDBGameDetails(gameId: number): Promise<ResolvedIGDBGameDetails | null> {
   if (igdbResolvedPortFamilyCache.has(gameId)) {
     return igdbResolvedPortFamilyCache.get(gameId) ?? null
   }
@@ -1275,28 +1287,102 @@ async function getResolvedIGDBGameDetails(gameId: number): Promise<Game | null> 
 
   const { selected, canonical, family } = await getPortFamilyGames(rawGame)
   const merged = mergePortFamilyGameDetails(selected, family, canonical)
-  igdbResolvedPortFamilyCache.set(gameId, merged)
-  return merged
+  const resolvedDetails = {
+    selectedGame: selected,
+    game: merged,
+  }
+  igdbResolvedPortFamilyCache.set(gameId, resolvedDetails)
+  return resolvedDetails
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  const normalizedLeft = [...left].map((value) => value.toLowerCase()).sort()
+  const normalizedRight = [...right].map((value) => value.toLowerCase()).sort()
+
+  return normalizedLeft.every((value, index) => value === normalizedRight[index])
+}
+
+function didCategoryExplanationChange(
+  before: CategoryMatchExplanation,
+  after: CategoryMatchExplanation
+): boolean {
+  return (
+    before.matched !== after.matched ||
+    before.matchSource !== after.matchSource ||
+    before.note !== after.note ||
+    !areStringArraysEqual(before.matchedValues, after.matchedValues)
+  )
+}
+
+function buildGuessValidationExplanation(options: {
+  selectedGame: Game
+  resolvedGame: Game
+  rowCategory: Category
+  colCategory: Category
+}): GuessValidationExplanation {
+  const { selectedGame, resolvedGame, rowCategory, colCategory } = options
+  const row = explainIGDBGameMatch(resolvedGame, rowCategory)
+  const col = explainIGDBGameMatch(resolvedGame, colCategory)
+  const selectedRow = explainIGDBGameMatch(selectedGame, rowCategory)
+  const selectedCol = explainIGDBGameMatch(selectedGame, colCategory)
+  const familyResolutionUsed =
+    didCategoryExplanationChange(selectedRow, row) || didCategoryExplanationChange(selectedCol, col)
+
+  return {
+    row,
+    col,
+    familyResolution: {
+      used: familyResolutionUsed,
+      selectedGameId: selectedGame.id,
+      selectedGameName: selectedGame.name,
+      note: familyResolutionUsed
+        ? 'Validated using merged original + official port family metadata.'
+        : null,
+    },
+  }
 }
 
 export async function validateIGDBGameForCell(
   gameId: number,
   rowCategory: Category,
   colCategory: Category
-): Promise<{ valid: boolean; game: Game | null; matchesRow: boolean; matchesCol: boolean }> {
-  const game = await getResolvedIGDBGameDetails(gameId)
-  if (!game) {
-    return { valid: false, game: null, matchesRow: false, matchesCol: false }
+): Promise<{
+  valid: boolean
+  game: Game | null
+  matchesRow: boolean
+  matchesCol: boolean
+  explanation: GuessValidationExplanation | null
+}> {
+  const resolvedDetails = await getResolvedIGDBGameDetails(gameId)
+  if (!resolvedDetails) {
+    return {
+      valid: false,
+      game: null,
+      matchesRow: false,
+      matchesCol: false,
+      explanation: null,
+    }
   }
 
-  const matchesRow = igdbGameMatchesCategory(game, rowCategory)
-  const matchesCol = igdbGameMatchesCategory(game, colCategory)
+  const explanation = buildGuessValidationExplanation({
+    selectedGame: resolvedDetails.selectedGame,
+    resolvedGame: resolvedDetails.game,
+    rowCategory,
+    colCategory,
+  })
+  const matchesRow = explanation.row.matched
+  const matchesCol = explanation.col.matched
 
   return {
     valid: matchesRow && matchesCol,
-    game,
+    game: resolvedDetails.game,
     matchesRow,
     matchesCol,
+    explanation,
   }
 }
 

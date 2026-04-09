@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildIGDBWhereClause,
   buildPuzzleCellMetadata,
+  explainIGDBGameMatch,
   getIntrinsicPairRejectionReason,
   getPairRejectionReason,
   igdbGameMatchesCategory,
@@ -588,6 +589,119 @@ describe('igdbGameMatchesCategory', () => {
 
   it('rejects categories the game does not satisfy', () => {
     expect(igdbGameMatchesCategory(baseGame, { type: 'theme', id: 1, name: 'Action' })).toBe(false)
+  })
+})
+
+describe('explainIGDBGameMatch', () => {
+  it('explains merged retro platform bucket matches', () => {
+    expect(
+      explainIGDBGameMatch(
+        {
+          ...baseGame,
+          platforms: [
+            { platform: { id: 150, name: 'TurboGrafx-16/PC Engine CD', slug: 'pce-cd' } },
+          ],
+        },
+        {
+          type: 'platform',
+          id: 86,
+          name: 'PC-Engine / TG16',
+          slug: 'tg16-slash-pce-slash-pce-cd',
+        }
+      )
+    ).toEqual({
+      matched: true,
+      categoryType: 'platform',
+      categoryName: 'PC-Engine / TG16',
+      matchSource: 'merged-platform-bucket',
+      matchedValues: ['TurboGrafx-16/PC Engine CD'],
+      note: 'Matched via the PC-Engine / TG16 platform family.',
+    })
+  })
+
+  it('explains decade matches using release-family dates', () => {
+    expect(
+      explainIGDBGameMatch(
+        { ...baseGame, released: '2004-11-09', releaseDates: ['1992-01-01', '2004-11-09'] },
+        { type: 'decade', id: '1990', name: '1990s' }
+      )
+    ).toEqual({
+      matched: true,
+      categoryType: 'decade',
+      categoryName: '1990s',
+      matchSource: 'release-date-family',
+      matchedValues: ['1992-01-01'],
+      note: null,
+    })
+  })
+
+  it('explains company alias and prefix matches', () => {
+    expect(
+      explainIGDBGameMatch(
+        {
+          ...baseGame,
+          developers: [],
+          publishers: [],
+          igdb: {
+            ...baseGame.igdb!,
+            companies: ['Square'],
+            keywords: [],
+          },
+        },
+        {
+          type: 'company',
+          id: 'square-enix',
+          name: 'Square Enix',
+          slug: 'square-enix',
+        }
+      )
+    ).toEqual({
+      matched: true,
+      categoryType: 'company',
+      categoryName: 'Square Enix',
+      matchSource: 'company-alias',
+      matchedValues: ['Square'],
+      note: null,
+    })
+
+    expect(
+      explainIGDBGameMatch(
+        {
+          ...baseGame,
+          developers: [],
+          publishers: [],
+          igdb: {
+            ...baseGame.igdb!,
+            companies: ['EA Tiburon'],
+            keywords: [],
+          },
+        },
+        {
+          type: 'company',
+          id: 'electronic-arts',
+          name: 'Electronic Arts',
+          slug: 'electronic-arts',
+        }
+      )
+    ).toEqual({
+      matched: true,
+      categoryType: 'company',
+      categoryName: 'Electronic Arts',
+      matchSource: 'company-prefix',
+      matchedValues: ['EA Tiburon'],
+      note: 'Matched via the Electronic Arts company family.',
+    })
+  })
+
+  it('returns an explicit no-match explanation when the category fails', () => {
+    expect(explainIGDBGameMatch(baseGame, { type: 'theme', id: 1, name: 'Action' })).toEqual({
+      matched: false,
+      categoryType: 'theme',
+      categoryName: 'Action',
+      matchSource: 'no-match',
+      matchedValues: [],
+      note: null,
+    })
   })
 })
 

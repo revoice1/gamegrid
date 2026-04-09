@@ -1,0 +1,202 @@
+import { describe, expect, it } from 'vitest'
+import {
+  classifyFetchedOnlineVersusEventSource,
+  normalizeOnlineVersusEventSource,
+  shouldReplayOnlineVersusSpectacle,
+  shouldSkipLocallyRenderedOwnOnlineVersusStealReplay,
+  shouldSkipOwnOnlineVersusEventReplay,
+  shouldSuppressOnlineVersusReplayEffects,
+} from '@/lib/online-versus-event-source'
+
+describe('online versus event source helpers', () => {
+  it('marks fetched events before replay start as history and newer ones as live-catchup', () => {
+    const replayStartedAtMs = Date.parse('2026-04-09T00:00:10.000Z')
+
+    expect(
+      classifyFetchedOnlineVersusEventSource({
+        createdAt: '2026-04-09T00:00:09.000Z',
+        replayStartedAtMs,
+        eventId: 9,
+        highestKnownEventIdAtReplayStart: 0,
+      })
+    ).toBe('history')
+
+    expect(
+      classifyFetchedOnlineVersusEventSource({
+        createdAt: '2026-04-09T00:00:10.000Z',
+        replayStartedAtMs,
+        eventId: 10,
+        highestKnownEventIdAtReplayStart: 0,
+      })
+    ).toBe('live-catchup')
+
+    expect(
+      classifyFetchedOnlineVersusEventSource({
+        createdAt: '2026-04-09T00:00:11.000Z',
+        replayStartedAtMs,
+        eventId: 11,
+        highestKnownEventIdAtReplayStart: 0,
+      })
+    ).toBe('live-catchup')
+  })
+
+  it('uses event ids to recover missed live events during catch-up', () => {
+    expect(
+      classifyFetchedOnlineVersusEventSource({
+        createdAt: '2026-04-09T00:00:09.000Z',
+        replayStartedAtMs: Date.parse('2026-04-09T00:00:15.000Z'),
+        eventId: 11,
+        highestKnownEventIdAtReplayStart: 10,
+      })
+    ).toBe('live-catchup')
+
+    expect(
+      classifyFetchedOnlineVersusEventSource({
+        createdAt: '2026-04-09T00:00:12.000Z',
+        replayStartedAtMs: Date.parse('2026-04-09T00:00:15.000Z'),
+        eventId: 10,
+        highestKnownEventIdAtReplayStart: 10,
+      })
+    ).toBe('history')
+  })
+
+  it('falls back safely when created_at is invalid', () => {
+    expect(
+      classifyFetchedOnlineVersusEventSource({
+        createdAt: 'not-a-date',
+        replayStartedAtMs: Date.now(),
+        eventId: 1,
+        highestKnownEventIdAtReplayStart: 0,
+      })
+    ).toBe('history')
+  })
+
+  it('only suppresses replay effects for true history events', () => {
+    expect(shouldSuppressOnlineVersusReplayEffects('history')).toBe(true)
+    expect(shouldSuppressOnlineVersusReplayEffects('live')).toBe(false)
+    expect(shouldSuppressOnlineVersusReplayEffects('live-catchup')).toBe(false)
+  })
+
+  it('allows spectacle replay when an already-applied event upgrades from history to live', () => {
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'history',
+        alreadyShown: false,
+        previousProcessedSource: null,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live',
+        alreadyShown: false,
+        previousProcessedSource: null,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live-catchup',
+        alreadyShown: false,
+        previousProcessedSource: null,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live',
+        alreadyShown: false,
+        previousProcessedSource: 'history',
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live-catchup',
+        alreadyShown: false,
+        previousProcessedSource: 'history',
+      })
+    ).toBe(true)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live',
+        alreadyShown: false,
+        previousProcessedSource: 'live',
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live-catchup',
+        alreadyShown: false,
+        previousProcessedSource: 'live-catchup',
+      })
+    ).toBe(false)
+
+    expect(
+      shouldReplayOnlineVersusSpectacle({
+        eventSource: 'live',
+        alreadyShown: true,
+        previousProcessedSource: 'history',
+      })
+    ).toBe(false)
+  })
+
+  it('skips only my non-history events because they are already applied locally', () => {
+    expect(shouldSkipOwnOnlineVersusEventReplay('live', 'o', 'o')).toBe(true)
+    expect(shouldSkipOwnOnlineVersusEventReplay('live-catchup', 'o', 'o')).toBe(true)
+    expect(shouldSkipOwnOnlineVersusEventReplay('history', 'o', 'o')).toBe(false)
+    expect(shouldSkipOwnOnlineVersusEventReplay('live', 'x', 'o')).toBe(false)
+  })
+
+  it('skips own steal echoes that correspond to a locally rendered showdown', () => {
+    const locallyRenderedClientEventIds = new Set(['steal-123'])
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'live',
+        eventPlayer: 'o',
+        myRole: 'o',
+        clientEventId: 'steal-123',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'history',
+        eventPlayer: 'o',
+        myRole: 'o',
+        clientEventId: 'steal-123',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'live',
+        eventPlayer: 'x',
+        myRole: 'o',
+        clientEventId: 'steal-123',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+        source: 'live-catchup',
+        eventPlayer: 'o',
+        myRole: 'o',
+        clientEventId: 'steal-456',
+        locallyRenderedClientEventIds,
+      })
+    ).toBe(false)
+  })
+
+  it('normalizes missing sources based on whether history hydration is active', () => {
+    expect(normalizeOnlineVersusEventSource(undefined, true)).toBe('history')
+    expect(normalizeOnlineVersusEventSource(undefined, false)).toBe('live')
+    expect(normalizeOnlineVersusEventSource('live-catchup', true)).toBe('live-catchup')
+  })
+})

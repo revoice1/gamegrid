@@ -16,7 +16,7 @@ export async function POST(
 
   const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
-    .select('id, host_session_id, status, puzzle_id, settings')
+    .select('id, host_session_id, match_number, status, puzzle_id, settings')
     .eq('code', upperCode)
     .single()
 
@@ -46,8 +46,13 @@ export async function POST(
 
   let puzzleId: string
   let puzzle: Puzzle
+  let matchNumber: number | undefined
   try {
-    ;({ puzzleId, puzzle } = (await request.json()) as { puzzleId: string; puzzle: Puzzle })
+    ;({ puzzleId, puzzle, matchNumber } = (await request.json()) as {
+      puzzleId: string
+      puzzle: Puzzle
+      matchNumber?: number
+    })
   } catch {
     console.error('[versus.room.puzzle] invalid request body', {
       code: upperCode,
@@ -57,8 +62,15 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
   }
 
-  if (!puzzleId || !puzzle) {
-    return NextResponse.json({ error: 'Missing puzzleId or puzzle.' }, { status: 400 })
+  if (!puzzleId || !puzzle || !Number.isInteger(matchNumber)) {
+    return NextResponse.json(
+      { error: 'Missing puzzleId, puzzle, or matchNumber.' },
+      { status: 400 }
+    )
+  }
+
+  if (matchNumber !== room.match_number) {
+    return NextResponse.json({ error: 'This room has moved to a newer match.' }, { status: 409 })
   }
 
   const timerOption = room.settings?.timerOption

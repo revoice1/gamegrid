@@ -36,6 +36,10 @@ import {
   isGuessHydrated,
 } from './game-client-helpers'
 import {
+  hasRestorableVersusState,
+  shouldForegroundOnlineVersusSession,
+} from './game-client-online-helpers'
+import {
   buildLegacySessionHeaders,
   buildDailyStatsPayload,
   getPostGuessCompletionEffects,
@@ -48,8 +52,11 @@ import {
 } from './game-client-submission'
 import {
   buildStealFailureDescription,
+  getOnlineVersusStealShowdownData,
+  getOnlineVersusPlacementStateTransition,
   getNextPlayer,
   getPlayerLabel,
+  getStealShowdownMetric,
   getVersusInvalidGuessResolution,
   getVersusPlacementResolution,
   getVersusTurnExpiredResolution,
@@ -67,6 +74,13 @@ import type {
   VersusTurnTimerOption,
 } from './versus-setup-modal'
 import { clearGameState, loadGameState, saveGameState, type SavedGameState } from '@/lib/session'
+import {
+  normalizeOnlineVersusEventSource,
+  shouldReplayOnlineVersusSpectacle,
+  shouldSkipLocallyRenderedOwnOnlineVersusStealReplay,
+  shouldSkipOwnOnlineVersusEventReplay,
+  shouldSuppressOnlineVersusReplayEffects,
+} from '@/lib/online-versus-event-source'
 import { sanitizeMinValidOptionsOverride } from '@/lib/min-valid-options'
 import {
   useAnimationPreference,
@@ -105,6 +119,8 @@ import { useVersusSetupState } from '@/hooks/use-versus-setup-state'
 import { useVersusTurnTimer } from '@/hooks/use-versus-turn-timer'
 import type {
   OnlineVersusClaimPayload,
+  OnlineVersusEventType,
+  OnlineVersusEventSource,
   OnlineVersusMissPayload,
   OnlineVersusObjectionPayload,
   OnlineVersusSnapshot,
@@ -183,12 +199,12 @@ interface ActiveJudgmentVerdict {
 
 const STEAL_SHOWDOWN_DURATION_MS = 3400
 
-function getStealShowdownMetric(guess: CellGuess, rule: Exclude<VersusStealRule, 'off'>) {
-  if (rule === 'fewer_reviews' || rule === 'more_reviews') {
-    return guess.stealRatingCount ?? null
+function createOnlineVersusStealClientEventId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
   }
 
-  return guess.stealRating ?? null
+  return `steal_${Date.now()}_${Math.random().toString(36).slice(2)}`
 }
 
 interface PendingFinalSteal {
@@ -386,6 +402,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   const { enabled: versusAlarmsEnabled } = useVersusAlarmPreference()
   const { enabled: versusAudioEnabled } = useVersusAudioPreference()
   const versusEventLogRef = useRef<VersusEventRecord[]>([])
+  const activeStealShowdownRef = useRef<ActiveStealShowdown | null>(null)
   const detectConfiguredAnimationQuality = useCallback(
     () => (animationsEnabled ? detectAnimationQuality() : 'low'),
     [animationsEnabled]
@@ -415,6 +432,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   }, [versusObjectionRule])
 
   useEffect(() => {
+    activeStealShowdownRef.current = activeStealShowdown
+  }, [activeStealShowdown])
+
+  useEffect(() => {
     guessesRef.current = guesses
   }, [guesses])
 
@@ -426,6 +447,11 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     mode === 'versus' &&
     currentOnlineRoomPuzzleId !== null &&
     puzzle?.id === currentOnlineRoomPuzzleId
+  const shouldForegroundOnlineSession = shouldForegroundOnlineVersusSession({
+    mode,
+    showOnlineLobby,
+    isResumingOnlineVersus: onlineVersus.isResuming,
+  })
   const hasStableOnlineBoardLoaded =
     mode === 'versus' &&
     loadedPuzzleMode === 'versus' &&
@@ -438,6 +464,37 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       onlineVersus.phase === 'creating' ||
       (hasActiveOnlineRoom && (!onlineVersus.room?.puzzle_id || !onlineVersus.room?.puzzle_data)))
 
+  const sendOnlineEventWithRecovery = useCallback(
+    async (type: OnlineVersusEventType, payload: Record<string, unknown>) => {
+      const result = await onlineVersus.sendEvent(type, payload)
+      if (result.ok) {
+        return result
+      }
+
+      const description =
+        result.code === 'wrong_turn'
+          ? 'Your local turn state was stale, so the match was refreshed from the server.'
+          : result.code === 'cell_unavailable'
+            ? 'That square was already resolved elsewhere, so the board was refreshed.'
+            : result.code === 'steal_not_available'
+              ? 'That steal window was no longer open, so the board was refreshed.'
+              : result.code === 'objection_limit_reached'
+                ? 'Your objection count was already exhausted, so the match was refreshed.'
+                : result.code
+                  ? `${result.error ?? 'The match state changed on the server.'} The board was refreshed.`
+                  : (result.error ?? 'Failed to sync that move to the server.')
+
+      toast({
+        variant: result.code ? 'default' : 'destructive',
+        title: result.code ? 'Match updated' : 'Sync failed',
+        description,
+      })
+
+      return result
+    },
+    [onlineVersus, toast]
+  )
+
   const resetOnlineVersusSession = useCallback(() => {
     onlineVersus.reset()
     setShowOnlineLobby(false)
@@ -449,6 +506,9 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     setActiveJudgmentVerdict(null)
     publishedPuzzleRoomIdRef.current = null
     appliedOnlineEventIdsRef.current = new Set()
+    shownOnlineStealShowdownIdsRef.current = new Set()
+    processedOnlineEventSourcesRef.current = new Map()
+    locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
     finishedOnlineRoomIdRef.current = null
     preparedOnlineRoomKeyRef.current = null
     lastSavedOnlineSnapshotRef.current = null
@@ -495,7 +555,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   // When the online room becomes active, apply authoritative settings and reset board state
   useEffect(() => {
     const { room, myRole } = onlineVersus
-    if (!hasActiveOnlineRoom || !room) return
+    if (!hasActiveOnlineRoom || !room || !shouldForegroundOnlineSession) return
 
     // Apply room.settings as the authoritative rules for this match.
     // This is critical for the guest — their local settings are irrelevant.
@@ -523,7 +583,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     setShowOnlineLobby(false)
 
     const roomSnapshot = room.state_data
-    const roomPrepKey = `${room.id}:${room.puzzle_id ?? 'pending'}`
+    const roomMatchKey = `${room.id}:${room.match_number}`
+    const roomPrepKey = `${roomMatchKey}:${room.puzzle_id ?? 'pending'}`
     const roomSnapshotSignature = roomSnapshot ? JSON.stringify(roomSnapshot) : null
     const hasMatchingLocalPuzzle =
       loadedPuzzleMode === 'versus' &&
@@ -548,6 +609,9 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       setPendingVersusObjectionReview(null)
       publishedPuzzleRoomIdRef.current = null
       appliedOnlineEventIdsRef.current = new Set()
+      shownOnlineStealShowdownIdsRef.current = new Set()
+      processedOnlineEventSourcesRef.current = new Map()
+      locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
       lastSavedOnlineSnapshotRef.current = roomSnapshotSignature
       lastAppliedOnlineSnapshotRef.current = null
     }
@@ -616,15 +680,27 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   }, [
     hasActiveOnlineRoom,
     loadedPuzzleMode,
+    mode,
     onlineVersus.room?.puzzle_id,
     onlineVersus.room?.state_data,
+    onlineVersus.isResuming,
     puzzle,
+    shouldForegroundOnlineSession,
+    showOnlineLobby,
   ])
 
-  // Tracks which room ID has already had its puzzle published, preventing double-writes.
+  // Tracks which room/match boundary has already had its puzzle published.
   const publishedPuzzleRoomIdRef = useRef<string | null>(null)
   // Tracks online event IDs already applied to local state (prevents double-apply on re-renders).
   const appliedOnlineEventIdsRef = useRef(new Set<number>())
+  // Tracks which steal events have already rendered a showdown overlay.
+  const shownOnlineStealShowdownIdsRef = useRef(new Set<number>())
+  // Tracks the most recent source classification applied for each event so a
+  // steal showdown only replays when a previously historical event upgrades.
+  const processedOnlineEventSourcesRef = useRef(new Map<number, OnlineVersusEventSource>())
+  // Tracks locally rendered online steals so their later server echoes do not
+  // replay the same showdown on a subsequent rerender or catch-up pass.
+  const locallyRenderedOnlineStealClientEventIdsRef = useRef(new Set<string>())
   // Mirror of guesses state for synchronous reads inside the online event effect.
   const guessesRef = useRef(guesses)
   // True while a saveSnapshot() call is in-flight; prevents concurrent saves racing.
@@ -694,12 +770,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       room.puzzle_id !== null || // room already has a puzzle — do not overwrite
       !puzzle ||
       loadedPuzzleMode !== 'versus' ||
-      publishedPuzzleRoomIdRef.current === room.id // already published for this room
+      publishedPuzzleRoomIdRef.current === `${room.id}:${room.match_number}`
     ) {
       return
     }
 
-    publishedPuzzleRoomIdRef.current = room.id
+    publishedPuzzleRoomIdRef.current = `${room.id}:${room.match_number}`
 
     onlineVersus.setPuzzle(puzzle.id, puzzle).then((result) => {
       if (!result.ok) {
@@ -781,15 +857,25 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     const myRole = onlineVersus.myRole
 
     for (const event of onlineVersus.events) {
-      // Live events from this client are already applied locally. We only
-      // replay "own" events while hydrating history after a join/reload.
-      if (!onlineVersus.isHydratingHistory && event.player === myRole) {
+      const eventSource = normalizeOnlineVersusEventSource(
+        event.source,
+        onlineVersus.isHydratingHistory
+      )
+      const previousProcessedSource = processedOnlineEventSourcesRef.current.get(event.id) ?? null
+      const isOwnNonHistoryEvent = shouldSkipOwnOnlineVersusEventReplay(
+        eventSource,
+        event.player,
+        myRole
+      )
+      // Non-history events from this client are already applied locally.
+      // History replay still needs to rebuild "own" events after a join/reload.
+      if (isOwnNonHistoryEvent && event.type !== 'steal') {
         appliedOnlineEventIdsRef.current.add(event.id)
+        processedOnlineEventSourcesRef.current.set(event.id, eventSource)
         continue
       }
 
-      // Skip already-processed events
-      if (appliedOnlineEventIdsRef.current.has(event.id)) continue
+      const alreadyApplied = appliedOnlineEventIdsRef.current.has(event.id) || isOwnNonHistoryEvent
       appliedOnlineEventIdsRef.current.add(event.id)
 
       const payload = event.payload as Record<string, unknown>
@@ -810,23 +896,28 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         resolution: ReturnType<typeof getVersusPlacementResolution>,
         newStealable: number | null
       ) => {
-        if (resolution.kind === 'winner' || resolution.kind === 'claims-win') {
-          setWinner(resolution.winner)
-          setStealableCell(null)
-        } else if (resolution.kind === 'draw') {
-          setWinner('draw')
-          setStealableCell(null)
-        } else if (resolution.kind === 'final-steal') {
-          setPendingFinalSteal({ defender: resolution.defender, cellIndex: resolution.cellIndex })
-          setStealableCell(null)
-          setCurrentPlayer(resolution.nextPlayer)
-        } else {
-          setStealableCell(newStealable)
-          setCurrentPlayer(resolution.nextPlayer)
+        const nextState = getOnlineVersusPlacementStateTransition({
+          resolution,
+          newStealable,
+        })
+
+        setLockImpactCell(null)
+        setPendingFinalSteal(nextState.pendingFinalSteal)
+        setStealableCell(nextState.stealableCell)
+
+        if (nextState.winner !== null) {
+          setWinner(nextState.winner)
+        } else if (nextState.nextPlayer) {
+          setCurrentPlayer(nextState.nextPlayer)
+        }
+
+        if (nextState.shouldClearTurnDeadline) {
+          setTurnDeadlineAt(null)
         }
       }
 
       if (event.type === 'claim') {
+        if (alreadyApplied) continue
         const claimPayload = payload as unknown as OnlineVersusClaimPayload
         const guess = { ...claimPayload.guess, owner: event.player }
         const next = guessesRef.current.map((g, i) => (i === cellIndex ? guess : g))
@@ -845,36 +936,73 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         const stealPayload = payload as unknown as OnlineVersusStealPayload
         const attackingGuess = { ...stealPayload.attackingGuess, owner: event.player }
         const successful = stealPayload.successful
+        const clientEventId =
+          typeof stealPayload.clientEventId === 'string' && stealPayload.clientEventId.length > 0
+            ? stealPayload.clientEventId
+            : null
         const defendingGuess = guessesRef.current[cellIndex]
         const activeStealRule =
           versusStealRuleRef.current === 'off' ? 'lower' : versusStealRuleRef.current
-        const defendingScore = defendingGuess
-          ? getStealShowdownMetric(defendingGuess, activeStealRule)
-          : null
-        const attackingScore = getStealShowdownMetric(attackingGuess, activeStealRule)
-        const hasShowdownScores =
-          typeof defendingScore === 'number' && typeof attackingScore === 'number'
-        const suppressReplayEffects = onlineVersus.isHydratingHistory
+        const showdown = getOnlineVersusStealShowdownData({
+          stealPayload,
+          defendingGuess,
+          attackingGuess,
+          rule: activeStealRule,
+        })
+        if (
+          shouldSkipLocallyRenderedOwnOnlineVersusStealReplay({
+            source: eventSource,
+            eventPlayer: event.player,
+            myRole,
+            clientEventId,
+            locallyRenderedClientEventIds: locallyRenderedOnlineStealClientEventIdsRef.current,
+          }) ||
+          (isOwnNonHistoryEvent && activeStealShowdownRef.current)
+        ) {
+          if (showdown.hasShowdownScores) {
+            shownOnlineStealShowdownIdsRef.current.add(event.id)
+          }
+          if (clientEventId) {
+            locallyRenderedOnlineStealClientEventIdsRef.current.delete(clientEventId)
+          }
+          processedOnlineEventSourcesRef.current.set(event.id, eventSource)
+          continue
+        }
+
+        const suppressReplayEffects = shouldSuppressOnlineVersusReplayEffects(eventSource)
         const showdownDuration =
-          !suppressReplayEffects && animationsEnabled && hasShowdownScores
+          !suppressReplayEffects && animationsEnabled && showdown.hasShowdownScores
             ? STEAL_SHOWDOWN_DURATION_MS
             : 0
 
-        if (hasShowdownScores && !suppressReplayEffects) {
+        if (
+          showdown.hasShowdownScores &&
+          shouldReplayOnlineVersusSpectacle({
+            eventSource,
+            alreadyShown: shownOnlineStealShowdownIdsRef.current.has(event.id),
+            previousProcessedSource,
+          })
+        ) {
           setActiveStealShowdown({
             burstId: Date.now(),
             durationMs: showdownDuration,
-            defenderName: defendingGuess?.gameName ?? 'Defender',
-            defenderScore: defendingScore!,
-            attackerName: attackingGuess.gameName,
-            attackerScore: attackingScore!,
+            defenderName: showdown.defenderName,
+            defenderScore: showdown.defendingScore!,
+            attackerName: showdown.attackerName,
+            attackerScore: showdown.attackingScore!,
             rule: activeStealRule,
             successful,
           })
+          shownOnlineStealShowdownIdsRef.current.add(event.id)
+        }
+
+        if (alreadyApplied) {
+          processedOnlineEventSourcesRef.current.set(event.id, eventSource)
+          continue
         }
 
         if (successful) {
-          const nextGuess = hasShowdownScores
+          const nextGuess = showdown.hasShowdownScores
             ? {
                 ...attackingGuess,
                 showdownScoreRevealed: true,
@@ -921,6 +1049,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           }
         }
       } else if (event.type === 'miss') {
+        if (alreadyApplied) continue
         const missPayload = payload as unknown as OnlineVersusMissPayload
         const nextGuessesRemaining =
           typeof missPayload.guessesRemaining === 'number'
@@ -943,6 +1072,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           }
         }
       } else if (event.type === 'objection') {
+        if (alreadyApplied) continue
         const objectionPayload = payload as unknown as OnlineVersusObjectionPayload
         const verdict = objectionPayload.verdict
         const updatedGuess =
@@ -990,6 +1120,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           }
         }
       }
+
+      processedOnlineEventSourcesRef.current.set(event.id, eventSource)
     }
   }, [
     onlineVersus.events,
@@ -1555,7 +1687,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       }
 
       if (isCurrentOnlineMatch) {
-        void onlineVersus.sendEvent('miss', {
+        void sendOnlineEventWithRecovery('miss', {
           cellIndex: pendingVersusObjectionReview?.cellIndex ?? selectedCell,
           guessesRemaining: nextGuessesRemaining,
           resolutionKind: invalidGuessResolution.kind,
@@ -1727,7 +1859,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           const overruledGuessesRemaining =
             payload.verdict === 'overruled' ? Math.max(0, guessesRemaining - 1) : undefined
 
-          void onlineVersus.sendEvent('objection', {
+          void sendOnlineEventWithRecovery('objection', {
             cellIndex: activeDetailCell,
             verdict: payload.verdict,
             updatedGuess: nextGuess,
@@ -2170,7 +2302,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         setWinner(expirationResolution.defender)
 
         if (isCurrentOnlineMatch && pendingFinalSteal) {
-          void onlineVersus.sendEvent('miss', {
+          void sendOnlineEventWithRecovery('miss', {
             cellIndex: pendingFinalSteal.cellIndex,
             guessesRemaining,
             resolutionKind: 'defender-wins',
@@ -2650,9 +2782,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
 
   useEffect(() => {
     const isOnlineResumeInFlight =
-      onlineVersus.isResuming ||
-      onlineVersus.phase === 'joining' ||
-      onlineVersus.phase === 'creating'
+      shouldForegroundOnlineSession &&
+      (onlineVersus.isResuming ||
+        onlineVersus.phase === 'joining' ||
+        onlineVersus.phase === 'creating')
 
     const hasInviteJoinCode =
       typeof window !== 'undefined' &&
@@ -2668,7 +2801,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       return
     }
 
-    if (isWaitingForOnlinePuzzle) {
+    if (shouldForegroundOnlineSession && isWaitingForOnlinePuzzle) {
       setIsLoading(true)
       return
     }
@@ -2718,6 +2851,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     puzzle,
     showPracticeStartOptions,
     showVersusStartOptions,
+    shouldForegroundOnlineSession,
   ])
 
   // Handle mode change
@@ -2725,8 +2859,8 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     if (newMode !== mode) {
       activePuzzleLoadControllerRef.current?.abort()
 
-      if (onlineVersus.room && newMode !== 'versus') {
-        resetOnlineVersusSession()
+      if (newMode !== 'versus') {
+        setShowOnlineLobby(false)
       }
 
       if (newMode === 'practice') {
@@ -2756,7 +2890,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         setShowPracticeSetup(false)
         setPracticeSetupError(null)
         setVersusSetupError(null)
-        const hasSavedVersusState = Boolean(loadGameState('versus')?.puzzle)
+        const hasSavedVersusState = hasRestorableVersusState({
+          hasSavedVersusPuzzle: Boolean(loadGameState('versus')?.puzzle),
+          hasOnlineRoom: Boolean(onlineVersus.room),
+        })
 
         if (!hasSavedVersusState) {
           setVersusCategoryFilters({})
@@ -3084,8 +3221,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         const attackingScore = getStealShowdownMetric(newGuess, effectiveStealRule)
         const showdownDuration =
           animationsEnabled && outcome.hasShowdownScores ? STEAL_SHOWDOWN_DURATION_MS : 0
+        const clientEventId = isCurrentOnlineMatch ? createOnlineVersusStealClientEventId() : null
 
         if (outcome.hasShowdownScores) {
+          if (clientEventId) {
+            locallyRenderedOnlineStealClientEventIdsRef.current.add(clientEventId)
+          }
           setActiveStealShowdown({
             burstId: Date.now(),
             durationMs: showdownDuration,
@@ -3097,6 +3238,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
             successful: outcome.successful,
           })
         }
+
+        // Close the search sheet immediately so the showdown can take over the screen on mobile.
+        setSelectedCell(null)
+        setSearchQueryDraft('')
 
         appendVersusEvent({
           type: 'steal',
@@ -3122,9 +3267,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
                     nextPlayer: getNextPlayer(currentPlayer),
                   }
                 : null
-          void onlineVersus.sendEvent('steal', {
+          void sendOnlineEventWithRecovery('steal', {
             cellIndex: selectedCell,
             attackingGuess: newGuess,
+            clientEventId: clientEventId ?? undefined,
             successful: outcome.successful,
             resolutionKind: failedStealResolution?.resolutionKind,
             nextPlayer: failedStealResolution?.nextPlayer,
@@ -3134,6 +3280,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
             attackingScore,
             defendingGameName: existingGuess.gameName,
             defendingScore,
+          }).then((result) => {
+            if (!result.ok && clientEventId) {
+              locallyRenderedOnlineStealClientEventIdsRef.current.delete(clientEventId)
+            }
           })
         }
 
@@ -3243,7 +3393,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
             viaObjection: false,
           })
           if (isCurrentOnlineMatch) {
-            void onlineVersus.sendEvent('claim', {
+            void sendOnlineEventWithRecovery('claim', {
               cellIndex: selectedCell,
               guess: newGuess,
             })
@@ -3436,6 +3586,9 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       commitVersusEventLog([])
       publishedPuzzleRoomIdRef.current = null
       appliedOnlineEventIdsRef.current = new Set()
+      shownOnlineStealShowdownIdsRef.current = new Set()
+      processedOnlineEventSourcesRef.current = new Map()
+      locallyRenderedOnlineStealClientEventIdsRef.current = new Set()
       finishedOnlineRoomIdRef.current = null
       preparedOnlineRoomKeyRef.current = null
       lastSavedOnlineSnapshotRef.current = null

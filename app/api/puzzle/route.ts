@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
               companies: validation.game?.igdb?.companies ?? [],
               matchedRow: validation.matchesRow,
               matchedCol: validation.matchesCol,
+              validationExplanation: validation.explanation,
               objectionUsed: row.objection_used ?? false,
               objectionVerdict: row.objection_verdict ?? null,
               objectionExplanation: row.objection_explanation ?? null,

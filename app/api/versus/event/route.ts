@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  validateOnlineVersusEvent,
+  type StoredOnlineVersusEvent,
+} from '@/lib/online-versus-event-validation'
 import { resolveAnonymousSession } from '@/lib/server-session'
 import type { OnlineVersusEventType, RoomPlayer } from '@/lib/versus-room'
 
@@ -9,21 +13,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { roomId, player, type, payload } = body as {
+    const { roomId, player, type, payload, matchNumber } = body as {
       roomId: string
       player: RoomPlayer
       type: OnlineVersusEventType
       payload: Record<string, unknown>
+      matchNumber?: number
     }
 
-    if (!roomId || !player || !type) {
+    if (!roomId || !player || !type || !Number.isInteger(matchNumber)) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 })
     }
 
     // Verify the session owns the player slot they're claiming
     const { data: room, error: roomError } = await supabase
       .from('versus_rooms')
-      .select('host_session_id, guest_session_id, status')
+      .select(
+        'host_session_id, guest_session_id, match_number, status, settings, puzzle_id, state_data'
+      )
       .eq('id', roomId)
       .single()
 
@@ -39,8 +46,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!room) return NextResponse.json({ error: 'Room not found.' }, { status: 404 })
-    if (room.status === 'finished')
-      return NextResponse.json({ error: 'Match is over.' }, { status: 409 })
 
     const expectedSession = player === 'x' ? room.host_session_id : room.guest_session_id
 
@@ -48,13 +53,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authorized for that player slot.' }, { status: 403 })
     }
 
-    // TODO(online-versus): Enforce authoritative turn order, claim legality,
-    // steal timing, objection limits, and duplicate-action prevention here
-    // before this route is used in production. Currently only membership is
-    // checked; a participant can submit any event sequence.
-    const { error } = await supabase
+    if (matchNumber !== room.match_number) {
+      return NextResponse.json(
+        { error: 'This room has moved to a newer match.', code: 'stale_match' },
+        { status: 409 }
+      )
+    }
+
+    if (room.status === 'finished')
+      return NextResponse.json({ error: 'Match is over.' }, { status: 409 })
+
+    const { data: existingEventRows, error: existingEventsError } = await supabase
       .from('versus_events')
-      .insert({ room_id: roomId, player, type, payload: payload ?? {} })
+      .select('id, player, type, payload')
+      .eq('room_id', roomId)
+      .eq('match_number', room.match_number)
+      .order('id', { ascending: true })
+
+    if (existingEventsError) {
+      console.error('Online versus event history lookup failed', {
+        roomId,
+        player,
+        type,
+        sessionId: session.sessionId,
+        error: existingEventsError,
+      })
+      return NextResponse.json({ error: existingEventsError.message }, { status: 500 })
+    }
+
+    const validation = validateOnlineVersusEvent({
+      roomStatus: room.status,
+      puzzleId: room.puzzle_id,
+      settings: room.settings,
+      snapshot: room.state_data,
+      player,
+      type,
+      payload: payload ?? {},
+      existingEvents: (existingEventRows ?? []) as StoredOnlineVersusEvent[],
+    })
+
+    if (!validation.ok) {
+      return NextResponse.json(
+        { error: validation.error, code: validation.code },
+        { status: validation.status }
+      )
+    }
+
+    const { error } = await supabase.from('versus_events').insert({
+      room_id: roomId,
+      match_number: room.match_number,
+      player,
+      type: validation.type,
+      payload: validation.payload,
+    })
 
     if (error) {
       console.error('Online versus event insert failed', {

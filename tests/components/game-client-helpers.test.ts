@@ -8,7 +8,7 @@ import {
   isGuessHydrated,
   type GuessLookupResult,
 } from '@/components/game/game-client-helpers'
-import type { CellGuess, Game, Puzzle } from '@/lib/types'
+import type { CellGuess, Game, GuessValidationExplanation, Puzzle } from '@/lib/types'
 
 const baseGame: Game = {
   id: 7,
@@ -39,10 +39,36 @@ const puzzle: Puzzle = {
   ],
 }
 
+const validationExplanation: GuessValidationExplanation = {
+  row: {
+    matched: true,
+    categoryType: 'genre',
+    categoryName: 'RPG',
+    matchSource: 'igdb-array',
+    matchedValues: ['Role-playing (RPG)'],
+    note: null,
+  },
+  col: {
+    matched: false,
+    categoryType: 'platform',
+    categoryName: 'PlayStation (Original)',
+    matchSource: 'no-match',
+    matchedValues: [],
+    note: null,
+  },
+  familyResolution: {
+    used: true,
+    selectedGameId: 7,
+    selectedGameName: 'Test Game',
+    note: 'Validated using merged original + official port family metadata.',
+  },
+}
+
 const lookupResult: GuessLookupResult = {
   valid: true,
   matchesRow: true,
   matchesCol: false,
+  validationExplanation,
   game: {
     slug: 'resolved-slug',
     url: 'https://example.com/resolved',
@@ -114,6 +140,7 @@ describe('game client helpers', () => {
       companies: ['Sony'],
       matchedRow: true,
       matchedCol: false,
+      validationExplanation,
     })
   })
 
@@ -165,6 +192,7 @@ describe('game client helpers', () => {
       stealRatingCount: null,
       matchedRow: false,
       matchedCol: false,
+      validationExplanation: null,
     })
   })
 
@@ -226,6 +254,7 @@ describe('game client helpers', () => {
       companies: ['Sony'],
       matchedRow: true,
       matchedCol: false,
+      validationExplanation,
       objectionUsed: false,
       objectionVerdict: null,
       objectionExplanation: null,
@@ -297,6 +326,7 @@ describe('game client helpers', () => {
       companies: ['Hudson Soft', 'Imagineer'],
       matchedRow: false,
       matchedCol: false,
+      validationExplanation: null,
       objectionUsed: false,
       objectionVerdict: null,
       objectionExplanation: null,
@@ -347,6 +377,9 @@ describe('game client helpers', () => {
           gameName: 'Test Game',
           gameImage: 'https://example.com/cover.png',
           isCorrect: true,
+          matchedRow: true,
+          matchedCol: false,
+          validationExplanation,
           platforms: ['PS1'],
         },
         null,
@@ -357,6 +390,9 @@ describe('game client helpers', () => {
         gameName: 'Test Game',
         gameImage: 'https://example.com/cover.png',
         isCorrect: true,
+        matchedRow: true,
+        matchedCol: false,
+        validationExplanation,
         objectionUsed: false,
         objectionVerdict: null,
         objectionExplanation: null,

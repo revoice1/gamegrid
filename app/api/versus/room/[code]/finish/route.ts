@@ -10,11 +10,22 @@ export async function POST(
   const session = resolveAnonymousSession(request)
   const { code } = await params
 
+  let matchNumber: number | undefined
+  try {
+    ;({ matchNumber } = (await request.json()) as { matchNumber?: number })
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
+  }
+
+  if (!Number.isInteger(matchNumber)) {
+    return NextResponse.json({ error: 'Missing matchNumber.' }, { status: 400 })
+  }
+
   const upperCode = code.toUpperCase()
 
   const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
-    .select('id, host_session_id, guest_session_id, status')
+    .select('id, host_session_id, guest_session_id, match_number, status')
     .eq('code', upperCode)
     .single()
 
@@ -37,6 +48,10 @@ export async function POST(
       sessionId: session.sessionId,
     })
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
+  }
+
+  if (matchNumber !== room.match_number) {
+    return NextResponse.json({ error: 'This room has moved to a newer match.' }, { status: 409 })
   }
 
   const { error: updateError } = await supabase

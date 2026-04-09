@@ -1,4 +1,10 @@
-import type { Category, Game, PuzzleCellMetadata } from './types'
+import type {
+  Category,
+  CategoryMatchExplanation,
+  Game,
+  MatchSource,
+  PuzzleCellMetadata,
+} from './types'
 import { getCuratedStandardPairBanReason } from './curated-standard-pair-bans'
 
 const CURATED_TAG_KEYWORD_IDS: Partial<Record<string, number[]>> = {
@@ -278,50 +284,334 @@ function buildDifficultyMetadata(validOptionCount: number) {
   return { difficulty: 'feast' as const, difficultyLabel: 'Feast' }
 }
 
-function matchesByName(values: string[] | undefined, target: string): boolean {
-  return values?.some((value) => normalizeName(value) === normalizeName(target)) || false
+function buildCategoryMatchExplanation(options: {
+  category: Category
+  matched: boolean
+  matchSource: MatchSource
+  matchedValues?: string[]
+  note?: string | null
+}): CategoryMatchExplanation {
+  return {
+    matched: options.matched,
+    categoryType: options.category.type,
+    categoryName: options.category.name,
+    matchSource: options.matchSource,
+    matchedValues: options.matchedValues ?? [],
+    note: options.note ?? null,
+  }
 }
 
-function matchesGameMode(values: string[] | undefined, target: string): boolean {
-  const normalizedTarget = normalizeName(target)
+function uniqueMatchedValues(values: string[]): string[] {
+  return Array.from(new Set(values))
+}
+
+function explainByName(values: string[] | undefined, category: Category): CategoryMatchExplanation {
+  const match = values?.find((value) => normalizeName(value) === normalizeName(category.name))
+
+  if (!match) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: false,
+      matchSource: 'no-match',
+    })
+  }
+
+  return buildCategoryMatchExplanation({
+    category,
+    matched: true,
+    matchSource: 'igdb-array',
+    matchedValues: [match],
+  })
+}
+
+function explainGameMode(
+  values: string[] | undefined,
+  category: Category
+): CategoryMatchExplanation {
+  const normalizedTarget = normalizeName(category.name)
   const normalizedValues = values?.map(normalizeName) ?? []
-  if (normalizedValues.includes(normalizedTarget)) {
-    return true
+  const directMatchIndex = normalizedValues.indexOf(normalizedTarget)
+
+  if (directMatchIndex >= 0) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: true,
+      matchSource: 'igdb-array',
+      matchedValues: values ? [values[directMatchIndex] ?? category.name] : [category.name],
+    })
   }
-  if (normalizedTarget === 'multiplayer') {
-    return normalizedValues.includes('co operative')
+
+  if (normalizeName(category.name) === 'multiplayer') {
+    const coopIndex = normalizedValues.indexOf('co operative')
+    if (coopIndex >= 0) {
+      return buildCategoryMatchExplanation({
+        category,
+        matched: true,
+        matchSource: 'igdb-array',
+        matchedValues: values ? [values[coopIndex] ?? 'Co-operative'] : ['Co-operative'],
+        note: 'Co-operative entries also count for multiplayer.',
+      })
+    }
   }
-  return false
+
+  return buildCategoryMatchExplanation({
+    category,
+    matched: false,
+    matchSource: 'no-match',
+  })
 }
 
-function getNormalizedTagSources(game: Game): string[] {
+function getTagSources(game: Game): Array<{ original: string; normalized: string }> {
   return [
-    ...(game.tags?.flatMap((tag) => [tag.name, tag.slug.replace(/-/g, ' ')]) ?? []),
-    ...(game.igdb?.game_modes ?? []),
-    ...(game.igdb?.themes ?? []),
-    ...(game.igdb?.player_perspectives ?? []),
-    ...(game.igdb?.keywords ?? []),
-  ].map(normalizeName)
+    ...(game.tags?.flatMap((tag) => [
+      { original: tag.name, normalized: normalizeName(tag.name) },
+      {
+        original: tag.slug.replace(/-/g, ' '),
+        normalized: normalizeName(tag.slug.replace(/-/g, ' ')),
+      },
+    ]) ?? []),
+    ...(game.igdb?.game_modes ?? []).map((value) => ({
+      original: value,
+      normalized: normalizeName(value),
+    })),
+    ...(game.igdb?.themes ?? []).map((value) => ({
+      original: value,
+      normalized: normalizeName(value),
+    })),
+    ...(game.igdb?.player_perspectives ?? []).map((value) => ({
+      original: value,
+      normalized: normalizeName(value),
+    })),
+    ...(game.igdb?.keywords ?? []).map((value) => ({
+      original: value,
+      normalized: normalizeName(value),
+    })),
+  ]
 }
 
-function matchesTagBucket(game: Game, category: Category): boolean {
+function explainTagBucket(game: Game, category: Category): CategoryMatchExplanation {
   const keywordIds = CURATED_TAG_KEYWORD_IDS[category.slug ?? '']
   if (keywordIds?.length) {
-    const gameKeywordIds = new Set((game.tags ?? []).map((tag) => tag.id))
-    if (keywordIds.some((keywordId) => gameKeywordIds.has(keywordId))) {
-      return true
+    const matchingTags = (game.tags ?? []).filter((tag) => keywordIds.includes(tag.id))
+    if (matchingTags.length > 0) {
+      return buildCategoryMatchExplanation({
+        category,
+        matched: true,
+        matchSource: 'igdb-array',
+        matchedValues: uniqueMatchedValues(matchingTags.map((tag) => tag.name)),
+        note: 'Matched via curated keyword bucket.',
+      })
     }
   }
 
   const normalizedCategorySlug = normalizeName(category.slug ?? category.name)
-  const sources = getNormalizedTagSources(game)
+  const sources = getTagSources(game)
 
   if (normalizedCategorySlug === 'sequel') {
-    return sources.some((source) => /\bsequel\b/.test(source))
+    const matchingSources = sources
+      .filter((source) => /\bsequel\b/.test(source.normalized))
+      .map((source) => source.original)
+    if (matchingSources.length > 0) {
+      return buildCategoryMatchExplanation({
+        category,
+        matched: true,
+        matchSource: 'igdb-array',
+        matchedValues: uniqueMatchedValues(matchingSources),
+      })
+    }
+
+    return buildCategoryMatchExplanation({
+      category,
+      matched: false,
+      matchSource: 'no-match',
+    })
   }
 
   const aliases = getTagAliases(category.name)
-  return sources.some((source) => aliases.has(source))
+  const matchingSources = sources
+    .filter((source) => aliases.has(source.normalized))
+    .map((source) => source.original)
+
+  if (matchingSources.length === 0) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: false,
+      matchSource: 'no-match',
+    })
+  }
+
+  return buildCategoryMatchExplanation({
+    category,
+    matched: true,
+    matchSource: 'igdb-array',
+    matchedValues: uniqueMatchedValues(matchingSources),
+  })
+}
+
+function explainPlatformMatch(game: Game, category: Category): CategoryMatchExplanation {
+  const directMatch = game.platforms?.find((platform) =>
+    getPlatformIds(category).includes(platform.platform.id)
+  )
+
+  if (directMatch) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: true,
+      matchSource: 'direct-id',
+      matchedValues: [directMatch.platform.name],
+    })
+  }
+
+  const platformAliases = getPlatformAliases(category.name)
+  const aliasMatch = game.platforms?.find((platform) =>
+    platformAliases.has(normalizeName(platform.platform.name))
+  )
+
+  if (!aliasMatch) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: false,
+      matchSource: 'no-match',
+    })
+  }
+
+  return buildCategoryMatchExplanation({
+    category,
+    matched: true,
+    matchSource: platformAliases.size > 1 ? 'merged-platform-bucket' : 'alias-name',
+    matchedValues: [aliasMatch.platform.name],
+    note: platformAliases.size > 1 ? `Matched via the ${category.name} platform family.` : null,
+  })
+}
+
+function explainDecadeMatch(game: Game, category: Category): CategoryMatchExplanation {
+  const releaseDates =
+    game.releaseDates && game.releaseDates.length > 0
+      ? game.releaseDates
+      : game.released
+        ? [game.released]
+        : []
+
+  if (releaseDates.length === 0) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: false,
+      matchSource: 'no-match',
+      note: 'No qualifying release date was available.',
+    })
+  }
+
+  const decadeStart = Number(category.id)
+  const matchedReleaseDate = releaseDates.find((releaseDate) => {
+    const year = Number(releaseDate.split('-')[0])
+    return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
+  })
+
+  if (!matchedReleaseDate) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: false,
+      matchSource: 'no-match',
+    })
+  }
+
+  return buildCategoryMatchExplanation({
+    category,
+    matched: true,
+    matchSource: 'release-date-family',
+    matchedValues: [matchedReleaseDate],
+  })
+}
+
+function explainCompanyMatch(game: Game, category: Category): CategoryMatchExplanation {
+  const developerMatch = game.developers?.find((company) =>
+    getCompanyIds(category).includes(company.id)
+  )
+  if (developerMatch) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: true,
+      matchSource: 'company-id',
+      matchedValues: [developerMatch.name],
+      note: 'Matched via developer credit.',
+    })
+  }
+
+  const publisherMatch = game.publishers?.find((company) =>
+    getCompanyIds(category).includes(company.id)
+  )
+  if (publisherMatch) {
+    return buildCategoryMatchExplanation({
+      category,
+      matched: true,
+      matchSource: 'company-id',
+      matchedValues: [publisherMatch.name],
+      note: 'Matched via publisher credit.',
+    })
+  }
+
+  for (const company of game.igdb?.companies ?? []) {
+    const normalizedCompany = normalizeCompanyName(company)
+    const fullNormalizedCompany = normalizeName(company)
+
+    if (getCompanyAliases(category).has(normalizedCompany)) {
+      return buildCategoryMatchExplanation({
+        category,
+        matched: true,
+        matchSource: 'company-alias',
+        matchedValues: [company],
+      })
+    }
+
+    const matchedPrefix = getCompanyPrefixes(category).find((prefix) =>
+      fullNormalizedCompany.startsWith(prefix)
+    )
+    if (matchedPrefix) {
+      return buildCategoryMatchExplanation({
+        category,
+        matched: true,
+        matchSource: 'company-prefix',
+        matchedValues: [company],
+        note: `Matched via the ${category.name} company family.`,
+      })
+    }
+  }
+
+  return buildCategoryMatchExplanation({
+    category,
+    matched: false,
+    matchSource: 'no-match',
+  })
+}
+
+export function explainIGDBGameMatch(game: Game, category: Category): CategoryMatchExplanation {
+  switch (category.type) {
+    case 'platform':
+      return explainPlatformMatch(game, category)
+    case 'genre':
+      return explainByName(
+        game.genres?.map((genre) => genre.name),
+        category
+      )
+    case 'decade':
+      return explainDecadeMatch(game, category)
+    case 'company':
+      return explainCompanyMatch(game, category)
+    case 'game_mode':
+      return explainGameMode(game.igdb?.game_modes, category)
+    case 'theme':
+      return explainByName(game.igdb?.themes, category)
+    case 'perspective':
+      return explainByName(game.igdb?.player_perspectives, category)
+    case 'tag':
+      return explainTagBucket(game, category)
+    default:
+      return buildCategoryMatchExplanation({
+        category,
+        matched: false,
+        matchSource: 'no-match',
+      })
+  }
 }
 
 export function buildPuzzleCellMetadata(
@@ -474,60 +764,5 @@ export function getPairRejectionReason(
 }
 
 export function igdbGameMatchesCategory(game: Game, category: Category): boolean {
-  switch (category.type) {
-    case 'platform':
-      return (
-        game.platforms?.some(
-          (platform) =>
-            getPlatformIds(category).includes(platform.platform.id) ||
-            getPlatformAliases(category.name).has(normalizeName(platform.platform.name))
-        ) || false
-      )
-    case 'genre':
-      return (
-        game.genres?.some((genre) => normalizeName(genre.name) === normalizeName(category.name)) ||
-        false
-      )
-    case 'decade': {
-      const releaseDates =
-        game.releaseDates && game.releaseDates.length > 0
-          ? game.releaseDates
-          : game.released
-            ? [game.released]
-            : []
-
-      if (releaseDates.length === 0) {
-        return false
-      }
-      const decadeStart = Number(category.id)
-      return releaseDates.some((releaseDate) => {
-        const year = Number(releaseDate.split('-')[0])
-        return Number.isFinite(year) && year >= decadeStart && year < decadeStart + 10
-      })
-    }
-    case 'company':
-      return (
-        game.developers?.some((company) => getCompanyIds(category).includes(company.id)) ||
-        game.publishers?.some((company) => getCompanyIds(category).includes(company.id)) ||
-        game.igdb?.companies?.some((company) => {
-          const normalizedCompany = normalizeCompanyName(company)
-          const fullNormalizedCompany = normalizeName(company)
-          return (
-            getCompanyAliases(category).has(normalizedCompany) ||
-            getCompanyPrefixes(category).some((prefix) => fullNormalizedCompany.startsWith(prefix))
-          )
-        }) ||
-        false
-      )
-    case 'game_mode':
-      return matchesGameMode(game.igdb?.game_modes, category.name)
-    case 'theme':
-      return matchesByName(game.igdb?.themes, category.name)
-    case 'perspective':
-      return matchesByName(game.igdb?.player_perspectives, category.name)
-    case 'tag':
-      return matchesTagBucket(game, category)
-    default:
-      return false
-  }
+  return explainIGDBGameMatch(game, category).matched
 }

@@ -3,6 +3,47 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveAnonymousSession } from '@/lib/server-session'
 
+const CategoryMatchExplanationSchema = z.object({
+  matched: z.boolean(),
+  categoryType: z.enum([
+    'platform',
+    'genre',
+    'developer',
+    'publisher',
+    'decade',
+    'tag',
+    'company',
+    'game_mode',
+    'theme',
+    'perspective',
+  ]),
+  categoryName: z.string(),
+  matchSource: z.enum([
+    'direct-id',
+    'alias-name',
+    'merged-platform-bucket',
+    'release-date-family',
+    'company-id',
+    'company-alias',
+    'company-prefix',
+    'igdb-array',
+    'no-match',
+  ]),
+  matchedValues: z.array(z.string()),
+  note: z.string().nullable().optional(),
+})
+
+const GuessValidationExplanationSchema = z.object({
+  row: CategoryMatchExplanationSchema,
+  col: CategoryMatchExplanationSchema,
+  familyResolution: z.object({
+    used: z.boolean(),
+    selectedGameId: z.number(),
+    selectedGameName: z.string(),
+    note: z.string().nullable().optional(),
+  }),
+})
+
 const GuessRecordSchema = z.object({
   gameId: z.number(),
   gameName: z.string(),
@@ -14,6 +55,7 @@ const GuessRecordSchema = z.object({
   released: z.string().nullable().optional(),
   metacritic: z.number().nullable().optional(),
   stealRating: z.number().nullable().optional(),
+  stealRatingCount: z.number().nullable().optional(),
   genres: z.array(z.string()).optional(),
   platforms: z.array(z.string()).optional(),
   developers: z.array(z.string()).optional(),
@@ -25,6 +67,7 @@ const GuessRecordSchema = z.object({
   companies: z.array(z.string()).optional(),
   matchedRow: z.boolean().optional(),
   matchedCol: z.boolean().optional(),
+  validationExplanation: GuessValidationExplanationSchema.nullable().optional(),
   objectionUsed: z.boolean().optional(),
   objectionVerdict: z.enum(['sustained', 'overruled']).nullable().optional(),
   objectionExplanation: z.string().nullable().optional(),
@@ -66,7 +109,7 @@ export async function POST(
 
   const { data: room, error: fetchError } = await supabase
     .from('versus_rooms')
-    .select('id, host_session_id, guest_session_id, status, puzzle_id')
+    .select('id, host_session_id, guest_session_id, match_number, status, puzzle_id')
     .eq('code', upperCode)
     .single()
 
@@ -119,6 +162,15 @@ export async function POST(
       { error: 'Invalid snapshot.', detail: parsed.error.flatten() },
       { status: 400 }
     )
+  }
+
+  const matchNumber = (body as { matchNumber?: unknown })?.matchNumber
+  if (!Number.isInteger(matchNumber)) {
+    return NextResponse.json({ error: 'Missing matchNumber.' }, { status: 400 })
+  }
+
+  if (matchNumber !== room.match_number) {
+    return NextResponse.json({ error: 'This room has moved to a newer match.' }, { status: 409 })
   }
 
   if (room.puzzle_id && parsed.data.puzzleId !== room.puzzle_id) {

@@ -1,7 +1,53 @@
 import type { CellGuess } from '@/lib/types'
+import type { OnlineVersusStealPayload } from '@/lib/versus-room'
 
 export type TicTacToePlayer = 'x' | 'o'
 export type VersusStealRule = 'lower' | 'higher' | 'fewer_reviews' | 'more_reviews'
+
+export function getStealShowdownMetric(guess: CellGuess, rule: VersusStealRule) {
+  if (rule === 'fewer_reviews' || rule === 'more_reviews') {
+    return guess.stealRatingCount ?? null
+  }
+
+  return guess.stealRating ?? null
+}
+
+export function getOnlineVersusStealShowdownData(options: {
+  stealPayload: OnlineVersusStealPayload
+  defendingGuess: CellGuess | null
+  attackingGuess: CellGuess
+  rule: VersusStealRule
+}) {
+  const { stealPayload, defendingGuess, attackingGuess, rule } = options
+  const payloadAttackingScore = stealPayload.attackingScore
+  const payloadDefendingScore = stealPayload.defendingScore
+  const payloadHasShowdownScores =
+    stealPayload.hadShowdownScores === true &&
+    typeof payloadAttackingScore === 'number' &&
+    typeof payloadDefendingScore === 'number'
+
+  if (payloadHasShowdownScores) {
+    return {
+      hasShowdownScores: true,
+      attackingScore: payloadAttackingScore,
+      defendingScore: payloadDefendingScore,
+      attackerName: stealPayload.attackingGameName ?? attackingGuess.gameName,
+      defenderName: stealPayload.defendingGameName ?? defendingGuess?.gameName ?? 'Defender',
+    }
+  }
+
+  const defendingScore = defendingGuess ? getStealShowdownMetric(defendingGuess, rule) : null
+  const attackingScore = getStealShowdownMetric(attackingGuess, rule)
+  const hasShowdownScores = typeof defendingScore === 'number' && typeof attackingScore === 'number'
+
+  return {
+    hasShowdownScores,
+    attackingScore,
+    defendingScore,
+    attackerName: attackingGuess.gameName,
+    defenderName: defendingGuess?.gameName ?? 'Defender',
+  }
+}
 
 export function getNextPlayer(player: TicTacToePlayer): TicTacToePlayer {
   return player === 'x' ? 'o' : 'x'

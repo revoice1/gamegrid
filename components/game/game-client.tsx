@@ -52,8 +52,10 @@ import {
 } from './game-client-submission'
 import {
   buildStealFailureDescription,
+  getOnlineVersusStealShowdownData,
   getNextPlayer,
   getPlayerLabel,
+  getStealShowdownMetric,
   getVersusInvalidGuessResolution,
   getVersusPlacementResolution,
   getVersusTurnExpiredResolution,
@@ -192,14 +194,6 @@ interface ActiveJudgmentVerdict {
 }
 
 const STEAL_SHOWDOWN_DURATION_MS = 3400
-
-function getStealShowdownMetric(guess: CellGuess, rule: Exclude<VersusStealRule, 'off'>) {
-  if (rule === 'fewer_reviews' || rule === 'more_reviews') {
-    return guess.stealRatingCount ?? null
-  }
-
-  return guess.stealRating ?? null
-}
 
 interface PendingFinalSteal {
   defender: TicTacToePlayer
@@ -903,33 +897,33 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         const defendingGuess = guessesRef.current[cellIndex]
         const activeStealRule =
           versusStealRuleRef.current === 'off' ? 'lower' : versusStealRuleRef.current
-        const defendingScore = defendingGuess
-          ? getStealShowdownMetric(defendingGuess, activeStealRule)
-          : null
-        const attackingScore = getStealShowdownMetric(attackingGuess, activeStealRule)
-        const hasShowdownScores =
-          typeof defendingScore === 'number' && typeof attackingScore === 'number'
+        const showdown = getOnlineVersusStealShowdownData({
+          stealPayload,
+          defendingGuess,
+          attackingGuess,
+          rule: activeStealRule,
+        })
         const suppressReplayEffects = shouldSuppressOnlineVersusReplayEffects(eventSource)
         const showdownDuration =
-          !suppressReplayEffects && animationsEnabled && hasShowdownScores
+          !suppressReplayEffects && animationsEnabled && showdown.hasShowdownScores
             ? STEAL_SHOWDOWN_DURATION_MS
             : 0
 
-        if (hasShowdownScores && !suppressReplayEffects) {
+        if (showdown.hasShowdownScores && !suppressReplayEffects) {
           setActiveStealShowdown({
             burstId: Date.now(),
             durationMs: showdownDuration,
-            defenderName: defendingGuess?.gameName ?? 'Defender',
-            defenderScore: defendingScore!,
-            attackerName: attackingGuess.gameName,
-            attackerScore: attackingScore!,
+            defenderName: showdown.defenderName,
+            defenderScore: showdown.defendingScore!,
+            attackerName: showdown.attackerName,
+            attackerScore: showdown.attackingScore!,
             rule: activeStealRule,
             successful,
           })
         }
 
         if (successful) {
-          const nextGuess = hasShowdownScores
+          const nextGuess = showdown.hasShowdownScores
             ? {
                 ...attackingGuess,
                 showdownScoreRevealed: true,

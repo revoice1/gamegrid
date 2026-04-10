@@ -127,16 +127,16 @@ describe('/api/objection route', () => {
     expect(requestBody).toMatchObject({
       generationConfig: {
         thinkingConfig: {
-          thinkingLevel: 'HIGH',
+          thinkingLevel: 'high',
         },
       },
     })
     expect(requestBody).not.toHaveProperty('tools')
   })
 
-  it('supports opt-in Google search grounding and thinking overrides', async () => {
+  it('supports opt-in Google search grounding and thinking overrides for Gemini 3.1 Flash-Lite', async () => {
     process.env.GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING = '1'
-    process.env.GEMINI_OBJECTION_THINKING_LEVEL = 'medium'
+    process.env.GEMINI_OBJECTION_THINKING_LEVEL = 'minimal'
 
     let requestBody: Record<string, unknown> | null = null
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -153,10 +153,41 @@ describe('/api/objection route', () => {
     expect(requestBody).toMatchObject({
       generationConfig: {
         thinkingConfig: {
-          thinkingLevel: 'MEDIUM',
+          thinkingLevel: 'minimal',
         },
       },
       tools: [{ googleSearch: {} }],
+    })
+  })
+
+  it('uses thinking budgets for explicit Gemini 2.5 models', async () => {
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash-lite'
+    process.env.GEMINI_OBJECTION_THINKING_LEVEL = 'minimal'
+
+    let requestBody: Record<string, unknown> | null = null
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body))
+      return buildGeminiResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(requestBody).toMatchObject({
+      generationConfig: {
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
+      },
+    })
+    expect(requestBody).not.toMatchObject({
+      generationConfig: {
+        thinkingConfig: {
+          thinkingLevel: expect.anything(),
+        },
+      },
     })
   })
 })

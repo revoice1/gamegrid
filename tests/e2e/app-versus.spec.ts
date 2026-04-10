@@ -468,3 +468,38 @@ test('versus timer enters danger state in the last 10 seconds', async ({ page })
     page.locator('.timer-danger-pulse').filter({ hasText: /Turn: 0:1\d|Turn: 0:0\d/ })
   ).toBeVisible()
 })
+
+test('local versus timer expiry closes an open search and passes the turn', async ({ page }) => {
+  await resetStorage(page)
+  await seedStorageValue(page, 'gamegrid_versus_state', {
+    puzzleId: 'versus-turn-expiry-search-open',
+    puzzle: {
+      ...fakePuzzle,
+      id: 'versus-turn-expiry-search-open',
+      is_daily: false,
+      date: null,
+    },
+    guesses: Array(9).fill(null),
+    guessesRemaining: 9,
+    isComplete: false,
+    selectedCell: 0,
+    searchQuery: '',
+    currentPlayer: 'x',
+    stealableCell: null,
+    winner: null,
+    pendingFinalSteal: null,
+    versusCategoryFilters: {},
+    versusStealRule: 'lower',
+    versusTimerOption: 20,
+    turnTimeLeft: 0,
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Versus' }).click()
+
+  await expect(page.getByText('Turn expired', { exact: true })).toBeVisible({ timeout: 4000 })
+  await expect(page.getByText('O is up.', { exact: true })).toBeVisible()
+  await expect(page.getByPlaceholder('Search for a video game...')).toHaveCount(0)
+  await expect(page.getByText('Turn', { exact: true })).toBeVisible()
+  await expect(page.getByText('O', { exact: true })).toBeVisible()
+})

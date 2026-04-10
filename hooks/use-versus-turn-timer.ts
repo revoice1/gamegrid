@@ -52,6 +52,7 @@ export function useVersusTurnTimer({
   const onTurnExpiredEvent = useEffectEvent(onTurnExpired)
   const initializedTurnTimerKeyRef = useRef<string | null>(null)
   const expiredTurnTimerKeyRef = useRef<string | null>(null)
+  const pendingLocalTurnResetKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const cueKey = pendingFinalSteal
@@ -85,6 +86,7 @@ export function useVersusTurnTimer({
       activeTurnTimerKeyRef.current = null
       initializedTurnTimerKeyRef.current = null
       expiredTurnTimerKeyRef.current = null
+      pendingLocalTurnResetKeyRef.current = null
       setTurnTimeLeft(null)
       setTurnDeadlineAt(null)
       return
@@ -94,6 +96,7 @@ export function useVersusTurnTimer({
       if (isVersusMode && (isLoading || loadedPuzzleMode !== 'versus' || puzzleId === null)) {
         initializedTurnTimerKeyRef.current = null
         expiredTurnTimerKeyRef.current = null
+        pendingLocalTurnResetKeyRef.current = null
         setTurnTimeLeft(null)
       }
       return
@@ -102,6 +105,12 @@ export function useVersusTurnTimer({
     const turnTimerKey = `${puzzleId}:${currentPlayer}`
     if (expiredTurnTimerKeyRef.current && expiredTurnTimerKeyRef.current !== turnTimerKey) {
       expiredTurnTimerKeyRef.current = null
+    }
+    if (
+      pendingLocalTurnResetKeyRef.current &&
+      pendingLocalTurnResetKeyRef.current !== turnTimerKey
+    ) {
+      pendingLocalTurnResetKeyRef.current = null
     }
     const parsedDeadlineMs = turnDeadlineAt ? Date.parse(turnDeadlineAt) : Number.NaN
     const hasUsableOnlineDeadline =
@@ -134,6 +143,12 @@ export function useVersusTurnTimer({
     } else {
       activeTurnTimerKeyRef.current = turnTimerKey
       if (hadInitializedTurn || turnTimeLeft === null || turnTimeLeft <= 0) {
+        // Local turn handoff can briefly render the incoming player with the
+        // previous player's remaining time (including 0). Mark the new key so
+        // the countdown effect ignores any carried-over value until the reset
+        // turn duration is visible for the new player.
+        pendingLocalTurnResetKeyRef.current =
+          hadInitializedTurn || turnTimeLeft === null ? turnTimerKey : null
         setTurnTimeLeft(versusTimerOption)
       }
       setTurnDeadlineAt(null)
@@ -194,6 +209,13 @@ export function useVersusTurnTimer({
 
     if (turnTimeLeft === null) {
       return
+    }
+
+    if (turnTimerKey && pendingLocalTurnResetKeyRef.current === turnTimerKey) {
+      if (turnTimeLeft !== versusTimerOption) {
+        return
+      }
+      pendingLocalTurnResetKeyRef.current = null
     }
 
     if (turnTimeLeft <= 0) {

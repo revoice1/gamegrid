@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildOverruledObjectionToastDescription,
   hasRestorableVersusState,
   shouldForegroundOnlineVersusSession,
 } from '@/components/game/game-client-online-helpers'
@@ -60,5 +61,41 @@ describe('game client online helpers', () => {
         hasOnlineRoom: false,
       })
     ).toBe(false)
+  })
+
+  it('uses the Gemini rationale when building the overruled objection toast', () => {
+    expect(
+      buildOverruledObjectionToastDescription(
+        'The game fits first-person, but it was not published by Square Enix.',
+        'X loses the turn.'
+      )
+    ).toBe('The game fits first-person, but it was not published by Square Enix. X loses the turn.')
+  })
+
+  it('normalizes trailing punctuation on the Gemini rationale', () => {
+    expect(
+      buildOverruledObjectionToastDescription(
+        'The app rejection is probably correct!!!',
+        'X loses the turn.'
+      )
+    ).toBe('The app rejection is probably correct. X loses the turn.')
+  })
+
+  it('falls back to the generic overruled copy when Gemini gives no rationale', () => {
+    expect(buildOverruledObjectionToastDescription(null, 'X loses the turn.')).toBe(
+      'Judge Gemini overruled the objection. X loses the turn.'
+    )
+  })
+
+  it('treats whitespace-only Gemini rationale the same as no rationale', () => {
+    expect(buildOverruledObjectionToastDescription('   ', 'X loses the turn.')).toBe(
+      'Judge Gemini overruled the objection. X loses the turn.'
+    )
+  })
+
+  it('treats missing Gemini rationale the same as no rationale', () => {
+    expect(buildOverruledObjectionToastDescription(undefined, 'X loses the turn.')).toBe(
+      'Judge Gemini overruled the objection. X loses the turn.'
+    )
   })
 })

@@ -20,3 +20,16 @@ export function shouldForegroundOnlineVersusSession(
 export function hasRestorableVersusState(options: RestorableVersusStateOptions): boolean {
   return options.hasSavedVersusPuzzle || options.hasOnlineRoom
 }
+
+export function buildOverruledObjectionToastDescription(
+  rationale: string | null | undefined,
+  resolutionDescription: string
+): string {
+  const trimmedRationale = rationale?.trim()
+  if (!trimmedRationale) {
+    return `Judge Gemini overruled the objection. ${resolutionDescription}`
+  }
+
+  const normalizedRationale = trimmedRationale.replace(/[.!?]+$/, '')
+  return `${normalizedRationale}. ${resolutionDescription}`
+}

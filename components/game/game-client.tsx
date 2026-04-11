@@ -36,6 +36,7 @@ import {
   isGuessHydrated,
 } from './game-client-helpers'
 import {
+  buildOverruledObjectionToastDescription,
   hasRestorableVersusState,
   shouldForegroundOnlineVersusSession,
 } from './game-client-online-helpers'
@@ -1748,6 +1749,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       nextVersusObjectionsUsed: VersusObjectionsUsed = versusObjectionsUsed,
       options?: {
         fromOverruledObjection?: boolean
+        rationale?: string | null
       }
     ) => {
       setPendingVersusObjectionReview(null)
@@ -1813,7 +1815,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           ? 'Objection overruled'
           : invalidGuessResolution.title,
         description: options?.fromOverruledObjection
-          ? `Judge Gemini overruled the objection. ${invalidGuessResolution.description}`
+          ? buildOverruledObjectionToastDescription(
+              options.rationale,
+              invalidGuessResolution.description
+            )
           : invalidGuessResolution.description,
       })
     },
@@ -2317,7 +2322,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           resolveVersusRejectedGuess(
             pendingVersusObjectionReview.invalidGuessResolution,
             nextVersusObjectionsUsed,
-            { fromOverruledObjection: true }
+            {
+              fromOverruledObjection: true,
+              rationale: payload.explanation ?? null,
+            }
           )
         }
 

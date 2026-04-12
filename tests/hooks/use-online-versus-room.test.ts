@@ -273,7 +273,10 @@ describe('useOnlineVersusRoom', () => {
         await result.current.joinRoom('ABCD')
       })
 
-      const res = await result.current.sendEvent('claim', { cellIndex: 0 })
+      let res!: Awaited<ReturnType<typeof result.current.sendEvent>>
+      await act(async () => {
+        res = await result.current.sendEvent('claim', { cellIndex: 0 })
+      })
 
       expect(res).toEqual({
         ok: false,

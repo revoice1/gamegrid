@@ -31,7 +31,7 @@ The intended authority chain today is:
 4. events are the live sync primitive during active play; snapshots are the persistence primitive
    for reload/rejoin
 
-That is safer than fully client-public writes, but it is not yet the final authoritative model.
+That gives the server meaningful authority over move legality and room state transitions, though the rematch lifecycle and some edge cases around disconnection are still lightweight.
 
 ## Supabase Setup
 
@@ -42,6 +42,8 @@ scripts/008_create_versus_tables.sql
 scripts/009_add_online_versus_room_state.sql
 scripts/010_expand_versus_event_types.sql
 scripts/011_add_online_versus_match_number.sql
+scripts/012_update_expires_at_defaults.sql
+scripts/013_cleanup_fn_security_definer.sql
 ```
 
 Then publish these tables to Supabase Realtime:
@@ -128,10 +130,7 @@ Both `saveSnapshot` and `markFinished` in `use-online-versus-room.ts` carry an 8
 
 The online loop is real enough to play, but these caveats still matter:
 
-- **Server-side gameplay validation is still room-row scoped** — the event route
-  (`POST /api/versus/event`) now rejects wrong-turn actions, illegal claims/steals, objection
-  overuse, and post-finish writes, and it also rejects stale requests from an older `match_number`.
-  The main remaining gaps are around broader room lifecycle modeling rather than move legality.
+- **Server-side gameplay validation covers move legality** — the event route (`POST /api/versus/event`) rejects wrong-turn actions, illegal claims/steals, objection overuse, and post-finish writes, and rejects stale requests from an older `match_number`. The state route additionally guards writes with `status = active` and `match_number` checks so stale clients cannot overwrite finished-room state. Remaining gaps are around broader room lifecycle modeling rather than move legality.
 - **No automatic guest finish trigger** — if the host disconnects before calling `markFinished`,
   the guest's board stays in the active phase. The guest can call `markFinished` manually but
   nothing triggers it automatically.

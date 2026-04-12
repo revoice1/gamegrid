@@ -23,7 +23,7 @@ export function DevReloadBadge() {
   }
 
   return (
-    <div className="fixed bottom-3 right-3 z-[120] rounded-full border border-amber-400/35 bg-background/88 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200 shadow-lg backdrop-blur-sm">
+    <div className="fixed bottom-3 right-3 z-120 rounded-full border border-amber-400/35 bg-background/90 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200 shadow-lg backdrop-blur-sm">
       Dev Boot {bootCount}
     </div>
   )

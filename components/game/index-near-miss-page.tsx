@@ -6,7 +6,7 @@ interface IndexNearMissPageProps {
 
 export function IndexNearMissPage({ attemptedSlug }: IndexNearMissPageProps) {
   return (
-    <main className="fixed inset-0 z-[120] overflow-hidden bg-black text-white">
+    <main className="fixed inset-0 z-120 overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,197,94,0.1),transparent_24%),radial-gradient(circle_at_center,rgba(59,130,246,0.06),transparent_52%),#020409]" />
       <div className="relative flex min-h-screen items-center justify-center px-6">
         <div className="max-w-xl text-center">

@@ -1049,7 +1049,7 @@ export function EasterEggCelebration({ burstId, renderPiece, particles }: Active
       burstId={burstId}
       particles={particles}
       dataTestId="easter-egg-celebration"
-      zIndexClassName="z-[80]"
+      zIndexClassName="z-80"
       animationName="easter-egg-fall"
       animationStyles={`
         @keyframes easter-egg-fall {
@@ -1077,7 +1077,7 @@ export function PerfectGridCelebration({ burstId, particles }: ActivePerfectCele
       burstId={burstId}
       particles={particles}
       dataTestId="perfect-grid-celebration"
-      zIndexClassName="z-[90]"
+      zIndexClassName="z-90"
       animationName="perfect-grid-fall"
       animationStyles={`
         @keyframes perfect-grid-fall {

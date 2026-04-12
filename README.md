@@ -113,6 +113,9 @@ scripts/007_drop_public_guess_insert_policy.sql - removes the public guess inser
 scripts/008_create_versus_tables.sql - creates online versus rooms/events and Realtime-friendly read policies
 scripts/009_add_online_versus_room_state.sql - adds snapshot state storage for online versus resume/sync
 scripts/010_expand_versus_event_types.sql - updates existing versus event constraints to allow newer event kinds like `miss`
+scripts/011_add_online_versus_match_number.sql - adds match_number to rooms and events for in-room rematch boundary scoping
+scripts/012_update_expires_at_defaults.sql - changes room expiry default from 2h to 48h for activity-based cleanup
+scripts/013_cleanup_fn_security_definer.sql - rebuilds cleanup function as SECURITY DEFINER with pinned search_path
 ```
 
 For online versus, also add these tables to your Supabase Realtime publication:
@@ -127,22 +130,24 @@ for live room/event updates, so the tables must be published for clients to stay
 
 ## API Routes
 
-| Route                                         | Description                                                                            |
-| --------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `GET /api/puzzle?mode=daily\|practice`        | Returns the current puzzle as JSON.                                                    |
-| `GET /api/puzzle-stream?mode=daily\|practice` | Streams puzzle generation progress.                                                    |
-| `GET /api/search?q=...`                       | Searches IGDB for games matching a query.                                              |
-| `POST /api/guess`                             | Validates a game guess against a cell's row and column categories.                     |
-| `PATCH /api/guess`                            | Persists daily objection verdict metadata through a server-only privileged write path. |
-| `POST /api/stats`                             | Records a completed daily game session.                                                |
-| `POST /api/versus/room`                       | Creates an online versus room as the host.                                             |
-| `POST /api/versus/room/:code/join`            | Joins or rejoins an online versus room by invite code.                                 |
-| `POST /api/versus/room/:code/puzzle`          | Host-only route that publishes the shared versus puzzle into the room.                 |
-| `POST /api/versus/room/:code/state`           | Persists the current authoritative online versus snapshot state.                       |
-| `POST /api/versus/room/:code/finish`          | Marks an online room finished.                                                         |
-| `POST /api/versus/room/:code/continue`        | Host-only route that clears a finished room for another game under the same code.      |
-| `POST /api/versus/event`                      | Appends an online versus event for the active room.                                    |
-| `GET /api/versus/room-events/:roomId`         | Fetches room event history for resume/hydration.                                       |
+| Route                                         | Description                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `GET /api/puzzle?mode=daily\|practice`        | Returns the current puzzle as JSON.                                                     |
+| `GET /api/puzzle-stream?mode=daily\|practice` | Streams puzzle generation progress.                                                     |
+| `GET /api/search?q=...`                       | Searches IGDB for games matching a query.                                               |
+| `POST /api/guess`                             | Validates a game guess against a cell's row and column categories.                      |
+| `PATCH /api/guess`                            | Persists daily objection verdict metadata through a server-only privileged write path.  |
+| `POST /api/stats`                             | Records a completed daily game session.                                                 |
+| `POST /api/versus/room`                       | Creates an online versus room as the host.                                              |
+| `POST /api/versus/room/:code/join`            | Joins or rejoins an online versus room by invite code.                                  |
+| `POST /api/versus/room/:code/puzzle`          | Host-only route that publishes the shared versus puzzle into the room.                  |
+| `POST /api/versus/room/:code/state`           | Persists the current authoritative online versus snapshot state.                        |
+| `POST /api/versus/room/:code/finish`          | Marks an online room finished.                                                          |
+| `POST /api/versus/room/:code/continue`        | Host-only route that clears a finished room for another game under the same code.       |
+| `POST /api/versus/event`                      | Appends an online versus event for the active room.                                     |
+| `GET /api/versus/room-events/:roomId`         | Fetches room event history for resume/hydration.                                        |
+| `GET /api/cron/cleanup-versus-rooms`          | Cron-only route that deletes expired versus rooms. Runs daily via Vercel cron.          |
+| `GET /api/cron/generate-daily-puzzle`         | Cron-only route that pre-generates the next daily puzzle. Runs nightly via Vercel cron. |
 
 ## Notes
 
@@ -156,8 +161,7 @@ for live room/event updates, so the tables must be published for clients to stay
 - Local versus matches are restored from local storage.
 - Online versus rooms use backend routes for writes, Supabase Realtime for live updates, and room
   snapshots for faster resume after refresh.
-- Online post-game flow now supports a host-side `Continue In Room` reset, but it still is not a
-  fully modeled rematch lifecycle with match-scoped history.
+- Online post-game flow supports a host-side `Continue In Room` reset that advances `match_number` and scopes event replay to the new match boundary, so old events do not leak into the next game.
 - Finished versus matches can expand into a post-game summary with the rules used, picks, and key
   match stats.
 - Standard puzzle generation uses curated category families and prevalidated banned pairs to avoid

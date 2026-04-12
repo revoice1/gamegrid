@@ -27,7 +27,7 @@ vi.mock('@/lib/daily-streaks', () => ({
 
 import { GET, POST } from '@/app/api/stats/route'
 
-const logger = { requestId: 'test', info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+let logger = { requestId: 'test', info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 const SESSION = { sessionId: 'sess-1', isNew: false }
 
 function makeGetRequest(puzzleId?: string) {
@@ -90,6 +90,7 @@ function makeGetSupabase({
 
 describe('GET /api/stats', () => {
   beforeEach(() => {
+    logger = { requestId: 'test', info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     createRequestLoggerMock.mockReturnValue(logger)
     resolveAnonymousSessionMock.mockReturnValue(SESSION)
     applyAnonymousSessionCookieMock.mockImplementation((res) => res)
@@ -162,6 +163,7 @@ describe('GET /api/stats', () => {
 
 describe('POST /api/stats', () => {
   beforeEach(() => {
+    logger = { requestId: 'test', info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     createRequestLoggerMock.mockReturnValue(logger)
     resolveAnonymousSessionMock.mockReturnValue(SESSION)
     applyAnonymousSessionCookieMock.mockImplementation((res) => res)

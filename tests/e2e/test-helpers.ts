@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type BrowserContext, type Page } from '@playwright/test'
 
 export const fakePuzzle = {
   id: 'test-puzzle',
@@ -34,8 +34,8 @@ export const fakeSearchResult = {
   platforms: [{ platform: { id: 6, name: 'PC (Microsoft Windows)', slug: 'pc' } }],
 }
 
-export async function mockGuessApi(page: Page) {
-  await page.route('**/api/guess', async (route) => {
+export async function mockGuessApi(target: Page | BrowserContext) {
+  await target.route('**/api/guess', async (route) => {
     const method = route.request().method()
     let requestBody: Record<string, unknown> = {}
 

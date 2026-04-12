@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { fakeSearchResult, mockGuessApi, seedDailyPuzzle, setTheme } from './test-helpers'
 
-test.beforeEach(async ({ page }) => {
-  await mockGuessApi(page)
+test.beforeEach(async ({ context }) => {
+  await mockGuessApi(context)
 })
 
 test('search confirm flow can pick a correct answer onto the board', async ({ page }) => {

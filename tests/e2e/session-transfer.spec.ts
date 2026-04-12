@@ -41,7 +41,7 @@ test('import: rejects an invalid code', async ({ page }) => {
   await openSettings(page)
   await page.getByRole('button', { name: 'Import on this device' }).click()
   await page.getByPlaceholder('Paste code here...').fill('not-a-uuid')
-  await page.getByRole('button', { name: 'Confirm import' }).click()
+  await page.getByRole('button', { name: 'Replace history' }).click()
   await expect(page.getByText("That code doesn't look right")).toBeVisible()
 })
 
@@ -61,7 +61,7 @@ test('import: accepts a valid transfer code and reloads', async ({ page }) => {
   await page.getByRole('button', { name: 'Import on this device' }).click()
   await page.getByPlaceholder('Paste code here...').fill(TRANSFER_CODE)
   const reloadPromise = page.waitForURL('/')
-  await page.getByRole('button', { name: 'Confirm import' }).click()
+  await page.getByRole('button', { name: 'Replace history' }).click()
   await reloadPromise
 })
 
@@ -80,11 +80,11 @@ test('import: shows rate-limit message on 429', async ({ page }) => {
   await openSettings(page)
   await page.getByRole('button', { name: 'Import on this device' }).click()
   await page.getByPlaceholder('Paste code here...').fill(TRANSFER_CODE)
-  await page.getByRole('button', { name: 'Confirm import' }).click()
+  await page.getByRole('button', { name: 'Replace history' }).click()
   await expect(page.getByText('Too many attempts. Please wait a moment.')).toBeVisible()
 })
 
-test('transfer page: redeems a scanned link and redirects home', async ({ page }) => {
+test('transfer page: warns before importing a scanned link', async ({ page }) => {
   await resetStorage(page)
   await seedDailyPuzzle(page)
   await page.route('**/api/session/import', async (route) => {
@@ -96,6 +96,11 @@ test('transfer page: redeems a scanned link and redirects home', async ({ page }
   })
 
   await page.goto(`/transfer?code=${TRANSFER_CODE}`)
+  await expect(page.getByText('Import history?')).toBeVisible()
+  await expect(
+    page.getByText('This replaces completed history on this device. Boards in progress stay local.')
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Replace history' }).click()
   await expect(page.getByText('Transfer complete')).toBeVisible()
   await page.getByRole('link', { name: 'Open GameGrid' }).click()
   await page.waitForURL('/')

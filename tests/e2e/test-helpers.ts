@@ -248,8 +248,12 @@ export function buildCompletedGuesses() {
 }
 
 export async function openSettings(page: Page) {
-  await page.getByRole('button', { name: 'Open settings' }).click()
-  await expect(page.getByText('Settings')).toBeVisible()
+  const settingsButton = page.getByRole('button', { name: 'Open settings' })
+  await expect(settingsButton).toBeVisible()
+  await expect(settingsButton).toBeEnabled()
+  await settingsButton.click()
+  await expect(settingsButton).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByText('Theme')).toBeVisible()
 }
 
 export async function setTheme(page: Page, theme: 'light' | 'dark') {

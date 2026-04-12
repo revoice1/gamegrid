@@ -7,8 +7,12 @@ import { normalizeTransferCode } from '@/lib/session-transfer'
 
 function TransferPageShell({
   phase = 'loading',
+  hasCode = false,
+  onConfirm,
 }: {
-  phase?: 'loading' | 'success' | 'invalid' | 'error'
+  phase?: 'loading' | 'ready' | 'submitting' | 'success' | 'invalid' | 'error'
+  hasCode?: boolean
+  onConfirm?: () => void
 }) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
@@ -18,9 +22,28 @@ function TransferPageShell({
         </p>
         {phase === 'loading' && (
           <>
-            <h1 className="mt-2 text-xl font-semibold text-foreground">Transferring history…</h1>
+            <h1 className="mt-2 text-xl font-semibold text-foreground">Checking transfer…</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Hold on for a second while we move your completed boards to this device.
+              Hold on for a second while we verify this transfer code.
+            </p>
+          </>
+        )}
+        {phase === 'ready' && (
+          <>
+            <h1 className="mt-2 text-xl font-semibold text-foreground">Import history?</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This transfer code is ready to use on this device.
+            </p>
+            <p className="mt-3 rounded-lg border border-amber-400/25 bg-amber-500/8 px-3 py-2 text-sm text-amber-100/90">
+              This replaces completed history on this device. Boards in progress stay local.
+            </p>
+          </>
+        )}
+        {phase === 'submitting' && (
+          <>
+            <h1 className="mt-2 text-xl font-semibold text-foreground">Importing history…</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Hold on while we move your completed boards to this device.
             </p>
           </>
         )}
@@ -48,7 +71,16 @@ function TransferPageShell({
             </p>
           </>
         )}
-        <div className="mt-5">
+        <div className="mt-5 flex flex-wrap gap-2">
+          {phase === 'ready' && hasCode && onConfirm ? (
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+            >
+              Replace history
+            </button>
+          ) : null}
           <Link
             href="/"
             className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
@@ -63,48 +95,49 @@ function TransferPageShell({
 
 function TransferPageContent() {
   const searchParams = useSearchParams()
-  const [phase, setPhase] = useState<'loading' | 'success' | 'invalid' | 'error'>('loading')
+  const [phase, setPhase] = useState<
+    'loading' | 'ready' | 'submitting' | 'success' | 'invalid' | 'error'
+  >('loading')
+  const [code, setCode] = useState<string | null>(null)
 
   useEffect(() => {
     const normalizedCode = normalizeTransferCode(searchParams.get('code'))
     if (!normalizedCode) {
       setPhase('invalid')
+      setCode(null)
+      return
+    }
+    setCode(normalizedCode)
+    setPhase('ready')
+  }, [searchParams])
+
+  const handleConfirm = async () => {
+    if (!code) {
+      setPhase('invalid')
       return
     }
 
-    let cancelled = false
+    setPhase('submitting')
 
-    void (async () => {
-      try {
-        const response = await fetch('/api/session/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: normalizedCode }),
-        })
+    try {
+      const response = await fetch('/api/session/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
 
-        if (cancelled) {
-          return
-        }
-
-        if (response.ok) {
-          setPhase('success')
-          return
-        }
-
-        setPhase(response.status === 400 ? 'invalid' : 'error')
-      } catch {
-        if (!cancelled) {
-          setPhase('error')
-        }
+      if (response.ok) {
+        setPhase('success')
+        return
       }
-    })()
 
-    return () => {
-      cancelled = true
+      setPhase(response.status === 400 ? 'invalid' : 'error')
+    } catch {
+      setPhase('error')
     }
-  }, [searchParams])
+  }
 
-  return <TransferPageShell phase={phase} />
+  return <TransferPageShell phase={phase} hasCode={Boolean(code)} onConfirm={handleConfirm} />
 }
 
 export default function TransferPage() {

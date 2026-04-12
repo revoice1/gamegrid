@@ -1241,58 +1241,54 @@ test('versus: server returning duplicateEvent:true does not double-apply the gue
   await page.evaluate(() => localStorage.removeItem('gg_online_versus_room'))
 })
 
-test('versus: objection flow — sustained verdict updates button label in modal', async ({
-  page,
-}) => {
+test('objection flow — sustained verdict updates button label in modal', async ({ page }) => {
   /**
-   * Exercises the full client-side objection flow in a local versus game:
+   * Exercises the full client-side objection flow in daily mode where clicking
+   * a filled cell unconditionally opens the guess details modal:
    *
-   *  1. Board starts with an incorrect guess on cell 0.
-   *  2. Player clicks the cell → guess details modal opens.
+   *  1. Daily board starts with an incorrect guess on cell 0.
+   *  2. Player clicks cell 0 → GuessDetailsModal opens.
    *  3. Player clicks "Objection!" → /api/objection called.
    *  4. Server returns { verdict: 'sustained' }.
    *  5. Button label inside the modal changes to "Objection sustained".
    *
-   * Local versus — no Supabase Realtime required.
+   * Note: in versus mode filled cells don't open the detail modal (they are
+   * only interactable for steals), so this test uses daily mode instead.
    */
   await mockPuzzleStream(page, fakePuzzle)
 
-  const puzzleId = 'versus-objection-test'
-
-  await seedStorageValue(page, 'gamegrid_versus_state', {
-    puzzleId,
-    puzzle: { ...fakePuzzle, id: puzzleId, is_daily: false, date: null },
-    guesses: [
+  const today = new Date().toISOString().slice(0, 10)
+  await page.addInitScript(
+    ([key, state]) => {
+      window.localStorage.setItem(key as string, JSON.stringify(state))
+    },
+    [
+      `gamegrid_daily_state:${today}`,
       {
-        gameId: 99,
-        gameName: 'Wrong Game',
-        gameImage: null,
-        isCorrect: false,
-        matchedRow: false,
-        matchedCol: true,
-        owner: 'x',
-        stealRating: null,
-        stealRatingCount: null,
-        objectionUsed: false,
-        objectionVerdict: null,
-        objectionExplanation: null,
-        objectionOriginalMatchedRow: null,
-        objectionOriginalMatchedCol: null,
+        puzzleId: fakePuzzle.id,
+        puzzle: fakePuzzle,
+        date: today,
+        guesses: [
+          {
+            gameId: 99,
+            gameName: 'Wrong Game',
+            gameImage: null,
+            isCorrect: false,
+            matchedRow: false,
+            matchedCol: true,
+            objectionUsed: false,
+            objectionVerdict: null,
+            objectionExplanation: null,
+            objectionOriginalMatchedRow: null,
+            objectionOriginalMatchedCol: null,
+          },
+          ...Array(8).fill(null),
+        ],
+        guessesRemaining: 8,
+        isComplete: false,
       },
-      ...Array(8).fill(null),
-    ],
-    guessesRemaining: 8,
-    isComplete: false,
-    currentPlayer: 'o',
-    stealableCell: null,
-    winner: null,
-    pendingFinalSteal: null,
-    versusCategoryFilters: {},
-    versusStealRule: 'off',
-    versusTimerOption: 'none',
-    versusObjectionRule: 'one',
-    turnTimeLeft: null,
-  })
+    ]
+  )
 
   await page.route('**/api/objection', async (route) => {
     await route.fulfill({
@@ -1307,19 +1303,17 @@ test('versus: objection flow — sustained verdict updates button label in modal
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: 'Versus' }).click()
 
-  // Cell 0 has an incorrect guess — click to open details modal
+  // Cell 0 has an incorrect guess — clicking it opens the guess details modal
   await expect(page.getByTestId('grid-cell-0')).toBeVisible({ timeout: 10_000 })
   await page.getByTestId('grid-cell-0').click()
 
-  // Scope to the dialog to avoid ambiguous matches with cell text on the board
+  // Scope all assertions to the dialog to avoid ambiguity with cell text
   const modal = page.getByRole('dialog')
   await expect(modal).toBeVisible({ timeout: 5_000 })
-  // Dialog title is the game name
   await expect(modal.getByRole('heading', { name: 'Wrong Game' })).toBeVisible()
 
-  // Objection button must be present inside the modal
+  // Objection button must be present and enabled
   const objectionBtn = modal.getByRole('button', { name: 'Objection!' })
   await expect(objectionBtn).toBeVisible()
   await objectionBtn.click()

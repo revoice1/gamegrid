@@ -12,6 +12,15 @@ export const metadata: Metadata = {
 const CHANGELOG_ENTRIES = [
   {
     date: 'April 12, 2026',
+    title: 'History Transfer',
+    items: [
+      'Added History Transfer in Settings so you can move completed puzzle history to another device without logging in.',
+      'Transfer codes now support both manual entry and QR-based phone scanning.',
+      'Imported sessions now clear stale local daily board state on the destination device so today’s board reflects the transferred session correctly.',
+    ],
+  },
+  {
+    date: 'April 12, 2026',
     title: 'Submission Race Guard',
     items: [
       'Fixed a bug where a slow IGDB validation could apply stale guess results to the wrong cell if the board state changed mid-request.',

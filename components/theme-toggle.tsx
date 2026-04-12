@@ -239,7 +239,7 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
                 aria-pressed={!isDark}
                 onClick={() => mounted && setTheme(isDark ? 'light' : 'dark')}
                 className={cn(
-                  'group relative inline-flex h-8 w-[64px] shrink-0 items-center rounded-full border p-1 transition-[background-color,border-color,box-shadow] duration-300 ease-out',
+                  'group relative inline-flex h-8 w-16 shrink-0 items-center rounded-full border p-1 transition-[background-color,border-color,box-shadow] duration-300 ease-out',
                   isDark
                     ? 'border-border bg-secondary/70 text-foreground shadow-sm'
                     : 'border-border bg-card/95 text-foreground shadow-sm'
@@ -250,20 +250,20 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
                   className={cn(
                     'absolute top-1 h-6 w-6 rounded-full border shadow-sm transition-[left,background-color,transform] duration-300 ease-out group-active:scale-95',
                     isDark
-                      ? 'left-[31px] border-border bg-foreground'
+                      ? 'left-7.75 border-border bg-foreground'
                       : 'left-1 border-border bg-primary'
                   )}
                 />
                 <span className="relative z-10 grid w-full grid-cols-2 place-items-center">
                   <FlashbangIcon
                     className={cn(
-                      'h-[14px] w-[14px] transition-[color,transform,opacity] duration-300 ease-out',
+                      'h-3.5 w-3.5 transition-[color,transform,opacity] duration-300 ease-out',
                       isDark ? 'text-muted-foreground' : 'text-primary-foreground'
                     )}
                   />
                   <Moon
                     className={cn(
-                      'h-[14px] w-[14px] transition-[color,transform,opacity] duration-300 ease-out',
+                      'h-3.5 w-3.5 transition-[color,transform,opacity] duration-300 ease-out',
                       isDark ? 'text-background' : 'text-muted-foreground'
                     )}
                   />
@@ -295,7 +295,7 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
               <span
                 className={cn(
                   'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
-                  confirmBeforeSelect ? 'left-[18px] bg-primary' : 'left-0.5 bg-muted-foreground'
+                  confirmBeforeSelect ? 'left-4.5 bg-primary' : 'left-0.5 bg-muted-foreground'
                 )}
               />
             </button>
@@ -322,7 +322,7 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
               <span
                 className={cn(
                   'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
-                  animationsEnabled ? 'left-[18px] bg-primary' : 'left-0.5 bg-muted-foreground'
+                  animationsEnabled ? 'left-4.5 bg-primary' : 'left-0.5 bg-muted-foreground'
                 )}
               />
             </button>
@@ -355,9 +355,7 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
                   <span
                     className={cn(
                       'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
-                      versusAlarmsEnabled
-                        ? 'left-[18px] bg-primary'
-                        : 'left-0.5 bg-muted-foreground'
+                      versusAlarmsEnabled ? 'left-4.5 bg-primary' : 'left-0.5 bg-muted-foreground'
                     )}
                   />
                 </button>
@@ -386,7 +384,7 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
                   <span
                     className={cn(
                       'absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left,background-color] duration-200',
-                      versusAudioEnabled ? 'left-[18px] bg-primary' : 'left-0.5 bg-muted-foreground'
+                      versusAudioEnabled ? 'left-4.5 bg-primary' : 'left-0.5 bg-muted-foreground'
                     )}
                   />
                 </button>
@@ -477,12 +475,10 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
             ) : (
               <>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Paste the temporary code from your other device. Your current history on this
-                  device will be replaced.
+                  Paste the temporary code from your other device to move completed history here.
                 </p>
                 <p className="mt-2 rounded-lg border border-amber-400/25 bg-amber-500/8 px-2.5 py-2 text-[11px] text-amber-100/90">
-                  Import replaces completed puzzle history on this device. Boards in progress stay
-                  local.
+                  This replaces completed history on this device. Boards in progress stay local.
                 </p>
                 <input
                   type="text"
@@ -506,7 +502,7 @@ export function ThemeToggle({ showVersusAlarms = false }: { showVersusAlarms?: b
                       'hover:bg-secondary/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-60'
                     )}
                   >
-                    {transferStatus === 'loading' ? 'Importing...' : 'Confirm import'}
+                    {transferStatus === 'loading' ? 'Importing...' : 'Replace history'}
                   </button>
                   <button
                     type="button"

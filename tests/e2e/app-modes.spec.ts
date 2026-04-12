@@ -2,11 +2,16 @@ import { expect, test } from '@playwright/test'
 import {
   fakePuzzle,
   fakeSearchResult,
+  mockGuessApi,
   resetStorage,
   seedStorageValue,
   mockPuzzleStream,
   seedDailyPuzzle,
 } from './test-helpers'
+
+test.beforeEach(async ({ context }) => {
+  await mockGuessApi(context)
+})
 
 test('practice mode shows start options and opens custom setup', async ({ page }) => {
   await resetStorage(page)

@@ -1240,3 +1240,100 @@ test('versus: server returning duplicateEvent:true does not double-apply the gue
 
   await page.evaluate(() => localStorage.removeItem('gg_online_versus_room'))
 })
+
+test('objection flow — sustained verdict updates button label in modal', async ({ page }) => {
+  /**
+   * Exercises the full client-side objection flow in daily mode where clicking
+   * a filled cell unconditionally opens the guess details modal:
+   *
+   *  1. Daily board starts with an incorrect guess on cell 0.
+   *  2. Player clicks cell 0 → GuessDetailsModal opens.
+   *  3. Player clicks "Objection!" → /api/objection called.
+   *  4. Server returns { verdict: 'sustained' }.
+   *  5. Button label inside the modal changes to "Objection sustained".
+   *
+   * Note: in versus mode filled cells don't open the detail modal (they are
+   * only interactable for steals), so this test uses daily mode instead.
+   */
+  await mockPuzzleStream(page, fakePuzzle)
+
+  const today = new Date().toISOString().slice(0, 10)
+  await page.addInitScript(
+    ([key, state]) => {
+      window.localStorage.setItem(key as string, JSON.stringify(state))
+    },
+    [
+      `gamegrid_daily_state:${today}`,
+      {
+        puzzleId: fakePuzzle.id,
+        puzzle: fakePuzzle,
+        date: today,
+        guesses: [
+          {
+            gameId: 99,
+            gameName: 'Wrong Game',
+            gameImage: null,
+            isCorrect: false,
+            matchedRow: false,
+            matchedCol: true,
+            objectionUsed: false,
+            objectionVerdict: null,
+            objectionExplanation: null,
+            objectionOriginalMatchedRow: null,
+            objectionOriginalMatchedCol: null,
+          },
+          ...Array(8).fill(null),
+        ],
+        guessesRemaining: 8,
+        isComplete: false,
+      },
+    ]
+  )
+
+  await page.route('**/api/objection', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        verdict: 'sustained',
+        confidence: 'high',
+        explanation: 'The judge agrees this pick fits the intersection.',
+      }),
+    })
+  })
+
+  // Silence the objection persistence PATCH so it does not leak to the real
+  // Supabase-backed server and produce noise in the dev-server log.
+  await page.route('**/api/guess', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+      return
+    }
+    await route.fallback()
+  })
+
+  await page.goto('/')
+
+  // Cell 0 has an incorrect guess — clicking it opens the guess details modal
+  await expect(page.getByTestId('grid-cell-0')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('grid-cell-0').click()
+
+  // Scope all assertions to the dialog to avoid ambiguity with cell text
+  const modal = page.getByRole('dialog')
+  await expect(modal).toBeVisible({ timeout: 5_000 })
+  await expect(modal.getByRole('heading', { name: 'Wrong Game' })).toBeVisible()
+
+  // Objection button must be present and enabled
+  const objectionBtn = modal.getByRole('button', { name: 'Objection!' })
+  await expect(objectionBtn).toBeVisible()
+  await objectionBtn.click()
+
+  // After sustained verdict the button label must change
+  await expect(modal.getByRole('button', { name: 'Objection sustained' })).toBeVisible({
+    timeout: 5_000,
+  })
+})

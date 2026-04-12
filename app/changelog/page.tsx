@@ -11,6 +11,18 @@ export const metadata: Metadata = {
 
 const CHANGELOG_ENTRIES = [
   {
+    date: 'April 11, 2026',
+    title: 'Online Versus Polish And Objection Improvements',
+    items: [
+      'Overruled objection toasts now show the Gemini rationale explaining why the objection was rejected.',
+      'Online versus is now server-authoritative: the server validates claims, misses, and turn ownership before committing them.',
+      'Fixed a bug where optimistic claim commits could fire twice in online versus, causing duplicate events.',
+      'Fixed a bug where the turn timer could double-expire in local versus matches.',
+      'Objection requests now fall back gracefully when the grounded Gemini call fails, rather than silently dropping the result.',
+      'Guess explanations are now included in the match flow and several online versus edge cases were hardened.',
+    ],
+  },
+  {
     date: 'March 28, 2026',
     title: 'Daily Archive, Streaks, And Versus Summary',
     items: [

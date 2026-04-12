@@ -224,7 +224,7 @@ export function GameGrid({
                             : undefined
                 }
                 className={cn(
-                  'mt-1 inline-flex max-w-full items-center justify-center self-center rounded-full border px-2 py-0.75 text-[8px] font-semibold uppercase tracking-[0.08em] leading-none sm:mt-1.5 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.1em]',
+                  'mt-1 inline-flex max-w-full items-center justify-center self-center rounded-full border px-2 py-0.75 text-[8px] font-semibold uppercase tracking-[0.08em] leading-none sm:mt-1.5 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-widest',
                   isGamePointAlarm
                     ? animationsEnabled
                       ? 'alarm-pill-amber border-amber-300/55 bg-amber-400/12 text-amber-950 dark:text-amber-100'
@@ -245,7 +245,7 @@ export function GameGrid({
               </div>
               <div
                 className={cn(
-                  'mt-1 inline-flex min-w-0 max-w-full items-center justify-center self-center rounded-full border px-2 py-0.75 text-center text-[8px] font-semibold uppercase tracking-[0.08em] tabular-nums sm:mt-1.5 sm:min-w-[96px] sm:px-2.5 sm:py-1 sm:text-[11px] sm:tracking-[0.14em]',
+                  'mt-1 inline-flex min-w-0 max-w-full items-center justify-center self-center rounded-full border px-2 py-0.75 text-center text-[8px] font-semibold uppercase tracking-[0.08em] tabular-nums sm:mt-1.5 sm:min-w-24 sm:px-2.5 sm:py-1 sm:text-[11px] sm:tracking-[0.14em]',
                   turnTimerLabel
                     ? isTimerDanger && animationsEnabled
                       ? 'timer-danger-pulse border-rose-400/40 bg-rose-500/12 text-rose-50'

@@ -17,10 +17,10 @@ export function ObjectionSplash({ burstId }: BurstOverlayProps) {
     <div
       key={burstId}
       data-testid="objection-splash"
-      className="pointer-events-none fixed inset-0 z-[96] grid place-items-center overflow-hidden p-4"
+      className="pointer-events-none fixed inset-0 z-96 grid place-items-center overflow-hidden p-4"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.24),transparent_22%),linear-gradient(180deg,rgba(9,10,14,0.24),rgba(9,10,14,0.42))]" />
-      <div className="absolute inset-0 opacity-70 [background-image:repeating-linear-gradient(-72deg,transparent_0_14px,rgba(255,185,64,0.13)_14px_22px,transparent_22px_38px)]" />
+      <div className="absolute inset-0 opacity-70 bg-[repeating-linear-gradient(-72deg,transparent_0_14px,rgba(255,185,64,0.13)_14px_22px,transparent_22px_38px)]" />
       <div className="objection-splash select-none px-6 text-center font-black uppercase italic tracking-[0.08em] text-[#ffb44a] drop-shadow-[0_16px_42px_rgba(0,0,0,0.88)]">
         Objection!
       </div>
@@ -33,7 +33,7 @@ export function StealMissSplash({ burstId }: BurstOverlayProps) {
     <div
       key={burstId}
       data-testid="steal-miss-splash"
-      className="pointer-events-none fixed inset-0 z-[90] grid place-items-center p-4"
+      className="pointer-events-none fixed inset-0 z-90 grid place-items-center p-4"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.12),transparent_28%),rgba(0,0,0,0.18)]" />
       <div className="steal-miss-splash select-none px-6 text-center font-black uppercase italic tracking-[0.08em] text-[#ff6262] drop-shadow-[0_10px_28px_rgba(0,0,0,0.78)]">
@@ -48,7 +48,7 @@ export function DoubleKoSplash({ burstId }: BurstOverlayProps) {
     <div
       key={burstId}
       data-testid="double-ko-splash"
-      className="pointer-events-none fixed inset-0 z-[90] grid place-items-center p-4"
+      className="pointer-events-none fixed inset-0 z-90 grid place-items-center p-4"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.16),transparent_26%),radial-gradient(circle_at_center,rgba(239,68,68,0.14),transparent_44%),rgba(0,0,0,0.2)]" />
       <div className="double-ko-splash select-none px-6 text-center font-black uppercase italic tracking-[0.08em] text-[#ffcf5a] drop-shadow-[0_10px_28px_rgba(0,0,0,0.82)]">
@@ -63,10 +63,10 @@ export function JudgmentPendingOverlay({ burstId }: JudgmentPendingOverlayProps)
     <div
       key={burstId}
       data-testid="judgment-pending-overlay"
-      className="pointer-events-none fixed inset-0 z-[95] grid place-items-center overflow-hidden p-4"
+      className="pointer-events-none fixed inset-0 z-95 grid place-items-center overflow-hidden p-4"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.18),transparent_24%),linear-gradient(180deg,rgba(7,10,16,0.72),rgba(7,10,16,0.84))]" />
-      <div className="absolute inset-0 opacity-60 [background-image:repeating-linear-gradient(-68deg,transparent_0_16px,rgba(245,158,11,0.12)_16px_24px,transparent_24px_40px)]" />
+      <div className="absolute inset-0 opacity-60 bg-[repeating-linear-gradient(-68deg,transparent_0_16px,rgba(245,158,11,0.12)_16px_24px,transparent_24px_40px)]" />
       <div className="relative w-full max-w-xl rounded-[28px] border border-[#f5b94e]/45 bg-[#0f1219]/90 px-6 py-7 text-center shadow-[0_28px_70px_rgba(0,0,0,0.48)] backdrop-blur-md">
         <p className="text-[11px] font-semibold uppercase tracking-[0.42em] text-[#ffd46f]">
           OBJECTION!
@@ -78,9 +78,9 @@ export function JudgmentPendingOverlay({ burstId }: JudgmentPendingOverlayProps)
         <p className="mt-3 text-sm text-foreground/75">
           Reviewing the game, the intersection, and the current metadata.
         </p>
-        <div className="mx-auto mt-6 flex w-full max-w-[220px] items-end justify-center">
-          <div className="relative h-[92px] w-[148px]">
-            <div className="judgment-gavel absolute left-[16px] top-[0px]">
+        <div className="mx-auto mt-6 flex w-full max-w-55 items-end justify-center">
+          <div className="relative h-23 w-37">
+            <div className="judgment-gavel absolute left-4 top-0">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 120 100"
@@ -123,8 +123,8 @@ export function JudgmentPendingOverlay({ burstId }: JudgmentPendingOverlayProps)
                 </g>
               </svg>
             </div>
-            <div className="judgment-block absolute bottom-[14px] left-[26px]" />
-            <div className="judgment-impact absolute bottom-[34px] left-[52px]" />
+            <div className="judgment-block absolute bottom-3.5 left-6.5" />
+            <div className="judgment-impact absolute bottom-8.5 left-13" />
           </div>
         </div>
       </div>
@@ -139,7 +139,7 @@ export function JudgmentVerdictSplash({ burstId, verdict }: JudgmentVerdictSplas
     <div
       key={burstId}
       data-testid="judgment-verdict-splash"
-      className="pointer-events-none fixed inset-0 z-[96] grid place-items-center overflow-hidden p-4"
+      className="pointer-events-none fixed inset-0 z-96 grid place-items-center overflow-hidden p-4"
     >
       <div
         className={`absolute inset-0 ${

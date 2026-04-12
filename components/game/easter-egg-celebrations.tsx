@@ -266,8 +266,8 @@ export const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
               className="absolute left-1/2 top-[10%] h-[70%] w-[70%] -translate-x-1/2 border border-[#D86F2C] bg-[#F59A44] shadow-[0_8px_22px_rgba(245,154,68,0.3)]"
               style={{ clipPath: 'polygon(50% 0%, 90% 24%, 86% 64%, 50% 100%, 14% 64%, 10% 24%)' }}
             />
-            <div className="absolute left-[18%] top-[2%] h-[34%] w-[24%] -rotate-[18deg] rounded-t-[88%] rounded-b-[18%] border border-[#D86F2C] bg-[#F59A44]" />
-            <div className="absolute right-[18%] top-[2%] h-[34%] w-[24%] rotate-[18deg] rounded-t-[88%] rounded-b-[18%] border border-[#D86F2C] bg-[#F59A44]" />
+            <div className="absolute left-[18%] top-[2%] h-[34%] w-[24%] -rotate-18 rounded-t-[88%] rounded-b-[18%] border border-[#D86F2C] bg-[#F59A44]" />
+            <div className="absolute right-[18%] top-[2%] h-[34%] w-[24%] rotate-18 rounded-t-[88%] rounded-b-[18%] border border-[#D86F2C] bg-[#F59A44]" />
             <div className="absolute left-[26%] top-[18%] h-[12%] w-[12%] rounded-full bg-[#FFF3DE]" />
             <div className="absolute right-[26%] top-[18%] h-[12%] w-[12%] rounded-full bg-[#FFF3DE]" />
             <div
@@ -748,8 +748,8 @@ export const EASTER_EGG_DEFINITIONS: EasterEggDefinition[] = [
           <div className="absolute left-1/2 top-[8%] h-[10%] w-[26%] -translate-x-1/2 rounded-full bg-[#38BDF8]" />
           <div className="absolute left-1/2 top-[16%] h-[62%] w-[56%] -translate-x-1/2 rounded-full border border-[#0369A1] bg-[#7DD3FC] shadow-[0_8px_20px_rgba(125,211,252,0.34)]" />
           <div className="absolute inset-[30%] rounded-full border border-[#0EA5E9] bg-[#F8FAFC]" />
-          <div className="absolute left-1/2 top-[34%] h-[6%] w-[2px] -translate-x-1/2 rounded-full bg-[#0369A1]" />
-          <div className="absolute left-1/2 top-[42%] h-[2px] w-[16%] -translate-x-1/2 rounded-full bg-[#0369A1]" />
+          <div className="absolute left-1/2 top-[34%] h-[6%] w-0.5 -translate-x-1/2 rounded-full bg-[#0369A1]" />
+          <div className="absolute left-1/2 top-[42%] h-0.5 w-[16%] -translate-x-1/2 rounded-full bg-[#0369A1]" />
           <div className="absolute inset-x-[34%] bottom-[8%] h-[8%] rounded-full bg-[#FDE047]" />
         </div>
       )
@@ -1049,7 +1049,7 @@ export function EasterEggCelebration({ burstId, renderPiece, particles }: Active
       burstId={burstId}
       particles={particles}
       dataTestId="easter-egg-celebration"
-      zIndexClassName="z-[80]"
+      zIndexClassName="z-80"
       animationName="easter-egg-fall"
       animationStyles={`
         @keyframes easter-egg-fall {
@@ -1077,7 +1077,7 @@ export function PerfectGridCelebration({ burstId, particles }: ActivePerfectCele
       burstId={burstId}
       particles={particles}
       dataTestId="perfect-grid-celebration"
-      zIndexClassName="z-[90]"
+      zIndexClassName="z-90"
       animationName="perfect-grid-fall"
       animationStyles={`
         @keyframes perfect-grid-fall {

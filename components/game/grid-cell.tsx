@@ -188,13 +188,13 @@ export function GridCell({
               </span>
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-1.5 pb-1 pt-5">
+          <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 via-black/55 to-transparent px-1.5 pb-1 pt-5">
             <span className="block line-clamp-2 text-[10px] font-medium leading-tight text-white/95 drop-shadow-sm">
               {guess.gameName}
             </span>
           </div>
           {showRevealedShowdownScore && (
-            <div className="absolute bottom-1 left-1 z-[2] rounded-md border border-black/35 bg-black/72 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.28)]">
+            <div className="absolute bottom-1 left-1 z-2 rounded-md border border-black/35 bg-black/72 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.28)]">
               {revealedShowdownMetricValue}
             </div>
           )}
@@ -220,7 +220,7 @@ export function GridCell({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div
-                    className="absolute right-1 top-1 z-[3] flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-[#fb923c]"
+                    className="absolute right-1 top-1 z-3 flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-[#fb923c]"
                     aria-label="Sustained on review"
                   >
                     <svg
@@ -238,7 +238,7 @@ export function GridCell({
                     </svg>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="left" sideOffset={6} className="max-w-[220px]">
+                <TooltipContent side="left" sideOffset={6} className="max-w-55">
                   {guess.objectionExplanation}
                 </TooltipContent>
               </Tooltip>
@@ -296,7 +296,7 @@ export function GridCell({
           )}
           {isStealable && !isLocked && possibleLabel && (
             <div
-              className="absolute left-1 top-1 z-[3] rounded-md border border-black/35 bg-black/72 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.28)]"
+              className="absolute left-1 top-1 z-3 rounded-md border border-black/35 bg-black/72 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.28)]"
               title={possibleTitle ?? undefined}
               aria-label={`Steal active: ${possibleTitle}`}
             >

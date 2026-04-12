@@ -650,7 +650,7 @@ export function GameSearch({
           </DialogHeader>
           {previewGame?.background_image ? (
             <div className="space-y-3">
-              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl bg-secondary">
+              <div className="relative aspect-3/4 w-full overflow-hidden rounded-xl bg-secondary">
                 <Image
                   src={previewGame.background_image}
                   alt={previewGame.name}

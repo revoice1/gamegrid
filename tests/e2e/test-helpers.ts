@@ -34,6 +34,109 @@ export const fakeSearchResult = {
   platforms: [{ platform: { id: 6, name: 'PC (Microsoft Windows)', slug: 'pc' } }],
 }
 
+export async function mockGuessApi(page: Page) {
+  await page.route('**/api/guess', async (route) => {
+    const method = route.request().method()
+    let requestBody: Record<string, unknown> = {}
+
+    try {
+      requestBody = route.request().postDataJSON() as Record<string, unknown>
+    } catch {
+      requestBody = {}
+    }
+
+    if (method === 'PATCH') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+      return
+    }
+
+    if (method === 'POST') {
+      const gameId =
+        typeof requestBody.gameId === 'number' ? requestBody.gameId : fakeSearchResult.id
+      const gameName =
+        typeof requestBody.gameName === 'string' ? requestBody.gameName : fakeSearchResult.name
+
+      if (requestBody.lookupOnly === true) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            valid: false,
+            duplicate: false,
+            matchesRow: false,
+            matchesCol: false,
+            game: {
+              id: gameId,
+              name: gameName,
+              slug: fakeSearchResult.slug,
+              url: null,
+              background_image: null,
+              released: fakeSearchResult.released,
+              metacritic: fakeSearchResult.metacritic,
+              stealRating: 93,
+              genres: ['Role-playing (RPG)'],
+              platforms: ['PC (Microsoft Windows)'],
+              developers: [],
+              publishers: [],
+              tags: [],
+              gameModes: ['Single player'],
+              themes: [],
+              perspectives: [],
+              companies: [],
+            },
+            selectedGame: null,
+          }),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          valid: true,
+          duplicate: false,
+          matchesRow: true,
+          matchesCol: true,
+          game: {
+            id: gameId,
+            name: gameName,
+            slug: fakeSearchResult.slug,
+            url: null,
+            background_image: null,
+            released: fakeSearchResult.released,
+            metacritic: fakeSearchResult.metacritic,
+            stealRating: 93,
+            genres: ['Role-playing (RPG)'],
+            platforms: ['PC (Microsoft Windows)'],
+            developers: [],
+            publishers: [],
+            tags: [],
+            gameModes: ['Single player'],
+            themes: [],
+            perspectives: [],
+            companies: [],
+          },
+          selectedGame: {
+            id: gameId,
+            name: gameName,
+            slug: fakeSearchResult.slug,
+            url: null,
+            background_image: null,
+          },
+        }),
+      })
+      return
+    }
+
+    await route.fallback()
+  })
+}
+
 export async function resetStorage(page: Page) {
   const seededDailyState = {
     puzzleId: fakePuzzle.id,

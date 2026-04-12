@@ -78,9 +78,9 @@ export function JudgmentPendingOverlay({ burstId }: JudgmentPendingOverlayProps)
         <p className="mt-3 text-sm text-foreground/75">
           Reviewing the game, the intersection, and the current metadata.
         </p>
-        <div className="mx-auto mt-6 flex w-full max-w-[220px] items-end justify-center">
-          <div className="relative h-[92px] w-[148px]">
-            <div className="judgment-gavel absolute left-[16px] top-[0px]">
+        <div className="mx-auto mt-6 flex w-full max-w-55 items-end justify-center">
+          <div className="relative h-23 w-37">
+            <div className="judgment-gavel absolute left-4 top-0">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 120 100"
@@ -123,8 +123,8 @@ export function JudgmentPendingOverlay({ burstId }: JudgmentPendingOverlayProps)
                 </g>
               </svg>
             </div>
-            <div className="judgment-block absolute bottom-[14px] left-[26px]" />
-            <div className="judgment-impact absolute bottom-[34px] left-[52px]" />
+            <div className="judgment-block absolute bottom-3.5 left-6.5" />
+            <div className="judgment-impact absolute bottom-8.5 left-13" />
           </div>
         </div>
       </div>

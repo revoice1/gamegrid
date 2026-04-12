@@ -188,7 +188,7 @@ export function GridCell({
               </span>
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-1.5 pb-1 pt-5">
+          <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 via-black/55 to-transparent px-1.5 pb-1 pt-5">
             <span className="block line-clamp-2 text-[10px] font-medium leading-tight text-white/95 drop-shadow-sm">
               {guess.gameName}
             </span>
@@ -238,7 +238,7 @@ export function GridCell({
                     </svg>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="left" sideOffset={6} className="max-w-[220px]">
+                <TooltipContent side="left" sideOffset={6} className="max-w-55">
                   {guess.objectionExplanation}
                 </TooltipContent>
               </Tooltip>

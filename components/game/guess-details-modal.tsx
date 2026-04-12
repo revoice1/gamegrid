@@ -165,7 +165,7 @@ export function GuessDetailsModal({
 
         <div className="space-y-4">
           {guess.gameImage && (
-            <div className="relative aspect-[16/9] overflow-hidden rounded-xl border border-border">
+            <div className="relative aspect-video overflow-hidden rounded-xl border border-border">
               <Image
                 src={guess.gameImage}
                 alt={guess.gameName}

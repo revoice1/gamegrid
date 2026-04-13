@@ -56,7 +56,7 @@ test('changelog jump links update the page hash', async ({ page }) => {
 
   await safeClick(page.getByRole('link', { name: 'March 27, 2026' }))
 
-  await expect(page).toHaveURL(/#march-27-2026$/)
+  await expect(page).toHaveURL(/#2026-03-27-versus-objections$/)
   await expect(
     page.getByRole('heading', { name: 'Versus Objections And Custom Rules' })
   ).toBeVisible()

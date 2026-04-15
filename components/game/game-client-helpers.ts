@@ -59,6 +59,22 @@ function pickResolvedValue<T>(resolved: T | null | undefined, fallback: T): T {
   return resolved ?? fallback
 }
 
+function pickResolvedString(
+  primary: string | null | undefined,
+  fallback: string | null | undefined,
+  defaultValue = ''
+): string {
+  if (typeof primary === 'string' && primary.trim().length > 0) {
+    return primary
+  }
+
+  if (typeof fallback === 'string' && fallback.trim().length > 0) {
+    return fallback
+  }
+
+  return defaultValue
+}
+
 function pickResolvedArray(resolved: string[] | undefined, fallback: string[]): string[] {
   return resolved && resolved.length > 0 ? resolved : fallback
 }
@@ -82,6 +98,8 @@ export function isGuessHydrated(guess: CellGuess): boolean {
 export function hydrateStoredGuess(existingGuess: CellGuess, result: GuessLookupResult): CellGuess {
   return {
     ...existingGuess,
+    gameName: pickResolvedString(existingGuess.gameName, result.selectedGame?.name),
+    gameImage: result.selectedGame?.background_image ?? existingGuess.gameImage ?? null,
     gameSlug: pickResolvedValue(result.game?.slug, existingGuess.gameSlug ?? null),
     gameUrl: pickResolvedValue(result.game?.url, existingGuess.gameUrl ?? null),
     released: pickResolvedValue(result.game?.released, existingGuess.released ?? null),

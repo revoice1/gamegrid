@@ -144,6 +144,34 @@ describe('game client helpers', () => {
     })
   })
 
+  it('backfills missing display fields from the lookup result', () => {
+    const existingGuess: CellGuess = {
+      gameId: 7,
+      gameName: '',
+      gameImage: null,
+      isCorrect: false,
+    }
+
+    expect(
+      hydrateStoredGuess(existingGuess, {
+        ...lookupResult,
+        selectedGame: {
+          id: 7,
+          name: 'Test Game',
+          slug: 'test-game',
+          url: 'https://example.com/test-game',
+          background_image: 'https://example.com/cover.png',
+        },
+      })
+    ).toMatchObject({
+      gameName: 'Test Game',
+      gameImage: 'https://example.com/cover.png',
+      matchedRow: true,
+      matchedCol: false,
+      validationExplanation,
+    })
+  })
+
   it('keeps existing hydrated metadata when a later lookup returns sparse values', () => {
     const existingGuess: CellGuess = {
       gameId: 7,

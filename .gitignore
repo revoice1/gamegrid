@@ -20,6 +20,7 @@ node_modules/
 playwright-report/
 test-results/
 .husky/_/
+.claude/
 .DS_Store
 .vercel
 tmp-*-report.json

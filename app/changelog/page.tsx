@@ -11,6 +11,17 @@ export const metadata: Metadata = {
 
 const CHANGELOG_ENTRIES = [
   {
+    id: '2026-04-15-search-title-matching',
+    date: 'April 15, 2026',
+    title: 'Search Title Matching Improvements',
+    items: [
+      'Search now recognizes more alternate, regional, and abbreviation-based game titles.',
+      'Standalone expansions can now appear in search results, making games like Metal Gear Solid V: Ground Zeroes easier to find.',
+      'Results can now show a matched alternate title hint when the canonical game name differs from what you searched.',
+      'Search responsiveness was improved while preserving better alternate-title matches for edge cases like regional Final Fantasy naming.',
+    ],
+  },
+  {
     id: '2026-04-12-history-transfer',
     date: 'April 12, 2026',
     title: 'History Transfer',

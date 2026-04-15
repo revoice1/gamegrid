@@ -123,9 +123,9 @@ const DEFAULT_CELL_VALIDATION_CACHE_TTL_MS = 1000 * 60 * 60 * 6
 const DEFAULT_PLATFORM_SUMMARY_CACHE_TTL_MS = 1000 * 60 * 60 * 12
 const DEFAULT_IGDB_MIN_REQUEST_INTERVAL_MS = 350
 const DEFAULT_IGDB_MAX_RETRIES = 3
-const ALLOWED_GAME_TYPES = [0, 8, 9, 10, 11] as const
+const ALLOWED_GAME_TYPES = [0, 4, 8, 9, 10, 11] as const
 const ALLOWED_GAME_TYPE_SET = new Set<number>(ALLOWED_GAME_TYPES)
-const REJECTED_GAME_TYPE_SET = new Set<number>([1, 2, 3, 4, 5, 6, 7, 12, 13, 14])
+const REJECTED_GAME_TYPE_SET = new Set<number>([1, 2, 3, 5, 6, 7, 12, 13, 14])
 const UNOFFICIAL_NAME_PATTERNS = [
   /\bgoogle translated\b/i,
   /\bchapter\s+\d+\b/i,
@@ -230,6 +230,7 @@ let igdbNextRequestAt = 0
 
 const GAME_TYPE_LABELS: Record<number, string> = {
   0: 'Original',
+  4: 'Standalone Expansion',
   8: 'Remake',
   9: 'Remaster',
   10: 'Expanded Game',
@@ -841,6 +842,7 @@ export function buildSearchGameWhereClause(): string {
     'first_release_date != null',
     'involved_companies != null',
     'total_rating != null',
+    `game_type = (${ALLOWED_GAME_TYPES.join(',')})`,
   ].join(' & ')
 }
 

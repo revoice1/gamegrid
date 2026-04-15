@@ -348,6 +348,7 @@ describe('buildSearchGameWhereClause', () => {
   it('requires recognized ratings by default', () => {
     expect(buildSearchGameWhereClause()).toContain('total_rating != null')
     expect(buildSearchGameWhereClause()).toContain('involved_companies != null')
+    expect(buildSearchGameWhereClause()).toContain('game_type = (0,4,8,9,10,11)')
   })
 })
 

@@ -82,10 +82,32 @@ describe('GET /api/search', () => {
     searchIGDBGamesMock.mockResolvedValue([makeGame()])
     const res = await GET(makeRequest({ q: 'half-life' }))
     const body = await res.json()
-    expect(searchIGDBGamesMock).toHaveBeenCalledWith('half-life')
+    expect(searchIGDBGamesMock).toHaveBeenCalledWith('half-life', {
+      allowUnratedFallback: false,
+    })
     expect(body.results).toHaveLength(1)
     expect(body.results[0].id).toBe(1)
     expect(body.results[0].name).toBe('Half-Life')
+  })
+
+  it('enables unrated fallback for daily search mode', async () => {
+    searchIGDBGamesMock.mockResolvedValue([makeGame()])
+
+    await GET(makeRequest({ q: 'lunacy', mode: 'daily' }))
+
+    expect(searchIGDBGamesMock).toHaveBeenCalledWith('lunacy', {
+      allowUnratedFallback: true,
+    })
+  })
+
+  it('keeps rated-only search for versus mode', async () => {
+    searchIGDBGamesMock.mockResolvedValue([makeGame()])
+
+    await GET(makeRequest({ q: 'lunacy', mode: 'versus' }))
+
+    expect(searchIGDBGamesMock).toHaveBeenCalledWith('lunacy', {
+      allowUnratedFallback: false,
+    })
   })
 
   it('scrubs platform data when categoryTypes includes platform', async () => {

@@ -913,12 +913,14 @@ function buildOfficialGameWhereClause(): string {
   ].join(' & ')
 }
 
-export function buildSearchGameWhereClause(): string {
+export function buildSearchGameWhereClause(options?: { requireRating?: boolean }): string {
+  const requireRating = options?.requireRating ?? true
+
   return [
     'version_parent = null',
     'first_release_date != null',
     'involved_companies != null',
-    'total_rating != null',
+    ...(requireRating ? ['total_rating != null'] : []),
     `game_type = (${ALLOWED_GAME_TYPES.join(',')})`,
   ].join(' & ')
 }
@@ -1335,19 +1337,28 @@ export async function getIGDBFamilyNames(gameId: number): Promise<string[]> {
   )
 }
 
-export async function searchIGDBGames(query: string): Promise<Game[]> {
+export async function searchIGDBGames(
+  query: string,
+  options?: { allowUnratedFallback?: boolean }
+): Promise<Game[]> {
   if (!query.trim()) {
     return []
   }
 
-  const runSearch = async (searchTerm: string, limit = 30) => {
+  const allowUnratedFallback = options?.allowUnratedFallback ?? false
+
+  const runSearch = async (
+    searchTerm: string,
+    limit = 30,
+    searchOptions?: { requireRating?: boolean }
+  ) => {
     const queryResults = await queryIGDBConcurrent([
       {
         key: 'games',
         endpoint: 'games',
         body: [
           IGDB_GAME_FIELDS,
-          `where ${buildSearchGameWhereClause()};`,
+          `where ${buildSearchGameWhereClause(searchOptions)};`,
           `search "${escapeIGDBSearch(searchTerm)}";`,
           `limit ${limit};`,
         ].join(' '),
@@ -1370,8 +1381,8 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
     return { games, alternativeNames }
   }
 
-  const gatherVisibleResults = async () => {
-    const primarySearch = await runSearch(query, 30)
+  const gatherVisibleResults = async (searchOptions?: { requireRating?: boolean }) => {
+    const primarySearch = await runSearch(query, 30, searchOptions)
     let mergedResults = [...primarySearch.games]
     const altMatchedNames = new Map<number, string>()
     for (const entry of primarySearch.alternativeNames) {
@@ -1401,7 +1412,7 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
     if (primarySearch.games.length < 5) {
       const fallbackTerms = getFallbackSearchTerms(query)
       for (const fallbackTerm of fallbackTerms.slice(0, 2)) {
-        const fallbackSearch = await runSearch(fallbackTerm, 40)
+        const fallbackSearch = await runSearch(fallbackTerm, 40, searchOptions)
         mergedResults = [...mergedResults, ...fallbackSearch.games]
         for (const entry of fallbackSearch.alternativeNames) {
           if (Number.isFinite(entry.game) && typeof entry.name === 'string' && entry.name.trim()) {
@@ -1449,11 +1460,44 @@ export async function searchIGDBGames(query: string): Promise<Game[]> {
     }
   }
 
+  const primaryVisibleResults = await gatherVisibleResults()
+  const unratedFallbackResults =
+    allowUnratedFallback && primaryVisibleResults.results.length < 5
+      ? await gatherVisibleResults({ requireRating: false })
+      : null
+
+  const combinedVisibleResults = Array.from(
+    new Map(
+      [...primaryVisibleResults.results, ...(unratedFallbackResults?.results ?? [])].map(
+        (result) => [result.id, result]
+      )
+    ).values()
+  )
+  const combinedAltMatchedGameIds = new Set<number>([
+    ...primaryVisibleResults.altMatchedGameIds,
+    ...(unratedFallbackResults?.altMatchedGameIds ?? []),
+  ])
+  const combinedAltMatchedNames = new Map<number, string>(primaryVisibleResults.altMatchedNames)
+  for (const [gameId, alternativeName] of unratedFallbackResults?.altMatchedNames ?? []) {
+    const betterName = pickBetterAlternativeNameMatch(
+      query,
+      combinedAltMatchedNames.get(gameId),
+      alternativeName
+    )
+    if (betterName) {
+      combinedAltMatchedNames.set(gameId, betterName)
+    }
+  }
+
   const {
     results: visibleResults,
     altMatchedGameIds,
     altMatchedNames,
-  } = await gatherVisibleResults()
+  } = {
+    results: combinedVisibleResults,
+    altMatchedGameIds: combinedAltMatchedGameIds,
+    altMatchedNames: combinedAltMatchedNames,
+  }
   const rankedResults = visibleResults.sort(
     (left, right) =>
       scoreSearchCandidate(right, query, altMatchedGameIds) -

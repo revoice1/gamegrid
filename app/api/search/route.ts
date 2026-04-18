@@ -4,6 +4,8 @@ import { createRequestLogger } from '@/lib/logging'
 import { createClient } from '@/lib/supabase/server'
 import type { Category } from '@/lib/types'
 
+type SearchMode = 'daily' | 'practice' | 'versus'
+
 function parseCategoryTypes(rawValue: string | null): Set<Category['type']> {
   if (!rawValue) {
     return new Set<Category['type']>()
@@ -49,18 +51,25 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get('q')
   const puzzleId = searchParams.get('puzzleId')
   const categoryTypesParam = searchParams.get('categoryTypes')
+  const modeParam = searchParams.get('mode')
 
   if (!query || query.length < 2) {
     return NextResponse.json({ results: [] })
   }
 
   try {
+    const mode: SearchMode =
+      modeParam === 'daily' || modeParam === 'practice' || modeParam === 'versus'
+        ? modeParam
+        : 'versus'
     const explicitCategoryTypes = parseCategoryTypes(categoryTypesParam)
     const categoryTypes =
       explicitCategoryTypes.size > 0
         ? explicitCategoryTypes
         : await getPuzzleCategoryTypes(puzzleId)
-    const games = await searchIGDBGames(query)
+    const games = await searchIGDBGames(query, {
+      allowUnratedFallback: mode !== 'versus',
+    })
     const duplicateTitleKeys = new Set(
       Object.entries(
         games.reduce<Record<string, number>>((counts, game) => {

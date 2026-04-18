@@ -297,20 +297,8 @@ describe('POST /api/stats', () => {
         if (table === 'puzzle_completions' && callIdx === 2) {
           return { upsert: vi.fn().mockResolvedValue({ error: null }) }
         }
-        if (table === 'guesses') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-                })),
-              })),
-            })),
-          }
-        }
         throw new Error(`Unexpected: ${table}`)
       }),
-      rpc: vi.fn().mockResolvedValue({ error: null }),
     }
     createClientMock.mockResolvedValue(supabaseFull)
 

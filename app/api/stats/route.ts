@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
     const { puzzleId, score, rarityScore } = await request.json()
     const resolvedSession = resolveAnonymousSession(request)
 
-    const { data: existingCompletion, error: existingCompletionError } = await supabase
+    const { error: existingCompletionError } = await supabase
       .from('puzzle_completions')
       .select('session_id')
       .eq('puzzle_id', puzzleId)
@@ -224,8 +224,6 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingCompletionError) throw existingCompletionError
-
-    const isNewCompletion = !existingCompletion
 
     const { error } = await supabase.from('puzzle_completions').upsert({
       puzzle_id: puzzleId,
@@ -235,27 +233,6 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) throw error
-
-    if (isNewCompletion) {
-      const { data: correctGuesses, error: guessesError } = await supabase
-        .from('guesses')
-        .select('cell_index,game_id,game_name,game_image')
-        .eq('puzzle_id', puzzleId)
-        .eq('session_id', resolvedSession.sessionId)
-        .eq('is_correct', true)
-
-      if (guessesError) throw guessesError
-
-      for (const guess of correctGuesses ?? []) {
-        await supabase.rpc('increment_answer_stat', {
-          p_puzzle_id: puzzleId,
-          p_cell_index: guess.cell_index,
-          p_game_id: guess.game_id,
-          p_game_name: guess.game_name,
-          p_game_image: guess.game_image,
-        })
-      }
-    }
 
     return applyAnonymousSessionCookie(
       NextResponse.json({ success: true }),

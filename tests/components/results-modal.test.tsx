@@ -175,4 +175,71 @@ describe('ResultsModal', () => {
     expect(incorrectRow).toHaveAttribute('data-selected-by-player', 'false')
     expect(within(incorrectRow as HTMLElement).getByText('25% of players')).toBeInTheDocument()
   })
+
+  it('shows uniqueness score across all 9 cells with misses counting as zero', async () => {
+    fetchMock.mockResolvedValueOnce({
+      json: async () => ({
+        cellStats: {
+          0: {
+            correct: [
+              {
+                puzzle_id: 'daily-2026-03-28',
+                cell_index: 0,
+                game_id: 1,
+                game_name: 'Final Fantasy VII',
+                game_image: null,
+                count: 1,
+              },
+              {
+                puzzle_id: 'daily-2026-03-28',
+                cell_index: 0,
+                game_id: 9,
+                game_name: 'Vagrant Story',
+                game_image: null,
+                count: 1,
+              },
+            ],
+            incorrect: [],
+          },
+        },
+        totalCompletions: 2,
+        dailySummary: {
+          currentStreak: 3,
+          bestStreak: 8,
+          completedCount: 17,
+          perfectCount: 4,
+        },
+      }),
+    })
+
+    const guesses: (CellGuess | null)[] = [
+      {
+        gameId: 1,
+        gameName: 'Final Fantasy VII',
+        gameImage: null,
+        isCorrect: true,
+      },
+      ...Array(8).fill(null),
+    ]
+
+    render(
+      <ResultsModal
+        isOpen
+        onClose={() => {}}
+        guesses={guesses}
+        puzzleId="daily-2026-03-28"
+        puzzleDate="2026-03-28"
+        rowCategories={rowCategories}
+        colCategories={colCategories}
+        isDaily
+        onPlayAgain={() => {}}
+      />
+    )
+
+    expect(await screen.findByText('Uniqueness Score')).toBeInTheDocument()
+    expect(screen.getByText('11.1')).toBeInTheDocument()
+    expect(
+      screen.getByText('Higher = more unique correct answers, with misses counting as zero')
+    ).toBeInTheDocument()
+  })
 })

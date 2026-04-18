@@ -13,6 +13,15 @@ interface GuessStatRow {
   count: number
 }
 
+interface CompletedGuessRow {
+  cell_index: number
+  game_id: number
+  game_name: string
+  game_image: string | null
+  is_correct: boolean
+  session_id: string
+}
+
 export async function GET(request: NextRequest) {
   const logger = createRequestLogger()
   const supabase = await createClient()
@@ -49,19 +58,7 @@ export async function GET(request: NextRequest) {
         )
     )
 
-    // answer_stats is a pre-aggregated table updated by a DB trigger on insert to guesses.
-    // Correct counts here are only as fresh as that trigger; incorrect counts below come
-    // from guesses directly and are always live.
-    const { data: correctAnswerRows, error: correctAnswerError } = await supabase
-      .from('answer_stats')
-      .select('puzzle_id,cell_index,game_id,game_name,game_image,count')
-      .eq('puzzle_id', puzzleId)
-
-    if (correctAnswerError) {
-      logger.warn('Answer stats unavailable', { message: correctAnswerError.message })
-    }
-
-    let incorrectGuessRows:
+    let guessRows:
       | {
           cell_index: number
           game_id: number
@@ -72,50 +69,35 @@ export async function GET(request: NextRequest) {
         }[]
       | null = null
 
-    const incorrectGuessResponse = await supabase
+    const guessResponse = await supabase
       .from('guesses')
       .select('cell_index,game_id,game_name,game_image,is_correct,session_id')
       .eq('puzzle_id', puzzleId)
-      .eq('is_correct', false)
 
-    if (incorrectGuessResponse.error) {
-      logger.warn('Incorrect guess stats unavailable', {
-        message: incorrectGuessResponse.error.message,
+    if (guessResponse.error) {
+      logger.warn('Guess stats unavailable', {
+        message: guessResponse.error.message,
       })
     } else {
-      incorrectGuessRows = incorrectGuessResponse.data
+      guessRows = guessResponse.data
     }
 
-    const completedIncorrectGuessRows = (incorrectGuessRows ?? []).filter(
-      (
-        guess
-      ): guess is {
-        cell_index: number
-        game_id: number
-        game_name: string
-        game_image: string | null
-        is_correct: boolean
-        session_id: string
-      } => (guess.session_id ? completedSessionIds.has(guess.session_id) : false)
+    const completedGuessRows = (guessRows ?? []).filter((guess): guess is CompletedGuessRow =>
+      guess.session_id ? completedSessionIds.has(guess.session_id) : false
     )
 
-    const correctStatsMap = new Map<number, GuessStatRow[]>()
+    const correctStatsMap = new Map<string, GuessStatRow & { sessionIds: Set<string> }>()
     const incorrectStatsMap = new Map<string, GuessStatRow & { sessionIds: Set<string> }>()
-    for (const stat of correctAnswerRows ?? []) {
-      const current = correctStatsMap.get(stat.cell_index) ?? []
-      current.push(stat)
-      correctStatsMap.set(stat.cell_index, current)
-    }
-    for (const guess of completedIncorrectGuessRows) {
+    for (const guess of completedGuessRows) {
       const key = `${guess.cell_index}:${guess.game_id}`
-
-      const existing = incorrectStatsMap.get(key)
+      const targetMap = guess.is_correct ? correctStatsMap : incorrectStatsMap
+      const existing = targetMap.get(key)
 
       if (existing) {
         existing.sessionIds.add(guess.session_id)
         existing.count = existing.sessionIds.size
       } else {
-        incorrectStatsMap.set(key, {
+        targetMap.set(key, {
           puzzle_id: puzzleId,
           cell_index: guess.cell_index,
           game_id: guess.game_id,
@@ -131,9 +113,17 @@ export async function GET(request: NextRequest) {
     const cellStats: Record<number, { correct: GuessStatRow[]; incorrect: GuessStatRow[] }> = {}
     for (let i = 0; i < 9; i++) {
       cellStats[i] = {
-        correct: [...(correctStatsMap.get(i) ?? [])].sort(
-          (left, right) => right.count - left.count
-        ),
+        correct: Array.from(correctStatsMap.values())
+          .filter((s) => s.cell_index === i)
+          .map((stat) => ({
+            puzzle_id: stat.puzzle_id,
+            cell_index: stat.cell_index,
+            game_id: stat.game_id,
+            game_name: stat.game_name,
+            game_image: stat.game_image,
+            count: stat.count,
+          }))
+          .sort((left, right) => right.count - left.count),
         incorrect: Array.from(incorrectStatsMap.values())
           .filter((s) => s.cell_index === i)
           .map((stat) => ({

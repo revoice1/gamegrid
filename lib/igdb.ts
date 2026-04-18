@@ -1145,7 +1145,7 @@ async function queryIGDBGamesByIds(gameIds: number[]): Promise<IGDBGame[]> {
   ].join(' ')
 
   const results = await queryIGDB<IGDBGame>('games', query)
-  const officialResults = results.filter(isOfficialCatalogGame)
+  const officialResults = results.filter((game) => isOfficialCatalogGame(game))
   const resultMap = new Map(officialResults.map((game) => [game.id, game]))
 
   for (const gameId of uniqueIds) {

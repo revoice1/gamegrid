@@ -1348,6 +1348,7 @@ export async function searchIGDBGames(
   }
 
   const allowUnratedFallback = options?.allowUnratedFallback ?? false
+  const primarySearchOptions = allowUnratedFallback ? { requireRating: false } : undefined
 
   const runSearch = async (
     searchTerm: string,
@@ -1449,47 +1450,11 @@ export async function searchIGDBGames(
     }
   }
 
-  const primaryVisibleResults = await gatherVisibleResults()
-  const unratedFallbackResults =
-    allowUnratedFallback && primaryVisibleResults.primarySearchGameCount < 5
-      ? await gatherVisibleResults(
-          { requireRating: false },
-          { allowFallbackTerms: primaryVisibleResults.results.length === 0 }
-        )
-      : null
-
-  const combinedVisibleResults = Array.from(
-    new Map(
-      [...primaryVisibleResults.results, ...(unratedFallbackResults?.results ?? [])].map(
-        (result) => [result.id, result]
-      )
-    ).values()
-  )
-  const combinedAltMatchedGameIds = new Set<number>([
-    ...primaryVisibleResults.altMatchedGameIds,
-    ...(unratedFallbackResults?.altMatchedGameIds ?? []),
-  ])
-  const combinedAltMatchedNames = new Map<number, string>(primaryVisibleResults.altMatchedNames)
-  for (const [gameId, alternativeName] of unratedFallbackResults?.altMatchedNames ?? []) {
-    const betterName = pickBetterAlternativeNameMatch(
-      query,
-      combinedAltMatchedNames.get(gameId),
-      alternativeName
-    )
-    if (betterName) {
-      combinedAltMatchedNames.set(gameId, betterName)
-    }
-  }
-
   const {
     results: visibleResults,
     altMatchedGameIds,
     altMatchedNames,
-  } = {
-    results: combinedVisibleResults,
-    altMatchedGameIds: combinedAltMatchedGameIds,
-    altMatchedNames: combinedAltMatchedNames,
-  }
+  } = await gatherVisibleResults(primarySearchOptions)
   const rankedResults = visibleResults.sort(
     (left, right) =>
       scoreSearchCandidate(right, query, altMatchedGameIds) -

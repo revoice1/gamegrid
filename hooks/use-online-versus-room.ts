@@ -36,6 +36,7 @@ export interface UseOnlineVersusRoomReturn {
   phase: OnlineVersusPhase
   room: VersusRoom | null
   myRole: RoomPlayer | null
+  isHost: boolean
   opponentReady: boolean
   events: OnlineVersusEvent[]
   errorMessage: string | null
@@ -97,6 +98,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   const [phase, setPhase] = useState<OnlineVersusPhase>('idle')
   const [room, setRoom] = useState<VersusRoom | null>(null)
   const [myRole, setMyRole] = useState<RoomPlayer | null>(null)
+  const [isHost, setIsHost] = useState(false)
   const [opponentReady, setOpponentReady] = useState(false)
   const [events, setEvents] = useState<OnlineVersusEvent[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -105,6 +107,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
   const roomRef = useRef<VersusRoom | null>(null)
   const myRoleRef = useRef<RoomPlayer | null>(null)
+  const isHostRef = useRef(false)
   const eventsRef = useRef<OnlineVersusEvent[]>([])
   // Set synchronously on mount (before any async fetch) if localStorage has an
   // in-progress room. The ?join= effect reads this to avoid a double-join race.
@@ -125,6 +128,9 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   useEffect(() => {
     myRoleRef.current = myRole
   }, [myRole])
+  useEffect(() => {
+    isHostRef.current = isHost
+  }, [isHost])
   useEffect(() => {
     eventsRef.current = events
   }, [events])
@@ -325,8 +331,10 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         }
         const rejoined = json.room as VersusRoom
         const role = json.role as RoomPlayer
+        const nextIsHost = json.isHost === true
         setRoom(rejoined)
         setMyRole(role)
+        setIsHost(nextIsHost)
         if (rejoined.status === 'finished') {
           clearRoomEntry()
           setPhase('finished')
@@ -403,6 +411,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         const role: RoomPlayer = 'x'
         setRoom(newRoom)
         setMyRole(role)
+        setIsHost(true)
         setPhase('lobby')
         saveRoomEntry(newRoom.code, role)
         subscribeToRoom(newRoom)
@@ -433,8 +442,10 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
 
         const joinedRoom = json.room as VersusRoom
         const role = json.role as RoomPlayer
+        const nextIsHost = json.isHost === true
         setRoom(joinedRoom)
         setMyRole(role)
+        setIsHost(nextIsHost)
         setOpponentReady(role === 'o')
         setPhase(joinedRoom.status === 'active' ? 'active' : 'lobby')
         saveRoomEntry(joinedRoom.code, role)
@@ -604,10 +615,12 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
       const continuedRoom = json.room as VersusRoom | undefined
       const nextRole =
         json.role === 'x' || json.role === 'o' ? (json.role as RoomPlayer) : myRoleRef.current
+      const nextIsHost = json.isHost === true ? true : isHostRef.current
       if (continuedRoom) {
         setRoom(continuedRoom)
         setPhase('active')
         setOpponentReady(true)
+        setIsHost(nextIsHost)
         if (nextRole) {
           setMyRole(nextRole)
           saveRoomEntry(continuedRoom.code, nextRole)
@@ -630,6 +643,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     setPhase('idle')
     setRoom(null)
     setMyRole(null)
+    setIsHost(false)
     setOpponentReady(false)
     setEvents([])
     setErrorMessage(null)
@@ -640,6 +654,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     phase,
     room,
     myRole,
+    isHost,
     opponentReady,
     events,
     errorMessage,

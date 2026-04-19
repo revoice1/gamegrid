@@ -94,6 +94,7 @@ describe('useOnlineVersusRoom', () => {
     expect(result.current.phase).toBe('idle')
     expect(result.current.room).toBeNull()
     expect(result.current.myRole).toBeNull()
+    expect(result.current.isHost).toBe(false)
     expect(result.current.events).toEqual([])
     expect(result.current.errorMessage).toBeNull()
     expect(result.current.isHydratingHistory).toBe(false)
@@ -116,6 +117,7 @@ describe('useOnlineVersusRoom', () => {
 
       expect(result.current.phase).toBe('lobby')
       expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
       expect(localStorage.getItem('gg_online_versus_room')).not.toBeNull()
     })
 
@@ -154,7 +156,7 @@ describe('useOnlineVersusRoom', () => {
   describe('joinRoom', () => {
     it('transitions to lobby for a waiting room', async () => {
       vi.spyOn(global, 'fetch').mockResolvedValue(
-        makeJsonResponse({ room: makeRoom({ status: 'waiting' }), role: 'o' })
+        makeJsonResponse({ room: makeRoom({ status: 'waiting' }), role: 'o', isHost: false })
       )
 
       const { result } = renderHook(() => useOnlineVersusRoom())
@@ -165,11 +167,12 @@ describe('useOnlineVersusRoom', () => {
 
       expect(result.current.phase).toBe('lobby')
       expect(result.current.myRole).toBe('o')
+      expect(result.current.isHost).toBe(false)
     })
 
     it('transitions to active for an already-active room', async () => {
       vi.spyOn(global, 'fetch').mockResolvedValue(
-        makeJsonResponse({ room: makeActiveRoom(), role: 'o' })
+        makeJsonResponse({ room: makeActiveRoom(), role: 'o', isHost: false })
       )
 
       const { result } = renderHook(() => useOnlineVersusRoom())
@@ -179,6 +182,7 @@ describe('useOnlineVersusRoom', () => {
       })
 
       expect(result.current.phase).toBe('active')
+      expect(result.current.isHost).toBe(false)
     })
 
     it('transitions to error on API failure', async () => {
@@ -210,7 +214,7 @@ describe('useOnlineVersusRoom', () => {
 
     it('returns { ok: true } after a successful join', async () => {
       vi.spyOn(global, 'fetch').mockResolvedValueOnce(
-        makeJsonResponse({ room: makeActiveRoom(), role: 'x' })
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
       )
 
       const { result } = renderHook(() => useOnlineVersusRoom())
@@ -429,19 +433,22 @@ describe('useOnlineVersusRoom', () => {
   })
 
   describe('continueRoom', () => {
-    it('updates the local role when the continued room returns a swapped side', async () => {
+    it('keeps the host as the room owner while updating their side for the next match', async () => {
       const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
         const url = String(input)
 
         if (url === '/api/versus/room/ABCD/join') {
-          return Promise.resolve(makeJsonResponse({ room: makeActiveRoom(), role: 'o' }))
+          return Promise.resolve(
+            makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+          )
         }
 
         if (url === '/api/versus/room/ABCD/continue') {
           return Promise.resolve(
             makeJsonResponse({
               room: makeActiveRoom({ match_number: 2 }),
-              role: 'x',
+              role: 'o',
+              isHost: true,
             })
           )
         }
@@ -455,7 +462,8 @@ describe('useOnlineVersusRoom', () => {
         await result.current.joinRoom('ABCD')
       })
 
-      expect(result.current.myRole).toBe('o')
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
 
       await act(async () => {
         await result.current.continueRoom()
@@ -465,9 +473,10 @@ describe('useOnlineVersusRoom', () => {
         method: 'POST',
       })
       expect(result.current.phase).toBe('active')
-      expect(result.current.myRole).toBe('x')
+      expect(result.current.myRole).toBe('o')
+      expect(result.current.isHost).toBe(true)
       expect(result.current.room?.match_number).toBe(2)
-      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"x"')
+      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
     })
   })
 

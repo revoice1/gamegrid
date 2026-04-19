@@ -34,6 +34,7 @@ interface GameHeaderProps {
   score: number
   currentPlayer?: 'x' | 'o' | null
   myOnlineRole?: 'x' | 'o' | null
+  isOnlineHost?: boolean
   winner?: 'x' | 'o' | 'draw' | null
   versusRecord?: { xWins: number; oWins: number }
   versusObjectionRule?: VersusObjectionRule
@@ -60,6 +61,7 @@ export function GameHeader({
   score,
   currentPlayer = null,
   myOnlineRole = null,
+  isOnlineHost = false,
   winner = null,
   versusRecord = { xWins: 0, oWins: 0 },
   versusObjectionRule = 'off',
@@ -86,8 +88,7 @@ export function GameHeader({
   const poolLabel = hasActiveCustomSetup ? 'Custom' : 'Standard'
   const versusTurnLabel = winner === 'draw' ? 'Result' : winner ? 'Winner' : 'Turn'
   const versusTurnValue = winner === 'draw' ? 'Tie' : (winner ?? currentPlayer ?? 'x').toUpperCase()
-  const canContinueOnlineRoom =
-    myOnlineRole !== null && (winner === 'draw' ? myOnlineRole === 'x' : myOnlineRole === winner)
+  const canContinueOnlineRoom = myOnlineRole !== null && isOnlineHost && winner !== null
   const objectionTokenCount =
     versusObjectionRule === 'three' ? 3 : versusObjectionRule === 'one' ? 1 : 0
   const utilityButtons = (

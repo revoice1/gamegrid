@@ -3603,8 +3603,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   }, [onlineVersus, resetOnlineVersusSession, toast, commitVersusEventLog])
 
   const canContinueOnlineRoom =
-    onlineVersus.myRole !== null &&
-    (winner === 'draw' ? onlineVersus.myRole === 'x' : onlineVersus.myRole === winner)
+    onlineVersus.myRole !== null && onlineVersus.isHost && winner !== null
 
   const handleContinueOnlineRoom = useCallback(() => {
     activePuzzleLoadControllerRef.current?.abort()
@@ -4128,6 +4127,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           score={score}
           currentPlayer={isVersusMode ? currentPlayer : null}
           myOnlineRole={onlineVersus.myRole}
+          isOnlineHost={onlineVersus.isHost}
           winner={isVersusMode ? winner : null}
           versusRecord={versusRecord}
           versusObjectionRule={versusObjectionRule}
@@ -4231,12 +4231,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
               ? onlineVersus.myRole
                 ? canContinueOnlineRoom
                   ? 'The online match ended in a draw. Close this dialog to review the finished board, continue in this room, or start a fresh online room.'
-                  : 'The online match ended in a draw. Close this dialog to review the finished board or start a fresh online room.'
+                  : 'The online match ended in a draw. Close this dialog to review the finished board or wait for the host to continue this room.'
                 : 'The versus match ended in a draw. Close this dialog to review the finished board or start a new match.'
               : onlineVersus.myRole
                 ? canContinueOnlineRoom
                   ? 'The online match is over. Close this dialog to review the finished board, continue in this room, or start a fresh online room.'
-                  : 'The online match is over. Close this dialog to review the finished board or wait for the winner to continue this room.'
+                  : 'The online match is over. Close this dialog to review the finished board or wait for the host to continue this room.'
                 : 'The versus match is over. Close this dialog to review the finished board or start a new match.'}
           </DialogDescription>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
@@ -4250,12 +4250,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
               ? onlineVersus.myRole
                 ? canContinueOnlineRoom
                   ? 'No line was completed before the board filled up. Continue in this room or start a fresh online room to play again.'
-                  : 'No line was completed before the board filled up. Wait for the X player to continue this room or start a fresh online room.'
+                  : 'No line was completed before the board filled up. Wait for the host to continue this room or start a fresh online room.'
                 : 'No line was completed before the board filled up.'
               : onlineVersus.myRole
                 ? canContinueOnlineRoom
                   ? 'Click outside to review the finished board, continue in this room, or start a fresh online room.'
-                  : 'Click outside to review the finished board, or wait for the winner to continue this room.'
+                  : 'Click outside to review the finished board, or wait for the host to continue this room.'
                 : 'Click outside to review the finished board, or start a new match.'}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -4274,7 +4274,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
               </button>
             )}
             <button
-              onClick={onlineVersus.myRole === 'x' ? handleStartFreshOnlineMatch : handleNewGame}
+              onClick={onlineVersus.isHost ? handleStartFreshOnlineMatch : handleNewGame}
               className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {onlineVersus.myRole ? 'New Online Room' : 'New Match'}

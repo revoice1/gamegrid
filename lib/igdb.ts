@@ -116,6 +116,31 @@ interface IGDBAlternativeName {
   comment?: string | null
 }
 
+export type SearchDebugEvent =
+  | {
+      stage: 'primary-search'
+      requireRating: boolean
+      query: string
+      gameCount: number
+      alternativeNameCount: number
+      alternativeMatchCount: number
+      altGameFetchCount: number
+      visibleResultCount: number
+    }
+  | {
+      stage: 'fallback-search'
+      requireRating: boolean
+      query: string
+      fallbackTerm: string
+      gameCount: number
+    }
+  | {
+      stage: 'final-results'
+      query: string
+      resultCount: number
+      altMatchCount: number
+    }
+
 // These caches are intentionally in-memory, so they help on warm Node instances
 // but are not shared across serverless cold starts or between regions.
 let tokenCache: IGDBTokenCache | null = null
@@ -1341,13 +1366,15 @@ export async function getIGDBFamilyNames(gameId: number): Promise<string[]> {
 
 export async function searchIGDBGames(
   query: string,
-  options?: { allowUnratedFallback?: boolean }
+  options?: { allowUnratedFallback?: boolean; onDebugEvent?: (event: SearchDebugEvent) => void }
 ): Promise<Game[]> {
   if (!query.trim()) {
     return []
   }
 
   const allowUnratedFallback = options?.allowUnratedFallback ?? false
+  const onDebugEvent = options?.onDebugEvent
+  const primarySearchOptions = allowUnratedFallback ? { requireRating: false } : undefined
 
   const runSearch = async (
     searchTerm: string,
@@ -1395,6 +1422,7 @@ export async function searchIGDBGames(
     searchOptions?: { requireRating?: boolean },
     gatherOptions?: { allowFallbackTerms?: boolean }
   ) => {
+    const requireRating = searchOptions?.requireRating ?? true
     const primarySearch = await runSearch(query, 30, searchOptions)
     let mergedResults = [...primarySearch.games]
     const altMatchedNames = new Map<number, string>()
@@ -1429,6 +1457,13 @@ export async function searchIGDBGames(
         const fallbackSearch = await runSearch(fallbackTerm, 40, searchOptions, {
           includeAlternativeNames: false,
         })
+        onDebugEvent?.({
+          stage: 'fallback-search',
+          requireRating,
+          query,
+          fallbackTerm,
+          gameCount: fallbackSearch.games.length,
+        })
         mergedResults = [...mergedResults, ...fallbackSearch.games]
 
         if (fallbackSearch.games.length > 0 || mergedResults.length >= 30) {
@@ -1441,43 +1476,24 @@ export async function searchIGDBGames(
       new Map(mergedResults.map((result) => [result.id, result])).values()
     ).filter((result) => isOfficialCatalogGame(result, searchOptions))
 
+    const visibleResults = await hideSameNamePortResults(filteredResults)
+
+    onDebugEvent?.({
+      stage: 'primary-search',
+      requireRating,
+      query,
+      gameCount: primarySearch.games.length,
+      alternativeNameCount: primarySearch.alternativeNames.length,
+      alternativeMatchCount: altMatchedGameIds.size,
+      altGameFetchCount: altMatchedGameIds.size,
+      visibleResultCount: visibleResults.length,
+    })
+
     return {
-      results: await hideSameNamePortResults(filteredResults),
+      results: visibleResults,
       altMatchedGameIds,
       altMatchedNames,
       primarySearchGameCount: primarySearch.games.length,
-    }
-  }
-
-  const primaryVisibleResults = await gatherVisibleResults()
-  const unratedFallbackResults =
-    allowUnratedFallback && primaryVisibleResults.primarySearchGameCount < 5
-      ? await gatherVisibleResults(
-          { requireRating: false },
-          { allowFallbackTerms: primaryVisibleResults.results.length === 0 }
-        )
-      : null
-
-  const combinedVisibleResults = Array.from(
-    new Map(
-      [...primaryVisibleResults.results, ...(unratedFallbackResults?.results ?? [])].map(
-        (result) => [result.id, result]
-      )
-    ).values()
-  )
-  const combinedAltMatchedGameIds = new Set<number>([
-    ...primaryVisibleResults.altMatchedGameIds,
-    ...(unratedFallbackResults?.altMatchedGameIds ?? []),
-  ])
-  const combinedAltMatchedNames = new Map<number, string>(primaryVisibleResults.altMatchedNames)
-  for (const [gameId, alternativeName] of unratedFallbackResults?.altMatchedNames ?? []) {
-    const betterName = pickBetterAlternativeNameMatch(
-      query,
-      combinedAltMatchedNames.get(gameId),
-      alternativeName
-    )
-    if (betterName) {
-      combinedAltMatchedNames.set(gameId, betterName)
     }
   }
 
@@ -1485,18 +1501,14 @@ export async function searchIGDBGames(
     results: visibleResults,
     altMatchedGameIds,
     altMatchedNames,
-  } = {
-    results: combinedVisibleResults,
-    altMatchedGameIds: combinedAltMatchedGameIds,
-    altMatchedNames: combinedAltMatchedNames,
-  }
+  } = await gatherVisibleResults(primarySearchOptions)
   const rankedResults = visibleResults.sort(
     (left, right) =>
       scoreSearchCandidate(right, query, altMatchedGameIds) -
       scoreSearchCandidate(left, query, altMatchedGameIds)
   )
 
-  return rankedResults.slice(0, 15).map((game) => {
+  const finalResults = rankedResults.slice(0, 15).map((game) => {
     const mapped = mapIGDBGameToGame(game)
     const matchedAltName = altMatchedNames.get(game.id) ?? null
     return {
@@ -1507,6 +1519,15 @@ export async function searchIGDBGames(
           : null,
     }
   })
+
+  onDebugEvent?.({
+    stage: 'final-results',
+    query,
+    resultCount: finalResults.length,
+    altMatchCount: altMatchedNames.size,
+  })
+
+  return finalResults
 }
 
 export async function getIGDBGameDetails(gameId: number): Promise<Game | null> {

@@ -20,6 +20,13 @@ interface MembershipResponseShape {
   error?: string
 }
 
+interface JsonRequestResult<T> {
+  ok: boolean
+  status: number
+  data: T | null
+  error: string | null
+}
+
 export type OnlineVersusPhase =
   | 'idle'
   | 'creating'
@@ -142,6 +149,39 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     eventsRef.current = events
   }, [events])
 
+  const requestJson = useCallback(
+    async <T>(input: RequestInfo | URL, init?: RequestInit): Promise<JsonRequestResult<T>> => {
+      try {
+        const res = await fetch(input, init)
+        const json = (await res.json()) as T & { error?: string }
+
+        if (!res.ok || json?.error) {
+          return {
+            ok: false,
+            status: res.status,
+            data: null,
+            error: json?.error ?? 'Request failed.',
+          }
+        }
+
+        return {
+          ok: true,
+          status: res.status,
+          data: json,
+          error: null,
+        }
+      } catch {
+        return {
+          ok: false,
+          status: 0,
+          data: null,
+          error: 'Network error.',
+        }
+      }
+    },
+    []
+  )
+
   const applyMembershipResponse = useCallback(
     (options: {
       response: MembershipResponseShape
@@ -202,17 +242,15 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
   const refreshMembershipForRoom = useCallback(
     async (code: string, fallbackRoom?: VersusRoom) => {
       try {
-        const res = await fetch(`/api/versus/room/${code}/join`, {
+        const result = await requestJson<MembershipResponseShape>(`/api/versus/room/${code}/join`, {
           method: 'POST',
         })
-        const json = await res.json()
-
-        if (!res.ok || json.error) {
-          throw new Error(json.error ?? 'Failed to refresh room membership.')
+        if (!result.ok || !result.data) {
+          throw new Error(result.error ?? 'Failed to refresh room membership.')
         }
 
         applyMembershipResponse({
-          response: json as MembershipResponseShape,
+          response: result.data,
           fallbackRoom,
           fallbackRole: myRoleRef.current,
           fallbackIsHost: isHostRef.current,
@@ -228,7 +266,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         })
       }
     },
-    [applyMembershipResponse]
+    [applyMembershipResponse, requestJson]
   )
 
   // ── Realtime subscription ─────────────────────────────────────────────────
@@ -420,19 +458,18 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     if (!entry) return
 
     setPhase('joining')
-    fetch(`/api/versus/room/${entry.code}/join`, { method: 'POST' })
-      .then((res) => res.json())
-      .then((json) => {
+    requestJson<MembershipResponseShape>(`/api/versus/room/${entry.code}/join`, { method: 'POST' })
+      .then((result) => {
         isResumingRef.current = false
-        if (json.error || !json.room) {
+        if (!result.ok || !result.data?.room) {
           clearRoomEntry()
-          setErrorMessage(json.error ?? 'Failed to rejoin match.')
+          setErrorMessage(result.error ?? 'Failed to rejoin match.')
           setPhase('error')
           return
         }
-        const rejoined = json.room as VersusRoom
+        const rejoined = result.data.room as VersusRoom
         const membership = applyMembershipResponse({
-          response: json as MembershipResponseShape,
+          response: result.data,
           nextPhase: rejoined.status === 'active' ? 'active' : 'lobby',
           setReadyFromRoom: true,
           clearPersistedEntry: rejoined.status === 'finished',
@@ -455,7 +492,7 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         setErrorMessage('Network error. Please try again.')
         setPhase('error')
       })
-  }, [])
+  }, [applyMembershipResponse, fetchEventHistory, requestJson, subscribeToRoom])
 
   // ── Visibility-based catch-up ─────────────────────────────────────────────
   // When the tab/app becomes visible again (phone waking from sleep, user
@@ -495,33 +532,31 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
       setPhase('creating')
       setErrorMessage(null)
 
-      try {
-        const res = await fetch('/api/versus/room', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ settings }),
-        })
-        const json = await res.json()
+      const result = await requestJson<{ room?: VersusRoom }>('/api/versus/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      })
 
-        if (!res.ok || json.error) {
-          setErrorMessage(json.error ?? 'Failed to create match.')
-          setPhase('error')
-          return
-        }
-
-        const newRoom = json.room as VersusRoom
-        applyMembershipResponse({
-          response: { room: newRoom, role: 'x', isHost: true },
-          nextPhase: 'lobby',
-          persistCode: newRoom.code,
-        })
-        subscribeToRoom(newRoom)
-      } catch {
-        setErrorMessage('Network error. Please try again.')
+      if (!result.ok || !result.data?.room) {
+        setErrorMessage(
+          result.error === 'Network error.'
+            ? 'Network error. Please try again.'
+            : (result.error ?? 'Failed to create match.')
+        )
         setPhase('error')
+        return
       }
+
+      const newRoom = result.data.room
+      applyMembershipResponse({
+        response: { room: newRoom, role: 'x', isHost: true },
+        nextPhase: 'lobby',
+        persistCode: newRoom.code,
+      })
+      subscribeToRoom(newRoom)
     },
-    [subscribeToRoom]
+    [applyMembershipResponse, requestJson, subscribeToRoom]
   )
 
   const joinRoom = useCallback(
@@ -529,37 +564,38 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
       setPhase('joining')
       setErrorMessage(null)
 
-      try {
-        const res = await fetch(`/api/versus/room/${code.toUpperCase()}/join`, {
+      const result = await requestJson<MembershipResponseShape>(
+        `/api/versus/room/${code.toUpperCase()}/join`,
+        {
           method: 'POST',
-        })
-        const json = await res.json()
-
-        if (!res.ok || json.error) {
-          setErrorMessage(json.error ?? 'Failed to join match.')
-          setPhase('error')
-          return
         }
+      )
 
-        const joinedRoom = json.room as VersusRoom
-        const membership = applyMembershipResponse({
-          response: json as MembershipResponseShape,
-          nextPhase: joinedRoom.status === 'active' ? 'active' : 'lobby',
-          persistCode: joinedRoom.code,
-        })
-        setOpponentReady((membership.role ?? null) === 'o')
-        subscribeToRoom(joinedRoom)
-        // Legacy fallback: rooms without a canonical snapshot still reconstruct
-        // from event history. Snapshot-backed rooms hydrate directly from state_data.
-        if (!joinedRoom.state_data) {
-          fetchEventHistory(joinedRoom.id)
-        }
-      } catch {
-        setErrorMessage('Network error. Please try again.')
+      if (!result.ok || !result.data?.room) {
+        setErrorMessage(
+          result.error === 'Network error.'
+            ? 'Network error. Please try again.'
+            : (result.error ?? 'Failed to join match.')
+        )
         setPhase('error')
+        return
+      }
+
+      const joinedRoom = result.data.room
+      const membership = applyMembershipResponse({
+        response: result.data,
+        nextPhase: joinedRoom.status === 'active' ? 'active' : 'lobby',
+        persistCode: joinedRoom.code,
+      })
+      setOpponentReady((membership.role ?? null) === 'o')
+      subscribeToRoom(joinedRoom)
+      // Legacy fallback: rooms without a canonical snapshot still reconstruct
+      // from event history. Snapshot-backed rooms hydrate directly from state_data.
+      if (!joinedRoom.state_data) {
+        fetchEventHistory(joinedRoom.id)
       }
     },
-    [subscribeToRoom, fetchEventHistory]
+    [applyMembershipResponse, fetchEventHistory, requestJson, subscribeToRoom]
   )
 
   const sendEvent = useCallback(
@@ -705,29 +741,27 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     const currentRoom = roomRef.current
     if (!currentRoom) return { ok: false, error: 'Not in a match.' }
 
-    try {
-      const res = await fetch(`/api/versus/room/${currentRoom.code}/continue`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok || json.error) {
-        return { ok: false, error: json.error ?? 'Failed to continue match.' }
-      }
-      const continuedRoom = json.room as VersusRoom | undefined
-      if (continuedRoom) {
-        setOpponentReady(true)
-      }
-      applyMembershipResponse({
-        response: json as MembershipResponseShape,
-        fallbackRole: myRoleRef.current,
-        fallbackIsHost: isHostRef.current,
-        nextPhase: 'active',
-        persistCode: continuedRoom?.code ?? currentRoom.code,
-      })
-      setEvents([])
-      return { ok: true, error: null }
-    } catch {
-      return { ok: false, error: 'Network error.' }
+    const result = await requestJson<MembershipResponseShape>(
+      `/api/versus/room/${currentRoom.code}/continue`,
+      { method: 'POST' }
+    )
+    if (!result.ok || !result.data) {
+      return { ok: false, error: result.error ?? 'Failed to continue match.' }
     }
-  }, [applyMembershipResponse])
+    const continuedRoom = result.data.room as VersusRoom | undefined
+    if (continuedRoom) {
+      setOpponentReady(true)
+    }
+    applyMembershipResponse({
+      response: result.data,
+      fallbackRole: myRoleRef.current,
+      fallbackIsHost: isHostRef.current,
+      nextPhase: 'active',
+      persistCode: continuedRoom?.code ?? currentRoom.code,
+    })
+    setEvents([])
+    return { ok: true, error: null }
+  }, [applyMembershipResponse, requestJson])
 
   const reset = useCallback(() => {
     const supabase = createClient()

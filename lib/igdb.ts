@@ -1391,7 +1391,10 @@ export async function searchIGDBGames(
     return { games, alternativeNames }
   }
 
-  const gatherVisibleResults = async (searchOptions?: { requireRating?: boolean }) => {
+  const gatherVisibleResults = async (
+    searchOptions?: { requireRating?: boolean },
+    gatherOptions?: { allowFallbackTerms?: boolean }
+  ) => {
     const primarySearch = await runSearch(query, 30, searchOptions)
     let mergedResults = [...primarySearch.games]
     const altMatchedNames = new Map<number, string>()
@@ -1419,9 +1422,10 @@ export async function searchIGDBGames(
       mergedResults = [...mergedResults, ...altGames]
     }
 
-    if (primarySearch.games.length < 5) {
+    const allowFallbackTerms = gatherOptions?.allowFallbackTerms ?? true
+    if (allowFallbackTerms && primarySearch.games.length < 5) {
       const fallbackTerms = getFallbackSearchTerms(query)
-      for (const fallbackTerm of fallbackTerms.slice(0, 2)) {
+      for (const fallbackTerm of fallbackTerms.slice(0, 1)) {
         const fallbackSearch = await runSearch(fallbackTerm, 40, searchOptions, {
           includeAlternativeNames: false,
         })
@@ -1448,7 +1452,10 @@ export async function searchIGDBGames(
   const primaryVisibleResults = await gatherVisibleResults()
   const unratedFallbackResults =
     allowUnratedFallback && primaryVisibleResults.primarySearchGameCount < 5
-      ? await gatherVisibleResults({ requireRating: false })
+      ? await gatherVisibleResults(
+          { requireRating: false },
+          { allowFallbackTerms: primaryVisibleResults.results.length === 0 }
+        )
       : null
 
   const combinedVisibleResults = Array.from(

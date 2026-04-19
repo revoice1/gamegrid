@@ -4,6 +4,7 @@ import {
   getInitialVersusRecord,
   hasNonEmptyFilters,
   saveVersusRecord,
+  shouldShowOnlineTurnChangeToast,
   VERSUS_RECORD_KEY,
 } from '@/components/game/game-client-runtime-helpers'
 
@@ -59,5 +60,31 @@ describe('game client runtime helpers', () => {
     sessionStorage.setItem(VERSUS_RECORD_KEY, '{bad json')
 
     expect(getInitialVersusRecord()).toEqual({ xWins: 0, oWins: 0 })
+  })
+
+  it('shows the online turn-change toast whenever turn passes to the local player', () => {
+    expect(
+      shouldShowOnlineTurnChangeToast({
+        suppressReplayEffects: false,
+        nextPlayer: 'x',
+        myRole: 'x',
+      })
+    ).toBe(true)
+
+    expect(
+      shouldShowOnlineTurnChangeToast({
+        suppressReplayEffects: false,
+        nextPlayer: 'o',
+        myRole: 'x',
+      })
+    ).toBe(false)
+
+    expect(
+      shouldShowOnlineTurnChangeToast({
+        suppressReplayEffects: true,
+        nextPlayer: 'x',
+        myRole: 'x',
+      })
+    ).toBe(false)
   })
 })

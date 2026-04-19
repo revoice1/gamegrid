@@ -8,6 +8,12 @@ export interface VersusRecord {
   oWins: number
 }
 
+export interface OnlineTurnChangeToastParams {
+  suppressReplayEffects: boolean
+  nextPlayer: 'x' | 'o' | null
+  myRole: 'x' | 'o' | null
+}
+
 export const VERSUS_RECORD_KEY = 'gamegrid_versus_record'
 
 let sharedVersusAudioContext: AudioContext | null = null
@@ -247,6 +253,14 @@ export function saveVersusRecord(record: VersusRecord) {
   } catch {
     // Ignore storage failures and keep the in-memory record.
   }
+}
+
+export function shouldShowOnlineTurnChangeToast({
+  suppressReplayEffects,
+  nextPlayer,
+  myRole,
+}: OnlineTurnChangeToastParams): boolean {
+  return !suppressReplayEffects && nextPlayer !== null && myRole !== null && nextPlayer === myRole
 }
 
 export function buildMissReason(

@@ -135,97 +135,136 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     eventsRef.current = events
   }, [events])
 
+  const refreshMembershipForRoom = useCallback(async (code: string, fallbackRoom?: VersusRoom) => {
+    try {
+      const res = await fetch(`/api/versus/room/${code}/join`, {
+        method: 'POST',
+      })
+      const json = await res.json()
+
+      if (!res.ok || json.error) {
+        throw new Error(json.error ?? 'Failed to refresh room membership.')
+      }
+
+      const refreshedRoom = (json.room as VersusRoom | undefined) ?? fallbackRoom
+      const role =
+        json.role === 'x' || json.role === 'o' ? (json.role as RoomPlayer) : myRoleRef.current
+      const nextIsHost = json.isHost === true
+
+      if (refreshedRoom) {
+        setRoom(refreshedRoom)
+      }
+      if (role) {
+        setMyRole(role)
+        saveRoomEntry(code, role)
+      }
+      setIsHost(nextIsHost)
+    } catch {
+      if (fallbackRoom) {
+        setRoom(fallbackRoom)
+      }
+      if (myRoleRef.current) {
+        saveRoomEntry(code, myRoleRef.current)
+      }
+    }
+  }, [])
+
   // ── Realtime subscription ─────────────────────────────────────────────────
 
-  const subscribeToRoom = useCallback((targetRoom: VersusRoom) => {
-    const supabase = createClient()
+  const subscribeToRoom = useCallback(
+    (targetRoom: VersusRoom) => {
+      const supabase = createClient()
 
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
 
-    hasConnectedOnceRef.current = false
+      hasConnectedOnceRef.current = false
 
-    const channel = supabase
-      .channel(`versus_room:${targetRoom.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'versus_rooms',
-          filter: `id=eq.${targetRoom.id}`,
-        },
-        (payload) => {
-          const updated = payload.new as VersusRoom
-          const previousMatchNumber = roomRef.current?.match_number ?? null
-          const didAdvanceMatch =
-            previousMatchNumber !== null && previousMatchNumber !== updated.match_number
-          setRoom(updated)
-          if (updated.status === 'active') {
-            if (didAdvanceMatch || (updated.puzzle_id === null && updated.state_data === null)) {
-              setEvents([])
+      const channel = supabase
+        .channel(`versus_room:${targetRoom.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'versus_rooms',
+            filter: `id=eq.${targetRoom.id}`,
+          },
+          (payload) => {
+            const updated = payload.new as VersusRoom
+            const previousMatchNumber = roomRef.current?.match_number ?? null
+            const didAdvanceMatch =
+              previousMatchNumber !== null && previousMatchNumber !== updated.match_number
+            setRoom(updated)
+            if (updated.status === 'active') {
+              if (didAdvanceMatch || (updated.puzzle_id === null && updated.state_data === null)) {
+                setEvents([])
+              }
+              setOpponentReady(true)
+              setPhase('active')
+              if (didAdvanceMatch) {
+                void refreshMembershipForRoom(updated.code, updated)
+              } else if (myRoleRef.current) {
+                saveRoomEntry(updated.code, myRoleRef.current)
+              }
+            } else if (updated.status === 'finished') {
+              setPhase('finished')
+              clearRoomEntry()
             }
-            setOpponentReady(true)
-            setPhase('active')
-            if (myRoleRef.current) {
-              saveRoomEntry(updated.code, myRoleRef.current)
-            }
-          } else if (updated.status === 'finished') {
-            setPhase('finished')
-            clearRoomEntry()
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'versus_events',
-          filter: `room_id=eq.${targetRoom.id}`,
-        },
-        (payload) => {
-          setEvents((prev) => {
-            const incoming = {
-              ...(payload.new as OnlineVersusEvent),
-              source: 'live' as const,
-            }
-            const existingIndex = prev.findIndex((event) => event.id === incoming.id)
-            if (existingIndex === -1) {
-              return [...prev, incoming]
-            }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'versus_events',
+            filter: `room_id=eq.${targetRoom.id}`,
+          },
+          (payload) => {
+            setEvents((prev) => {
+              const incoming = {
+                ...(payload.new as OnlineVersusEvent),
+                source: 'live' as const,
+              }
+              const existingIndex = prev.findIndex((event) => event.id === incoming.id)
+              if (existingIndex === -1) {
+                return [...prev, incoming]
+              }
 
-            const existing = prev[existingIndex]
-            if (existing.source === 'live') {
-              return prev
-            }
+              const existing = prev[existingIndex]
+              if (existing.source === 'live') {
+                return prev
+              }
 
-            const next = [...prev]
-            next[existingIndex] = {
-              ...existing,
-              source: 'live',
-            }
-            return next
-          })
-        }
-      )
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') return
-        if (!hasConnectedOnceRef.current) {
-          // First successful connection — normal path, no catch-up needed.
-          hasConnectedOnceRef.current = true
-          return
-        }
-        // Reconnected after a drop (phone sleep, network blip, etc.).
-        // Refresh the room row first. If the host has a fresh snapshot, prefer
-        // that authoritative state over replaying old events on top of it.
-        void catchUpRoomRef.current(targetRoom.id, targetRoom.code)
-      })
+              const next = [...prev]
+              next[existingIndex] = {
+                ...existing,
+                source: 'live',
+              }
+              return next
+            })
+          }
+        )
+        .subscribe((status) => {
+          if (status !== 'SUBSCRIBED') return
+          if (!hasConnectedOnceRef.current) {
+            // First successful connection — normal path, no catch-up needed.
+            hasConnectedOnceRef.current = true
+            return
+          }
+          // Reconnected after a drop (phone sleep, network blip, etc.).
+          // Refresh the room row first. If the host has a fresh snapshot, prefer
+          // that authoritative state over replaying old events on top of it.
+          void catchUpRoomRef.current(targetRoom.id, targetRoom.code)
+        })
 
-    channelRef.current = channel
-  }, [])
+      channelRef.current = channel
+    },
+    [refreshMembershipForRoom]
+  )
 
   // ── Fetch existing event history ──────────────────────────────────────────
   // Merges by ID so live Realtime inserts that arrive before the HTTP response

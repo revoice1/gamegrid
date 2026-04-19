@@ -4,9 +4,25 @@ import { useOnlineVersusRoom } from '@/hooks/use-online-versus-room'
 import type { RoomSettings } from '@/lib/versus-room'
 
 let capturedSubscribeCallback: ((status: string) => void) | null = null
+let capturedRoomUpdateHandler: ((payload: { new: ReturnType<typeof makeRoom> }) => void) | null =
+  null
 
 const mockChannel = {
-  on: vi.fn().mockReturnThis(),
+  on: vi.fn().mockImplementation((_, config, callback) => {
+    if (
+      config &&
+      typeof config === 'object' &&
+      'event' in config &&
+      config.event === 'UPDATE' &&
+      'table' in config &&
+      config.table === 'versus_rooms'
+    ) {
+      capturedRoomUpdateHandler = callback as (payload: {
+        new: ReturnType<typeof makeRoom>
+      }) => void
+    }
+    return mockChannel
+  }),
   subscribe: vi.fn().mockImplementation((cb?: (status: string) => void) => {
     if (cb) capturedSubscribeCallback = cb
     return mockChannel
@@ -80,7 +96,22 @@ describe('useOnlineVersusRoom', () => {
     vi.resetAllMocks()
     localStorage.clear()
     capturedSubscribeCallback = null
-    mockChannel.on.mockReturnThis()
+    capturedRoomUpdateHandler = null
+    mockChannel.on.mockImplementation((_, config, callback) => {
+      if (
+        config &&
+        typeof config === 'object' &&
+        'event' in config &&
+        config.event === 'UPDATE' &&
+        'table' in config &&
+        config.table === 'versus_rooms'
+      ) {
+        capturedRoomUpdateHandler = callback as (payload: {
+          new: ReturnType<typeof makeRoom>
+        }) => void
+      }
+      return mockChannel
+    })
     mockChannel.subscribe.mockImplementation((cb?: (status: string) => void) => {
       if (cb) capturedSubscribeCallback = cb
       return mockChannel
@@ -477,6 +508,72 @@ describe('useOnlineVersusRoom', () => {
       expect(result.current.isHost).toBe(true)
       expect(result.current.room?.match_number).toBe(2)
       expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
+    })
+
+    it('refreshes the guest role when a rematch advances to a new match', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          if (
+            fetchSpy.mock.calls.filter((call) => String(call[0]) === '/api/versus/room/ABCD/join')
+              .length === 1
+          ) {
+            return Promise.resolve(
+              makeJsonResponse({ room: makeActiveRoom(), role: 'o', isHost: false })
+            )
+          }
+
+          return Promise.resolve(
+            makeJsonResponse({
+              room: makeActiveRoom({
+                match_number: 2,
+                state_data: {
+                  roleAssignments: {
+                    xSessionId: 'session-2',
+                    oSessionId: 'session-1',
+                  },
+                },
+              }),
+              role: 'x',
+              isHost: false,
+            })
+          )
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(result.current.myRole).toBe('o')
+      expect(result.current.isHost).toBe(false)
+
+      act(() => {
+        capturedRoomUpdateHandler?.({
+          new: makeActiveRoom({
+            match_number: 2,
+            state_data: {
+              roleAssignments: {
+                xSessionId: 'session-2',
+                oSessionId: 'session-1',
+              },
+            },
+          }),
+        })
+      })
+
+      await waitFor(() => {
+        expect(result.current.room?.match_number).toBe(2)
+        expect(result.current.myRole).toBe('x')
+      })
+
+      expect(result.current.isHost).toBe(false)
+      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"x"')
     })
   })
 

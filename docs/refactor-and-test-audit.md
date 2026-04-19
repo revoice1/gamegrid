@@ -198,6 +198,15 @@ Still worth adding:
 - Add a regression for "failed final steal with alarms off" so the no-alarm visual/audio path stays intentional.
 - The online rematch/role model now has direct hook and route coverage, plus a lightweight
   runbook (`docs/online-versus-runbook.md`) for symptom-to-log debugging.
+- `useOnlineVersusRoom` request surfaces now have direct hook coverage for:
+  - create/join network failures
+  - continue API and network failures
+  - explicit host ownership refresh
+  - stale auto-resume cleanup
+  - send-event duplicate payload parsing and rejection catch-up
+  - puzzle publish success, idempotent conflict, and failure cases
+  - snapshot save success, timeout, API failure, and network failure
+  - finish success, timeout, API failure, and network failure
 - A richer multi-client browser harness is still the main missing piece for online-versus
   confidence.
 

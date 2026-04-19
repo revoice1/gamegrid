@@ -4142,6 +4142,11 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           onHowToPlay={() => setShowHowToPlay(true)}
           onDailyHistory={mode === 'daily' ? openDailyHistory : undefined}
           onNewGame={mode === 'practice' || mode === 'versus' ? handleNewGame : undefined}
+          onContinueOnlineRoom={
+            mode === 'versus' && onlineVersus.myRole && canContinueOnlineRoom
+              ? handleContinueOnlineRoom
+              : undefined
+          }
           onStartOnlineMatch={
             mode === 'versus' && !onlineVersus.myRole ? handleStartOnlineMatch : undefined
           }

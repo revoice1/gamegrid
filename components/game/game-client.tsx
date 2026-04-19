@@ -25,6 +25,7 @@ import {
   hasNonEmptyFilters,
   primeVersusAudioContext,
   saveVersusRecord,
+  shouldShowOnlineTurnChangeToast,
   type VersusRecord,
 } from './game-client-runtime-helpers'
 import { ModeStartScreen } from './mode-start-screen'
@@ -1099,7 +1100,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           const nextPlayer = missPayload.nextPlayer as TicTacToePlayer
           if (nextPlayer === 'x' || nextPlayer === 'o') {
             setCurrentPlayer(nextPlayer)
-            if (!suppressReplayEffects && event.player !== myRole && nextPlayer === myRole) {
+            if (shouldShowOnlineTurnChangeToast({ suppressReplayEffects, nextPlayer, myRole })) {
               toast({
                 title: 'Your turn',
                 description: 'Your opponent missed. Make your move.',

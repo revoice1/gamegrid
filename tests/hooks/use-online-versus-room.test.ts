@@ -136,6 +136,27 @@ describe('useOnlineVersusRoom', () => {
     expect(result.current.isResuming).toBe(false)
   })
 
+  it('auto-resume clears persisted room state when the saved room already finished', async () => {
+    localStorage.setItem('gg_online_versus_room', JSON.stringify({ code: 'ABCD', role: 'o' }))
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      makeJsonResponse({
+        room: makeRoom({ status: 'finished' }),
+        role: 'o',
+        isHost: false,
+      })
+    )
+
+    const { result } = renderHook(() => useOnlineVersusRoom())
+
+    await waitFor(() => {
+      expect(result.current.phase).toBe('finished')
+    })
+
+    expect(result.current.myRole).toBe('o')
+    expect(result.current.isHost).toBe(false)
+    expect(localStorage.getItem('gg_online_versus_room')).toBeNull()
+  })
+
   describe('createRoom', () => {
     it('transitions to lobby phase and saves room entry on success', async () => {
       vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({ room: makeRoom() }))
@@ -574,6 +595,72 @@ describe('useOnlineVersusRoom', () => {
 
       expect(result.current.isHost).toBe(false)
       expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"x"')
+    })
+
+    it('refreshes the host role while keeping host ownership when a rematch advances', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          if (
+            fetchSpy.mock.calls.filter((call) => String(call[0]) === '/api/versus/room/ABCD/join')
+              .length === 1
+          ) {
+            return Promise.resolve(
+              makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+            )
+          }
+
+          return Promise.resolve(
+            makeJsonResponse({
+              room: makeActiveRoom({
+                match_number: 2,
+                state_data: {
+                  roleAssignments: {
+                    xSessionId: 'session-2',
+                    oSessionId: 'session-1',
+                  },
+                },
+              }),
+              role: 'o',
+              isHost: true,
+            })
+          )
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
+
+      act(() => {
+        capturedRoomUpdateHandler?.({
+          new: makeActiveRoom({
+            match_number: 2,
+            state_data: {
+              roleAssignments: {
+                xSessionId: 'session-2',
+                oSessionId: 'session-1',
+              },
+            },
+          }),
+        })
+      })
+
+      await waitFor(() => {
+        expect(result.current.room?.match_number).toBe(2)
+        expect(result.current.myRole).toBe('o')
+      })
+
+      expect(result.current.isHost).toBe(true)
+      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
     })
   })
 

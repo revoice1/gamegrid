@@ -120,6 +120,7 @@ import { useVersusMatchState } from '@/hooks/use-versus-match-state'
 import { useVersusSetupState } from '@/hooks/use-versus-setup-state'
 import { useVersusTurnTimer } from '@/hooks/use-versus-turn-timer'
 import {
+  getOnlineVersusSnapshotRoleAssignments,
   isOnlineVersusSnapshot,
   type OnlineVersusClaimPayload,
   OnlineVersusEventType,
@@ -779,6 +780,38 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
     [onlineVersus.saveSnapshot]
   )
 
+  const buildOnlineVersusSnapshot = useCallback((): OnlineVersusSnapshot | null => {
+    if (!onlineVersus.room || !puzzle) {
+      return null
+    }
+
+    return {
+      puzzleId: puzzle.id,
+      guesses,
+      guessesRemaining,
+      currentPlayer,
+      winner,
+      stealableCell,
+      pendingFinalSteal,
+      objectionsUsed: versusObjectionsUsed,
+      turnDeadlineAt,
+      turnDurationSeconds: typeof versusTimerOption === 'number' ? versusTimerOption : null,
+      roleAssignments: getOnlineVersusSnapshotRoleAssignments(onlineVersus.room.state_data ?? null),
+    }
+  }, [
+    currentPlayer,
+    guesses,
+    guessesRemaining,
+    onlineVersus.room,
+    pendingFinalSteal,
+    puzzle,
+    stealableCell,
+    turnDeadlineAt,
+    versusObjectionsUsed,
+    versusTimerOption,
+    winner,
+  ])
+
   // Host-only: once the puzzle is generated and loaded locally, publish it to the room once.
   // Guards:
   //   - must be the host for this room
@@ -832,47 +865,25 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       return
     }
 
-    const snapshot: OnlineVersusSnapshot = {
-      puzzleId: puzzle.id,
-      guesses,
-      guessesRemaining,
-      currentPlayer,
-      winner,
-      stealableCell,
-      pendingFinalSteal,
-      objectionsUsed: versusObjectionsUsed,
-      turnDeadlineAt,
-      turnDurationSeconds: typeof versusTimerOption === 'number' ? versusTimerOption : null,
-      roleAssignments:
-        onlineVersus.room?.state_data &&
-        typeof onlineVersus.room.state_data === 'object' &&
-        'roleAssignments' in onlineVersus.room.state_data
-          ? onlineVersus.room.state_data.roleAssignments
-          : undefined,
+    if (!onlineVersus.isHost) {
+      return
     }
 
-    if (!onlineVersus.isHost) {
+    const snapshot = buildOnlineVersusSnapshot()
+    if (!snapshot) {
       return
     }
 
     enqueueSaveSnapshot(snapshot)
   }, [
-    currentPlayer,
+    buildOnlineVersusSnapshot,
     enqueueSaveSnapshot,
-    guesses,
-    guessesRemaining,
     isCurrentOnlineMatch,
     loadedPuzzleMode,
     mode,
     onlineVersus.isHost,
     onlineVersus.room,
-    pendingFinalSteal,
     puzzle,
-    stealableCell,
-    turnDeadlineAt,
-    versusObjectionsUsed,
-    versusTimerOption,
-    winner,
   ])
 
   // ── Apply incoming online opponent events to local board state ──────────────
@@ -1471,23 +1482,10 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
 
     finishedOnlineRoomIdRef.current = onlineVersus.room.id
 
-    const finalSnapshot: OnlineVersusSnapshot = {
-      puzzleId: puzzle.id,
-      guesses,
-      guessesRemaining,
-      currentPlayer,
-      winner,
-      stealableCell,
-      pendingFinalSteal,
-      objectionsUsed: versusObjectionsUsed,
-      turnDeadlineAt,
-      turnDurationSeconds: typeof versusTimerOption === 'number' ? versusTimerOption : null,
-      roleAssignments:
-        onlineVersus.room?.state_data &&
-        typeof onlineVersus.room.state_data === 'object' &&
-        'roleAssignments' in onlineVersus.room.state_data
-          ? onlineVersus.room.state_data.roleAssignments
-          : undefined,
+    const finalSnapshot = buildOnlineVersusSnapshot()
+    if (!finalSnapshot) {
+      finishedOnlineRoomIdRef.current = null
+      return
     }
 
     enqueueSaveSnapshot(finalSnapshot, () => {
@@ -1503,20 +1501,13 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
       })
     })
   }, [
-    currentPlayer,
+    buildOnlineVersusSnapshot,
     enqueueSaveSnapshot,
-    guesses,
-    guessesRemaining,
     isCurrentOnlineMatch,
     mode,
     onlineVersus,
-    pendingFinalSteal,
     puzzle,
-    stealableCell,
     toast,
-    turnDeadlineAt,
-    versusObjectionsUsed,
-    versusTimerOption,
     winner,
   ])
 

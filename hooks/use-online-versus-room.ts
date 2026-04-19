@@ -13,6 +13,13 @@ import type {
 } from '@/lib/versus-room'
 import type { Puzzle } from '@/lib/types'
 
+interface MembershipResponseShape {
+  room?: VersusRoom
+  role?: RoomPlayer
+  isHost?: boolean
+  error?: string
+}
+
 export type OnlineVersusPhase =
   | 'idle'
   | 'creating'
@@ -135,39 +142,94 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
     eventsRef.current = events
   }, [events])
 
-  const refreshMembershipForRoom = useCallback(async (code: string, fallbackRoom?: VersusRoom) => {
-    try {
-      const res = await fetch(`/api/versus/room/${code}/join`, {
-        method: 'POST',
-      })
-      const json = await res.json()
+  const applyMembershipResponse = useCallback(
+    (options: {
+      response: MembershipResponseShape
+      fallbackRoom?: VersusRoom | null
+      fallbackRole?: RoomPlayer | null
+      fallbackIsHost?: boolean
+      nextPhase?: OnlineVersusPhase
+      persistCode?: string | null
+      clearPersistedEntry?: boolean
+      setReadyFromRoom?: boolean
+    }) => {
+      const nextRoom = options.response.room ?? options.fallbackRoom ?? null
+      const nextRole =
+        options.response.role === 'x' || options.response.role === 'o'
+          ? options.response.role
+          : (options.fallbackRole ?? null)
+      const nextIsHost =
+        options.response.isHost === true
+          ? true
+          : options.response.isHost === false
+            ? false
+            : options.fallbackIsHost
 
-      if (!res.ok || json.error) {
-        throw new Error(json.error ?? 'Failed to refresh room membership.')
+      if (nextRoom) {
+        setRoom(nextRoom)
       }
 
-      const refreshedRoom = (json.room as VersusRoom | undefined) ?? fallbackRoom
-      const role =
-        json.role === 'x' || json.role === 'o' ? (json.role as RoomPlayer) : myRoleRef.current
-      const nextIsHost = json.isHost === true
+      if (nextRole) {
+        setMyRole(nextRole)
+      }
 
-      if (refreshedRoom) {
-        setRoom(refreshedRoom)
+      if (typeof nextIsHost === 'boolean') {
+        setIsHost(nextIsHost)
       }
-      if (role) {
-        setMyRole(role)
-        saveRoomEntry(code, role)
+
+      if (options.setReadyFromRoom && nextRoom) {
+        setOpponentReady(nextRoom.status === 'active')
       }
-      setIsHost(nextIsHost)
-    } catch {
-      if (fallbackRoom) {
-        setRoom(fallbackRoom)
+
+      if (options.nextPhase) {
+        setPhase(options.nextPhase)
       }
-      if (myRoleRef.current) {
-        saveRoomEntry(code, myRoleRef.current)
+
+      if (options.clearPersistedEntry) {
+        clearRoomEntry()
+      } else {
+        const persistCode = options.persistCode ?? nextRoom?.code ?? null
+        if (persistCode && nextRole) {
+          saveRoomEntry(persistCode, nextRole)
+        }
       }
-    }
-  }, [])
+
+      return { room: nextRoom, role: nextRole, isHost: nextIsHost }
+    },
+    []
+  )
+
+  const refreshMembershipForRoom = useCallback(
+    async (code: string, fallbackRoom?: VersusRoom) => {
+      try {
+        const res = await fetch(`/api/versus/room/${code}/join`, {
+          method: 'POST',
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.error) {
+          throw new Error(json.error ?? 'Failed to refresh room membership.')
+        }
+
+        applyMembershipResponse({
+          response: json as MembershipResponseShape,
+          fallbackRoom,
+          fallbackRole: myRoleRef.current,
+          fallbackIsHost: isHostRef.current,
+          persistCode: code,
+        })
+      } catch {
+        applyMembershipResponse({
+          response: {},
+          fallbackRoom,
+          fallbackRole: myRoleRef.current,
+          fallbackIsHost: isHostRef.current,
+          persistCode: code,
+        })
+      }
+    },
+    [applyMembershipResponse]
+  )
 
   // ── Realtime subscription ─────────────────────────────────────────────────
 
@@ -369,21 +431,22 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
           return
         }
         const rejoined = json.room as VersusRoom
-        const role = json.role as RoomPlayer
-        const nextIsHost = json.isHost === true
-        setRoom(rejoined)
-        setMyRole(role)
-        setIsHost(nextIsHost)
+        const membership = applyMembershipResponse({
+          response: json as MembershipResponseShape,
+          nextPhase: rejoined.status === 'active' ? 'active' : 'lobby',
+          setReadyFromRoom: true,
+          clearPersistedEntry: rejoined.status === 'finished',
+        })
         if (rejoined.status === 'finished') {
-          clearRoomEntry()
           setPhase('finished')
           return
         }
-        setOpponentReady(rejoined.status === 'active')
-        setPhase(rejoined.status === 'active' ? 'active' : 'lobby')
         subscribeToRoom(rejoined)
         if (!rejoined.state_data) {
           fetchEventHistory(rejoined.id)
+        }
+        if (!membership.role) {
+          clearRoomEntry()
         }
       })
       .catch(() => {
@@ -447,12 +510,11 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         }
 
         const newRoom = json.room as VersusRoom
-        const role: RoomPlayer = 'x'
-        setRoom(newRoom)
-        setMyRole(role)
-        setIsHost(true)
-        setPhase('lobby')
-        saveRoomEntry(newRoom.code, role)
+        applyMembershipResponse({
+          response: { room: newRoom, role: 'x', isHost: true },
+          nextPhase: 'lobby',
+          persistCode: newRoom.code,
+        })
         subscribeToRoom(newRoom)
       } catch {
         setErrorMessage('Network error. Please try again.')
@@ -480,14 +542,12 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         }
 
         const joinedRoom = json.room as VersusRoom
-        const role = json.role as RoomPlayer
-        const nextIsHost = json.isHost === true
-        setRoom(joinedRoom)
-        setMyRole(role)
-        setIsHost(nextIsHost)
-        setOpponentReady(role === 'o')
-        setPhase(joinedRoom.status === 'active' ? 'active' : 'lobby')
-        saveRoomEntry(joinedRoom.code, role)
+        const membership = applyMembershipResponse({
+          response: json as MembershipResponseShape,
+          nextPhase: joinedRoom.status === 'active' ? 'active' : 'lobby',
+          persistCode: joinedRoom.code,
+        })
+        setOpponentReady((membership.role ?? null) === 'o')
         subscribeToRoom(joinedRoom)
         // Legacy fallback: rooms without a canonical snapshot still reconstruct
         // from event history. Snapshot-backed rooms hydrate directly from state_data.
@@ -652,25 +712,22 @@ export function useOnlineVersusRoom(): UseOnlineVersusRoomReturn {
         return { ok: false, error: json.error ?? 'Failed to continue match.' }
       }
       const continuedRoom = json.room as VersusRoom | undefined
-      const nextRole =
-        json.role === 'x' || json.role === 'o' ? (json.role as RoomPlayer) : myRoleRef.current
-      const nextIsHost = json.isHost === true ? true : isHostRef.current
       if (continuedRoom) {
-        setRoom(continuedRoom)
-        setPhase('active')
         setOpponentReady(true)
-        setIsHost(nextIsHost)
-        if (nextRole) {
-          setMyRole(nextRole)
-          saveRoomEntry(continuedRoom.code, nextRole)
-        }
       }
+      applyMembershipResponse({
+        response: json as MembershipResponseShape,
+        fallbackRole: myRoleRef.current,
+        fallbackIsHost: isHostRef.current,
+        nextPhase: 'active',
+        persistCode: continuedRoom?.code ?? currentRoom.code,
+      })
       setEvents([])
       return { ok: true, error: null }
     } catch {
       return { ok: false, error: 'Network error.' }
     }
-  }, [])
+  }, [applyMembershipResponse])
 
   const reset = useCallback(() => {
     const supabase = createClient()

@@ -107,6 +107,28 @@ export function getOnlineVersusRoleAssignments(
   }
 }
 
+export function getOnlineVersusSnapshotRoleAssignments(
+  state: VersusRoom['state_data']
+): OnlineVersusRoleAssignments | undefined {
+  if (
+    state &&
+    typeof state === 'object' &&
+    'roleAssignments' in state &&
+    state.roleAssignments &&
+    typeof state.roleAssignments === 'object' &&
+    typeof state.roleAssignments.xSessionId === 'string' &&
+    (typeof state.roleAssignments.oSessionId === 'string' ||
+      state.roleAssignments.oSessionId === null)
+  ) {
+    return {
+      xSessionId: state.roleAssignments.xSessionId,
+      oSessionId: state.roleAssignments.oSessionId,
+    }
+  }
+
+  return undefined
+}
+
 /**
  * Events broadcast over Realtime. Mirrors VersusEventRecord from versus-events.ts
  * but scoped to the online room flow (includes ready/rematch lifecycle events).

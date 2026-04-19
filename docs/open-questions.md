@@ -8,6 +8,7 @@ These are the main places where product intent and implementation may still want
 - [Pair Smoothing](#pair-smoothing)
 - [Tag Cleanup](#tag-cleanup)
 - [Daily Midnight Efficiency](#daily-midnight-efficiency)
+- [Online Versus E2E Coverage](#online-versus-e2e-coverage)
 - [Documentation Maintenance](#documentation-maintenance)
 
 ## Platform Count Paths
@@ -32,6 +33,14 @@ These are the main places where product intent and implementation may still want
 - Correctness is protected by the unique daily puzzle row.
 - Expensive generation work can still race at midnight UTC before one insert wins.
 - A future DB lock/claim flow could reduce wasted work.
+
+## Online Versus E2E Coverage
+
+- Unit and route tests cover most of the online authority model now.
+- Full two-client end-to-end room play is still only partially simulated because Supabase Realtime
+  is not present in the current Playwright environment.
+- If online-versus work keeps growing, a richer multi-client test harness or a Realtime-friendly
+  test environment may become worth the setup cost.
 
 ## Documentation Maintenance
 

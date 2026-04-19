@@ -681,6 +681,72 @@ describe('useOnlineVersusRoom', () => {
       expect(result.current.isHost).toBe(true)
       expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
     })
+
+    it('applies an explicit false isHost from membership refresh', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          if (
+            fetchSpy.mock.calls.filter((call) => String(call[0]) === '/api/versus/room/ABCD/join')
+              .length === 1
+          ) {
+            return Promise.resolve(
+              makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+            )
+          }
+
+          return Promise.resolve(
+            makeJsonResponse({
+              room: makeActiveRoom({
+                match_number: 2,
+                state_data: {
+                  roleAssignments: {
+                    xSessionId: 'session-2',
+                    oSessionId: 'session-1',
+                  },
+                },
+              }),
+              role: 'o',
+              isHost: false,
+            })
+          )
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
+
+      act(() => {
+        capturedRoomUpdateHandler?.({
+          new: makeActiveRoom({
+            match_number: 2,
+            state_data: {
+              roleAssignments: {
+                xSessionId: 'session-2',
+                oSessionId: 'session-1',
+              },
+            },
+          }),
+        })
+      })
+
+      await waitFor(() => {
+        expect(result.current.room?.match_number).toBe(2)
+        expect(result.current.myRole).toBe('o')
+      })
+
+      expect(result.current.isHost).toBe(false)
+      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
+    })
   })
 
   describe('catch-up recovery', () => {

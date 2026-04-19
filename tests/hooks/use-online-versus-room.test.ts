@@ -378,6 +378,59 @@ describe('useOnlineVersusRoom', () => {
       expect(urls).toContain('/api/versus/room/ABCD')
       expect(urls).toContain('/api/versus/room-events/room-1')
     })
+
+    it('returns parsed payload, type, and duplicateEvent on success', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        makeJsonResponse({
+          duplicateEvent: true,
+          type: 'objection',
+          payload: { successful: true, cellIndex: 4 },
+        })
+      )
+
+      const res = await result.current.sendEvent('objection', { cellIndex: 4 })
+      expect(res).toEqual({
+        ok: true,
+        error: null,
+        code: null,
+        duplicateEvent: true,
+        payload: { successful: true, cellIndex: 4 },
+        type: 'objection',
+      })
+    })
+
+    it('returns a network error when the event request fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.sendEvent('claim', { cellIndex: 0 })
+      expect(res).toEqual({
+        ok: false,
+        error: 'Network error.',
+        code: null,
+        payload: null,
+        type: null,
+      })
+    })
   })
 
   describe('saveSnapshot', () => {
@@ -460,6 +513,149 @@ describe('useOnlineVersusRoom', () => {
         vi.useRealTimers()
       }
     })
+
+    it('returns the server error when save snapshot is rejected', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x' })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Snapshot match number is stale.' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.saveSnapshot(makeSnapshot())
+      expect(res).toEqual({ ok: false, error: 'Snapshot match number is stale.' })
+    })
+
+    it('returns a network error when snapshot save fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x' })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.saveSnapshot(makeSnapshot())
+      expect(res).toEqual({ ok: false, error: 'Network error.' })
+    })
+  })
+
+  describe('setPuzzle', () => {
+    const puzzlePayload = {
+      title: 'Test Puzzle',
+      categories: [],
+      answers: [],
+    } as unknown as import('@/lib/types').Puzzle
+
+    it('returns { ok: false } when not in a match', async () => {
+      const { result } = renderHook(() => useOnlineVersusRoom())
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res.ok).toBe(false)
+      expect(res.error).toBe('Not in a match.')
+    })
+
+    it('returns { ok: true } after a successful join and puzzle publish', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: true, error: null })
+      expect(fetchSpy).toHaveBeenLastCalledWith(
+        '/api/versus/room/ABCD/puzzle',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            puzzleId: 'p1',
+            puzzle: puzzlePayload,
+            matchNumber: 1,
+          }),
+        })
+      )
+    })
+
+    it('treats an already-set puzzle conflict as success', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Puzzle already set for this match.' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: true, error: null })
+    })
+
+    it('returns an API error when puzzle publish fails for another reason', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Only the host can set the puzzle.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: false, error: 'Only the host can set the puzzle.' })
+    })
+
+    it('returns a network error when puzzle publish fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: false, error: 'Network error.' })
+    })
   })
 
   describe('markFinished', () => {
@@ -468,6 +664,55 @@ describe('useOnlineVersusRoom', () => {
       const res = await result.current.markFinished()
       expect(res.ok).toBe(false)
       expect(res.error).toBe('Not in a match.')
+    })
+
+    it('returns success, flips phase, and clears local storage when finish succeeds', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(localStorage.getItem('gg_online_versus_room')).not.toBeNull()
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
+
+      let res!: Awaited<ReturnType<typeof result.current.markFinished>>
+      await act(async () => {
+        res = await result.current.markFinished()
+      })
+      expect(res).toEqual({ ok: true, error: null })
+      await waitFor(() => {
+        expect(result.current.phase).toBe('finished')
+      })
+      expect(localStorage.getItem('gg_online_versus_room')).toBeNull()
+    })
+
+    it('returns the server error when finish is rejected', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Only the host can end this room.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.markFinished()
+      expect(res).toEqual({ ok: false, error: 'Only the host can end this room.' })
+      expect(result.current.phase).toBe('active')
     })
 
     it('returns { ok: false, error: "Request timed out." } when the fetch is aborted', async () => {
@@ -513,6 +758,23 @@ describe('useOnlineVersusRoom', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('returns a network error when finish fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.markFinished()
+      expect(res).toEqual({ ok: false, error: 'Network error.' })
     })
   })
 

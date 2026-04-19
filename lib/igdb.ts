@@ -1341,13 +1341,14 @@ export async function getIGDBFamilyNames(gameId: number): Promise<string[]> {
 
 export async function searchIGDBGames(
   query: string,
-  options?: { allowUnratedFallback?: boolean }
+  options?: { allowUnratedFallback?: boolean; searchDepth?: 'fast' | 'full' }
 ): Promise<Game[]> {
   if (!query.trim()) {
     return []
   }
 
   const allowUnratedFallback = options?.allowUnratedFallback ?? false
+  const searchDepth = options?.searchDepth ?? 'full'
 
   const runSearch = async (
     searchTerm: string,
@@ -1449,12 +1450,17 @@ export async function searchIGDBGames(
     }
   }
 
-  const primaryVisibleResults = await gatherVisibleResults()
+  const allowBroadFallbacks = searchDepth === 'full'
+  const primaryVisibleResults = await gatherVisibleResults(undefined, {
+    allowFallbackTerms: allowBroadFallbacks,
+  })
   const unratedFallbackResults =
     allowUnratedFallback && primaryVisibleResults.primarySearchGameCount < 5
       ? await gatherVisibleResults(
           { requireRating: false },
-          { allowFallbackTerms: primaryVisibleResults.results.length === 0 }
+          {
+            allowFallbackTerms: allowBroadFallbacks && primaryVisibleResults.results.length === 0,
+          }
         )
       : null
 

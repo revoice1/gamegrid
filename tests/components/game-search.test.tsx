@@ -368,8 +368,11 @@ describe('GameSearch', () => {
     await user.type(screen.getByPlaceholderText('Search for a video game...'), 'wo')
     await screen.findByText('World of Warcraft')
 
-    const requestUrl = String(fetchMock.mock.calls.at(-1)?.[0] ?? '')
-    expect(requestUrl).toContain('mode=daily')
+    const requestUrls = fetchMock.mock.calls.map((call) => String(call[0] ?? ''))
+    expect(requestUrls[0]).toContain('mode=daily')
+    expect(requestUrls[0]).toContain('phase=fast')
+    expect(requestUrls[1]).toContain('mode=daily')
+    expect(requestUrls[1]).toContain('phase=full')
   })
 
   it('includes versus steal state in the API request', async () => {
@@ -395,17 +398,23 @@ describe('GameSearch', () => {
     await user.type(screen.getByPlaceholderText('Search for a video game...'), 'wo')
     await screen.findByText('World of Warcraft')
 
-    const requestUrl = String(fetchMock.mock.calls.at(-1)?.[0] ?? '')
-    expect(requestUrl).toContain('mode=versus')
-    expect(requestUrl).toContain('versusStealsEnabled=false')
+    const requestUrls = fetchMock.mock.calls.map((call) => String(call[0] ?? ''))
+    expect(requestUrls[0]).toContain('mode=versus')
+    expect(requestUrls[0]).toContain('versusStealsEnabled=false')
+    expect(requestUrls[0]).toContain('phase=fast')
+    expect(requestUrls[1]).toContain('mode=versus')
+    expect(requestUrls[1]).toContain('versusStealsEnabled=false')
+    expect(requestUrls[1]).toContain('phase=full')
   })
 
   it('ignores stale search responses when a newer query finishes later', async () => {
     vi.useFakeTimers()
     try {
       type SearchPayload = { results: Game[] }
-      let firstResolve: ((value: SearchPayload) => void) | undefined
-      let secondResolve: ((value: SearchPayload) => void) | undefined
+      let firstFastResolve: ((value: SearchPayload) => void) | undefined
+      let firstFullResolve: ((value: SearchPayload) => void) | undefined
+      let secondFastResolve: ((value: SearchPayload) => void) | undefined
+      let secondFullResolve: ((value: SearchPayload) => void) | undefined
 
       vi.stubGlobal(
         'fetch',
@@ -414,6 +423,7 @@ describe('GameSearch', () => {
             typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
           const url = new URL(rawUrl, 'https://example.com')
           const query = url.searchParams.get('q')
+          const phase = url.searchParams.get('phase')
 
           return new Promise((resolve) => {
             const resolveResponse = (results: { results: Game[] }) =>
@@ -421,12 +431,22 @@ describe('GameSearch', () => {
                 json: async () => results,
               })
 
-            if (query === 'wo') {
-              firstResolve = resolveResponse
+            if (query === 'wo' && phase === 'fast') {
+              firstFastResolve = resolveResponse
               return
             }
 
-            secondResolve = resolveResponse
+            if (query === 'wo' && phase === 'full') {
+              firstFullResolve = resolveResponse
+              return
+            }
+
+            if (query === 'wor' && phase === 'fast') {
+              secondFastResolve = resolveResponse
+              return
+            }
+
+            secondFullResolve = resolveResponse
           })
         })
       )
@@ -448,14 +468,22 @@ describe('GameSearch', () => {
         vi.advanceTimersByTime(450)
       })
 
+      expect(firstFastResolve).toBeDefined()
+      await act(async () => {
+        firstFastResolve?.({
+          results: [fakeGame],
+        })
+        await Promise.resolve()
+      })
+
       fireEvent.change(input, { target: { value: 'wor' } })
       await act(async () => {
         vi.advanceTimersByTime(450)
       })
 
-      expect(secondResolve).toBeDefined()
+      expect(secondFastResolve).toBeDefined()
       await act(async () => {
-        secondResolve?.({
+        secondFastResolve?.({
           results: [{ ...fakeGame, id: 4, name: 'World of Goo', slug: 'world-of-goo' }],
         })
         await Promise.resolve()
@@ -463,16 +491,99 @@ describe('GameSearch', () => {
 
       expect(screen.getByText('World of Goo')).toBeInTheDocument()
 
-      expect(firstResolve).toBeDefined()
+      const staleFullResolve = firstFullResolve
+      if (staleFullResolve) {
+        await act(async () => {
+          staleFullResolve({
+            results: [fakeGame],
+          })
+          await Promise.resolve()
+        })
+
+        expect(screen.getByText('World of Goo')).toBeInTheDocument()
+        expect(screen.queryByText('World of Warcraft')).not.toBeInTheDocument()
+      }
+
+      const freshFullResolve = secondFullResolve
+      if (freshFullResolve) {
+        await act(async () => {
+          freshFullResolve({
+            results: [{ ...fakeGame, id: 4, name: 'World of Goo', slug: 'world-of-goo' }],
+          })
+          await Promise.resolve()
+        })
+
+        expect(screen.getByText('World of Goo')).toBeInTheDocument()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows fast results immediately while refining in the background', async () => {
+    vi.useFakeTimers()
+    try {
+      let fastResolve: ((value: { results: Game[] }) => void) | undefined
+      let fullResolve: ((value: { results: Game[] }) => void) | undefined
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: string | URL | Request) => {
+          const rawUrl =
+            typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+          const url = new URL(rawUrl, 'https://example.com')
+          const phase = url.searchParams.get('phase')
+
+          return new Promise((resolve) => {
+            const resolveResponse = (results: { results: Game[] }) =>
+              resolve({
+                json: async () => results,
+              })
+
+            if (phase === 'fast') {
+              fastResolve = resolveResponse
+              return
+            }
+
+            fullResolve = resolveResponse
+          })
+        })
+      )
+
+      render(
+        <GameSearch
+          isOpen
+          rowCategory={rowCategory}
+          colCategory={colCategory}
+          onSelect={() => {}}
+          onClose={() => {}}
+        />
+      )
+
+      const input = screen.getByPlaceholderText('Search for a video game...')
+      fireEvent.change(input, { target: { value: 'wo' } })
+
       await act(async () => {
-        firstResolve?.({
-          results: [fakeGame],
+        vi.advanceTimersByTime(450)
+      })
+
+      await act(async () => {
+        fastResolve?.({ results: [fakeGame] })
+        await Promise.resolve()
+      })
+
+      expect(screen.getByText('World of Warcraft')).toBeInTheDocument()
+      expect(screen.getByText('Improving results...')).toBeInTheDocument()
+
+      await act(async () => {
+        fullResolve?.({
+          results: [{ ...fakeGame, id: 4, name: 'World of Goo', slug: 'world-of-goo' }],
         })
         await Promise.resolve()
       })
 
       expect(screen.getByText('World of Goo')).toBeInTheDocument()
-      expect(screen.queryByText('World of Warcraft')).not.toBeInTheDocument()
+      expect(screen.queryByText('Improving results...')).not.toBeInTheDocument()
     } finally {
       vi.useRealTimers()
     }

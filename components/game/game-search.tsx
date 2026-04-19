@@ -159,6 +159,7 @@ export function GameSearch({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResultGame[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isRefining, setIsRefining] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [pendingConfirmationId, setPendingConfirmationId] = useState<number | null>(null)
   const [previewGame, setPreviewGame] = useState<Game | null>(null)
@@ -213,6 +214,7 @@ export function GameSearch({
       setSelectedIndex(0)
       setPendingConfirmationId(null)
       setPreviewGame(null)
+      setIsRefining(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [initialQuery, isOpen])
@@ -229,6 +231,7 @@ export function GameSearch({
       if (searchQuery.length < 2) {
         searchAbortRef.current?.abort()
         setIsLoading(false)
+        setIsRefining(false)
         setResults([])
         return
       }
@@ -239,12 +242,9 @@ export function GameSearch({
       const requestId = ++searchRequestIdRef.current
 
       setIsLoading(true)
+      setIsRefining(false)
+      let hasAppliedFastResults = false
       try {
-        const params = new URLSearchParams({ q: searchQuery })
-        params.set('mode', searchMode)
-        if (searchMode === 'versus') {
-          params.set('versusStealsEnabled', String(versusStealsEnabled))
-        }
         const categoryTypes =
           activeCategoryTypesKey.length > 0
             ? activeCategoryTypesKey
@@ -254,26 +254,50 @@ export function GameSearch({
                 Boolean(type)
               )
 
-        if (puzzleId) {
-          params.set('puzzleId', puzzleId)
+        const buildSearchParams = (phase: 'fast' | 'full') => {
+          const params = new URLSearchParams({ q: searchQuery, phase })
+          params.set('mode', searchMode)
+          if (searchMode === 'versus') {
+            params.set('versusStealsEnabled', String(versusStealsEnabled))
+          }
+          if (puzzleId) {
+            params.set('puzzleId', puzzleId)
+          }
+          if (categoryTypes.length > 0) {
+            params.set('categoryTypes', categoryTypes.join(','))
+          }
+          return params
         }
 
-        if (categoryTypes.length > 0) {
-          params.set('categoryTypes', categoryTypes.join(','))
-        }
-
-        const response = await fetch(`/api/search?${params.toString()}`, {
+        const fastResponse = await fetch(`/api/search?${buildSearchParams('fast').toString()}`, {
           signal: controller.signal,
         })
-        const data = await response.json()
+        const fastData = await fastResponse.json()
 
         if (requestId !== searchRequestIdRef.current) {
           return
         }
 
-        setResults(data.results || [])
+        setResults(fastData.results || [])
         setSelectedIndex(0)
         setPendingConfirmationId(null)
+        setIsLoading(false)
+        hasAppliedFastResults = true
+        setIsRefining(true)
+
+        const fullResponse = await fetch(`/api/search?${buildSearchParams('full').toString()}`, {
+          signal: controller.signal,
+        })
+        const fullData = await fullResponse.json()
+
+        if (requestId !== searchRequestIdRef.current) {
+          return
+        }
+
+        setResults(fullData.results || [])
+        setSelectedIndex(0)
+        setPendingConfirmationId(null)
+        setIsRefining(false)
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           return
@@ -284,8 +308,11 @@ export function GameSearch({
         }
 
         console.error('Search error:', error)
-        setResults([])
-        setPendingConfirmationId(null)
+        if (!hasAppliedFastResults) {
+          setResults([])
+          setPendingConfirmationId(null)
+        }
+        setIsRefining(false)
       } finally {
         if (requestId === searchRequestIdRef.current) {
           setIsLoading(false)
@@ -505,6 +532,12 @@ export function GameSearch({
           {isLoading && (
             <div className="p-4 text-center text-muted-foreground">
               <div className="inline-block w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {!isLoading && isRefining && results.length > 0 && (
+            <div className="px-4 py-2 text-center text-xs text-muted-foreground">
+              Improving results...
             </div>
           )}
 

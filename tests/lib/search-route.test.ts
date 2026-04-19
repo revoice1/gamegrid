@@ -84,6 +84,7 @@ describe('GET /api/search', () => {
     const body = await res.json()
     expect(searchIGDBGamesMock).toHaveBeenCalledWith('half-life', {
       allowUnratedFallback: false,
+      searchDepth: 'full',
     })
     expect(body.results).toHaveLength(1)
     expect(body.results[0].id).toBe(1)
@@ -97,6 +98,7 @@ describe('GET /api/search', () => {
 
     expect(searchIGDBGamesMock).toHaveBeenCalledWith('lunacy', {
       allowUnratedFallback: true,
+      searchDepth: 'full',
     })
   })
 
@@ -107,6 +109,7 @@ describe('GET /api/search', () => {
 
     expect(searchIGDBGamesMock).toHaveBeenCalledWith('lunacy', {
       allowUnratedFallback: false,
+      searchDepth: 'full',
     })
   })
 
@@ -117,6 +120,18 @@ describe('GET /api/search', () => {
 
     expect(searchIGDBGamesMock).toHaveBeenCalledWith('lunacy', {
       allowUnratedFallback: true,
+      searchDepth: 'full',
+    })
+  })
+
+  it('passes through fast search phase when requested', async () => {
+    searchIGDBGamesMock.mockResolvedValue([makeGame()])
+
+    await GET(makeRequest({ q: 'lunacy', mode: 'daily', phase: 'fast' }))
+
+    expect(searchIGDBGamesMock).toHaveBeenCalledWith('lunacy', {
+      allowUnratedFallback: true,
+      searchDepth: 'fast',
     })
   })
 

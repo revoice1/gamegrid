@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Category } from '@/lib/types'
 
 type SearchMode = 'daily' | 'practice' | 'versus'
+type SearchPhase = 'fast' | 'full'
 
 function parseVersusStealsEnabled(rawValue: string | null): boolean | null {
   if (rawValue === 'true') return true
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
   const categoryTypesParam = searchParams.get('categoryTypes')
   const modeParam = searchParams.get('mode')
   const versusStealsEnabledParam = searchParams.get('versusStealsEnabled')
+  const phaseParam = searchParams.get('phase')
 
   if (!query || query.length < 2) {
     return NextResponse.json({ results: [] })
@@ -69,6 +71,7 @@ export async function GET(request: NextRequest) {
       modeParam === 'daily' || modeParam === 'practice' || modeParam === 'versus'
         ? modeParam
         : 'versus'
+    const searchPhase: SearchPhase = phaseParam === 'fast' ? 'fast' : 'full'
     const versusStealsEnabled = parseVersusStealsEnabled(versusStealsEnabledParam)
     const explicitCategoryTypes = parseCategoryTypes(categoryTypesParam)
     const categoryTypes =
@@ -77,6 +80,7 @@ export async function GET(request: NextRequest) {
         : await getPuzzleCategoryTypes(puzzleId)
     const games = await searchIGDBGames(query, {
       allowUnratedFallback: mode !== 'versus' || versusStealsEnabled === false,
+      searchDepth: searchPhase,
     })
     const duplicateTitleKeys = new Set(
       Object.entries(

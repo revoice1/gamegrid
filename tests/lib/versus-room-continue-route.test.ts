@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const { createAdminClientMock, resolveAnonymousSessionMock } = vi.hoisted(() => ({
-  createAdminClientMock: vi.fn(),
-  resolveAnonymousSessionMock: vi.fn(),
-}))
+const { createAdminClientMock, resolveAnonymousSessionMock, createRequestLoggerMock } = vi.hoisted(
+  () => ({
+    createAdminClientMock: vi.fn(),
+    resolveAnonymousSessionMock: vi.fn(),
+    createRequestLoggerMock: vi.fn(),
+  })
+)
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: createAdminClientMock,
@@ -12,6 +15,10 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 vi.mock('@/lib/server-session', () => ({
   resolveAnonymousSession: resolveAnonymousSessionMock,
+}))
+
+vi.mock('@/lib/logging', () => ({
+  createRequestLogger: createRequestLoggerMock,
 }))
 
 import { POST } from '@/app/api/versus/room/[code]/continue/route'
@@ -85,6 +92,12 @@ function buildSupabaseMock() {
 describe('/api/versus/room/[code]/continue route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    createRequestLoggerMock.mockReturnValue({
+      requestId: 'test',
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    })
     resolveAnonymousSessionMock.mockReturnValue({
       sessionId: 'session-1',
       shouldSetCookie: false,

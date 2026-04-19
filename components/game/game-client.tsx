@@ -2284,6 +2284,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   useVersusTurnTimer({
     isVersusMode,
     isOnlineMatch: isCurrentOnlineMatch,
+    objectionPending,
     isLoading,
     loadedPuzzleMode,
     puzzleId: puzzle?.id ?? null,

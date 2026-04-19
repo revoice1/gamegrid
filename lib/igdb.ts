@@ -430,7 +430,7 @@ async function fetchIGDBWithToken(
       Accept: 'application/json',
     },
     body,
-    next: { revalidate: 86400 },
+    cache: 'no-store',
   })
 }
 
@@ -569,7 +569,7 @@ async function queryIGDBCount(endpoint: string, whereClause: string): Promise<nu
           Accept: 'application/json',
         },
         body: `where ${whereClause};`,
-        next: { revalidate: 86400 },
+        cache: 'no-store',
       })
 
       if (response.ok) {
@@ -1352,29 +1352,37 @@ export async function searchIGDBGames(
   const runSearch = async (
     searchTerm: string,
     limit = 30,
-    searchOptions?: { requireRating?: boolean }
+    searchOptions?: { requireRating?: boolean },
+    requestOptions?: { includeAlternativeNames?: boolean }
   ) => {
-    const queryResults = await queryIGDBConcurrent([
-      {
-        key: 'games',
-        endpoint: 'games',
-        body: [
-          IGDB_GAME_FIELDS,
-          `where ${buildSearchGameWhereClause(searchOptions)};`,
-          `search "${escapeIGDBSearch(searchTerm)}";`,
-          `limit ${limit};`,
-        ].join(' '),
-      },
-      {
-        key: 'alternativeNames',
-        endpoint: 'alternative_names',
-        body: [
-          'fields game,name,comment;',
-          `where ${buildAlternativeNameMatchWhereClause(searchTerm)};`,
-          `limit ${Math.max(limit, IGDB_ALT_NAME_SEARCH_LIMIT)};`,
-        ].join(' '),
-      },
-    ])
+    const includeAlternativeNames = requestOptions?.includeAlternativeNames ?? true
+    const queryResults = await queryIGDBConcurrent(
+      [
+        {
+          key: 'games',
+          endpoint: 'games',
+          body: [
+            IGDB_GAME_FIELDS,
+            `where ${buildSearchGameWhereClause(searchOptions)};`,
+            `search "${escapeIGDBSearch(searchTerm)}";`,
+            `limit ${limit};`,
+          ].join(' '),
+        },
+        includeAlternativeNames
+          ? {
+              key: 'alternativeNames',
+              endpoint: 'alternative_names',
+              body: [
+                'fields game,name,comment;',
+                `where ${buildAlternativeNameMatchWhereClause(searchTerm)};`,
+                `limit ${Math.max(limit, IGDB_ALT_NAME_SEARCH_LIMIT)};`,
+              ].join(' '),
+            }
+          : null,
+      ].filter(
+        (queryDef): queryDef is { key: string; endpoint: string; body: string } => queryDef !== null
+      )
+    )
 
     const games = (queryResults.get('games') as IGDBGame[] | undefined) ?? []
     const alternativeNames =
@@ -1383,7 +1391,10 @@ export async function searchIGDBGames(
     return { games, alternativeNames }
   }
 
-  const gatherVisibleResults = async (searchOptions?: { requireRating?: boolean }) => {
+  const gatherVisibleResults = async (
+    searchOptions?: { requireRating?: boolean },
+    gatherOptions?: { allowFallbackTerms?: boolean }
+  ) => {
     const primarySearch = await runSearch(query, 30, searchOptions)
     let mergedResults = [...primarySearch.games]
     const altMatchedNames = new Map<number, string>()
@@ -1411,41 +1422,16 @@ export async function searchIGDBGames(
       mergedResults = [...mergedResults, ...altGames]
     }
 
-    if (primarySearch.games.length < 5) {
+    const allowFallbackTerms = gatherOptions?.allowFallbackTerms ?? true
+    if (allowFallbackTerms && primarySearch.games.length < 5) {
       const fallbackTerms = getFallbackSearchTerms(query)
-      for (const fallbackTerm of fallbackTerms.slice(0, 2)) {
-        const fallbackSearch = await runSearch(fallbackTerm, 40, searchOptions)
+      for (const fallbackTerm of fallbackTerms.slice(0, 1)) {
+        const fallbackSearch = await runSearch(fallbackTerm, 40, searchOptions, {
+          includeAlternativeNames: false,
+        })
         mergedResults = [...mergedResults, ...fallbackSearch.games]
-        for (const entry of fallbackSearch.alternativeNames) {
-          if (Number.isFinite(entry.game) && typeof entry.name === 'string' && entry.name.trim()) {
-            const gameId = entry.game as number
-            const betterName = pickBetterAlternativeNameMatch(
-              query,
-              altMatchedNames.get(gameId),
-              entry.name
-            )
-            if (betterName) {
-              altMatchedNames.set(gameId, betterName)
-            }
-          }
-        }
 
-        const newAltIds: number[] = []
-        for (const gameId of fallbackSearch.alternativeNames
-          .map((entry) => entry.game)
-          .filter((gameId): gameId is number => Number.isFinite(gameId))) {
-          if (!altMatchedGameIds.has(gameId)) {
-            altMatchedGameIds.add(gameId)
-            newAltIds.push(gameId)
-          }
-        }
-
-        if (newAltIds.length > 0) {
-          const altGames = await queryIGDBGamesByIds(newAltIds)
-          mergedResults = [...mergedResults, ...altGames]
-        }
-
-        if (mergedResults.length >= 30) {
+        if (fallbackSearch.games.length > 0 || mergedResults.length >= 30) {
           break
         }
       }
@@ -1466,7 +1452,10 @@ export async function searchIGDBGames(
   const primaryVisibleResults = await gatherVisibleResults()
   const unratedFallbackResults =
     allowUnratedFallback && primaryVisibleResults.primarySearchGameCount < 5
-      ? await gatherVisibleResults({ requireRating: false })
+      ? await gatherVisibleResults(
+          { requireRating: false },
+          { allowFallbackTerms: primaryVisibleResults.results.length === 0 }
+        )
       : null
 
   const combinedVisibleResults = Array.from(

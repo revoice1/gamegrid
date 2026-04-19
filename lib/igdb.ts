@@ -1375,7 +1375,6 @@ export async function searchIGDBGames(
   const allowUnratedFallback = options?.allowUnratedFallback ?? false
   const onDebugEvent = options?.onDebugEvent
   const primarySearchOptions = allowUnratedFallback ? { requireRating: false } : undefined
-  const onDebugEvent = options?.onDebugEvent
 
   const runSearch = async (
     searchTerm: string,

@@ -1764,6 +1764,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
         verdict?: 'sustained' | 'overruled'
         confidence?: 'low' | 'medium' | 'high'
         explanation?: string
+        proof?: string | null
       }
 
       if (!response.ok || !payload.verdict) {
@@ -1817,6 +1818,7 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           clientEventId,
           verdict: payload.verdict,
           updatedGuess: onlineUpdatedGuess,
+          proof: payload.proof ?? undefined,
           isSteal: pendingVersusObjectionReview.isVersusSteal,
           guessesRemaining: overruledGuessesRemaining,
           resolutionKind: overruledResolution?.kind,

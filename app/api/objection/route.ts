@@ -9,6 +9,7 @@ import {
   normalizeObjectionResponse,
   OBJECTION_SYSTEM_PROMPT,
 } from '@/lib/objection'
+import { createObjectionProof } from '@/lib/objection-proof'
 import type { Category, CellGuess } from '@/lib/types'
 
 const GEMINI_KEY = process.env.GEMINI_KEY
@@ -459,7 +460,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(judgment)
+    return NextResponse.json({
+      ...judgment,
+      proof:
+        judgment.verdict === 'sustained'
+          ? createObjectionProof({
+              gameId: body.guess.gameId,
+              rowCategory: body.rowCategory,
+              colCategory: body.colCategory,
+              verdict: 'sustained',
+            })
+          : null,
+    })
   } catch (error) {
     logger.error('Objection error', { error })
     return NextResponse.json({ error: 'Failed to review objection.' }, { status: 500 })

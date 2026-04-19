@@ -128,6 +128,7 @@ describe('/api/objection route', () => {
       confidence: 'high',
       explanation: 'The app rejection is probably correct.',
       suspectedMissingMetadata: null,
+      proof: null,
     })
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(requestBody).toMatchObject({
@@ -163,6 +164,54 @@ describe('/api/objection route', () => {
         },
       },
       tools: [{ googleSearch: {} }],
+    })
+  })
+
+  it('returns a proof for sustained verdicts', async () => {
+    process.env.OBJECTION_PROOF_SECRET = 'test-proof-secret'
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        verdict: 'sustained',
+                        confidence: 'high',
+                        explanation: 'The app rejection is wrong.',
+                        suspectedMissingMetadata: null,
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toEqual({
+      verdict: 'sustained',
+      confidence: 'high',
+      explanation: 'The app rejection is wrong.',
+      suspectedMissingMetadata: null,
+      proof: expect.any(String),
     })
   })
 
@@ -243,6 +292,7 @@ describe('/api/objection route', () => {
       explanation:
         'Cloning Clyde is a side-scrolling platformer. The game was released on Xbox 360. The verdict is sustained.',
       suspectedMissingMetadata: null,
+      proof: null,
     })
     expect(fetchMock).toHaveBeenCalledOnce()
   })

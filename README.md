@@ -72,6 +72,7 @@ to `ALLOWED_DEV_ORIGINS` in `.env.local`.
 | `GEMINI_MODEL`                             | No       | Gemini model name override for objections (default: `gemini-flash-lite-latest`; `models/` prefix is normalized)               |
 | `GEMINI_OBJECTION_THINKING_LEVEL`          | No       | Thinking level for objection review requests, one of `MINIMAL`, `LOW`, `MEDIUM`, or `HIGH` (default: `HIGH`)                  |
 | `GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING` | No       | Set to `1` to enable grounded Google Search objection requests (default disabled); grounded calls may require billing access  |
+| `OBJECTION_PROOF_SECRET`                   | No       | Optional HMAC secret for signed sustained-objection proofs in online versus. Falls back to `SUPABASE_SERVICE_ROLE_KEY`.       |
 | `PUZZLE_MIN_VALID_OPTIONS`                 | No       | Minimum valid answers per cell, default `3`                                                                                   |
 | `PUZZLE_GENERATION_MAX_ATTEMPTS`           | No       | Max candidate grids to try before failing, default `12`                                                                       |
 | `PUZZLE_VALIDATION_SAMPLE_SIZE`            | No       | IGDB matches sampled when validating each cell, default `40`                                                                  |
@@ -163,6 +164,10 @@ for live room/event updates, so the tables must be published for clients to stay
 - Online versus rooms use backend routes for writes, Supabase Realtime for live updates, and room
   snapshots for faster resume after refresh.
 - Online post-game flow supports a host-side `Continue In Room` reset that advances `match_number` and scopes event replay to the new match boundary, so old events do not leak into the next game.
+- In online rematches, host/guest room ownership stays stable while `X/O` can rotate between
+  matches via server-owned role assignments.
+- Sustained online objections now carry a short-lived signed proof from `/api/objection` so
+  `/api/versus/event` can trust the reviewed result without trusting raw client metadata.
 - Finished versus matches can expand into a post-game summary with the rules used, picks, and key
   match stats.
 - Standard puzzle generation uses curated category families and prevalidated banned pairs to avoid

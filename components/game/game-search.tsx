@@ -375,14 +375,14 @@ export function GameSearch({
   )
 
   const handleConfirm = useCallback(() => {
-    if (!pendingConfirmationGame) {
+    if (!pendingConfirmationGame || selectionLockedRef.current || selectionLocked) {
       return
     }
 
     selectionLockedRef.current = true
     setSelectionLocked(true)
     onSelect(pendingConfirmationGame)
-  }, [onSelect, pendingConfirmationGame])
+  }, [onSelect, pendingConfirmationGame, selectionLocked])
 
   useEffect(() => {
     if (!isOpen || pendingConfirmationId === null) {

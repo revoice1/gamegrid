@@ -136,6 +136,46 @@ describe('useOnlineVersusRoom', () => {
     expect(result.current.isResuming).toBe(false)
   })
 
+  it('auto-resume clears persisted room state when the saved room already finished', async () => {
+    localStorage.setItem('gg_online_versus_room', JSON.stringify({ code: 'ABCD', role: 'o' }))
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      makeJsonResponse({
+        room: makeRoom({ status: 'finished' }),
+        role: 'o',
+        isHost: false,
+      })
+    )
+
+    const { result } = renderHook(() => useOnlineVersusRoom())
+
+    await waitFor(() => {
+      expect(result.current.phase).toBe('finished')
+    })
+
+    expect(result.current.myRole).toBe('o')
+    expect(result.current.isHost).toBe(false)
+    expect(localStorage.getItem('gg_online_versus_room')).toBeNull()
+  })
+
+  it('auto-resume clears stale local storage when the server returns no role', async () => {
+    localStorage.setItem('gg_online_versus_room', JSON.stringify({ code: 'ABCD', role: 'o' }))
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      makeJsonResponse({
+        room: makeActiveRoom(),
+      })
+    )
+
+    const { result } = renderHook(() => useOnlineVersusRoom())
+
+    await waitFor(() => {
+      expect(result.current.phase).toBe('active')
+    })
+
+    expect(result.current.myRole).toBeNull()
+    expect(result.current.isHost).toBe(false)
+    expect(localStorage.getItem('gg_online_versus_room')).toBeNull()
+  })
+
   describe('createRoom', () => {
     it('transitions to lobby phase and saves room entry on success', async () => {
       vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({ room: makeRoom() }))
@@ -233,6 +273,19 @@ describe('useOnlineVersusRoom', () => {
       expect(result.current.phase).toBe('error')
       expect(result.current.errorMessage).toBe('Room not found')
     })
+
+    it('transitions to error on network failure', async () => {
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(result.current.phase).toBe('error')
+      expect(result.current.errorMessage).toBe('Network error. Please try again.')
+    })
   })
 
   describe('sendEvent', () => {
@@ -325,6 +378,59 @@ describe('useOnlineVersusRoom', () => {
       expect(urls).toContain('/api/versus/room/ABCD')
       expect(urls).toContain('/api/versus/room-events/room-1')
     })
+
+    it('returns parsed payload, type, and duplicateEvent on success', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        makeJsonResponse({
+          duplicateEvent: true,
+          type: 'objection',
+          payload: { successful: true, cellIndex: 4 },
+        })
+      )
+
+      const res = await result.current.sendEvent('objection', { cellIndex: 4 })
+      expect(res).toEqual({
+        ok: true,
+        error: null,
+        code: null,
+        duplicateEvent: true,
+        payload: { successful: true, cellIndex: 4 },
+        type: 'objection',
+      })
+    })
+
+    it('returns a network error when the event request fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.sendEvent('claim', { cellIndex: 0 })
+      expect(res).toEqual({
+        ok: false,
+        error: 'Network error.',
+        code: null,
+        payload: null,
+        type: null,
+      })
+    })
   })
 
   describe('saveSnapshot', () => {
@@ -407,6 +513,149 @@ describe('useOnlineVersusRoom', () => {
         vi.useRealTimers()
       }
     })
+
+    it('returns the server error when save snapshot is rejected', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x' })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Snapshot match number is stale.' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.saveSnapshot(makeSnapshot())
+      expect(res).toEqual({ ok: false, error: 'Snapshot match number is stale.' })
+    })
+
+    it('returns a network error when snapshot save fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x' })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.saveSnapshot(makeSnapshot())
+      expect(res).toEqual({ ok: false, error: 'Network error.' })
+    })
+  })
+
+  describe('setPuzzle', () => {
+    const puzzlePayload = {
+      title: 'Test Puzzle',
+      categories: [],
+      answers: [],
+    } as unknown as import('@/lib/types').Puzzle
+
+    it('returns { ok: false } when not in a match', async () => {
+      const { result } = renderHook(() => useOnlineVersusRoom())
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res.ok).toBe(false)
+      expect(res.error).toBe('Not in a match.')
+    })
+
+    it('returns { ok: true } after a successful join and puzzle publish', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: true, error: null })
+      expect(fetchSpy).toHaveBeenLastCalledWith(
+        '/api/versus/room/ABCD/puzzle',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            puzzleId: 'p1',
+            puzzle: puzzlePayload,
+            matchNumber: 1,
+          }),
+        })
+      )
+    })
+
+    it('treats an already-set puzzle conflict as success', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Puzzle already set for this match.' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: true, error: null })
+    })
+
+    it('returns an API error when puzzle publish fails for another reason', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Only the host can set the puzzle.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: false, error: 'Only the host can set the puzzle.' })
+    })
+
+    it('returns a network error when puzzle publish fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.setPuzzle('p1', puzzlePayload)
+      expect(res).toEqual({ ok: false, error: 'Network error.' })
+    })
   })
 
   describe('markFinished', () => {
@@ -415,6 +664,55 @@ describe('useOnlineVersusRoom', () => {
       const res = await result.current.markFinished()
       expect(res.ok).toBe(false)
       expect(res.error).toBe('Not in a match.')
+    })
+
+    it('returns success, flips phase, and clears local storage when finish succeeds', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(localStorage.getItem('gg_online_versus_room')).not.toBeNull()
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(makeJsonResponse({}))
+
+      let res!: Awaited<ReturnType<typeof result.current.markFinished>>
+      await act(async () => {
+        res = await result.current.markFinished()
+      })
+      expect(res).toEqual({ ok: true, error: null })
+      await waitFor(() => {
+        expect(result.current.phase).toBe('finished')
+      })
+      expect(localStorage.getItem('gg_online_versus_room')).toBeNull()
+    })
+
+    it('returns the server error when finish is rejected', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Only the host can end this room.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+
+      const res = await result.current.markFinished()
+      expect(res).toEqual({ ok: false, error: 'Only the host can end this room.' })
+      expect(result.current.phase).toBe('active')
     })
 
     it('returns { ok: false, error: "Request timed out." } when the fetch is aborted', async () => {
@@ -460,6 +758,23 @@ describe('useOnlineVersusRoom', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('returns a network error when finish fails before a response', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+        makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+      )
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'))
+
+      const res = await result.current.markFinished()
+      expect(res).toEqual({ ok: false, error: 'Network error.' })
     })
   })
 
@@ -508,6 +823,93 @@ describe('useOnlineVersusRoom', () => {
       expect(result.current.isHost).toBe(true)
       expect(result.current.room?.match_number).toBe(2)
       expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
+    })
+
+    it('returns an API error when continue fails and keeps existing room state', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          return Promise.resolve(
+            makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+          )
+        }
+
+        if (url === '/api/versus/room/ABCD/continue') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: 'Only the host can continue this room.' }), {
+              status: 403,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          )
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      let continueResult!: Awaited<ReturnType<typeof result.current.continueRoom>>
+      await act(async () => {
+        continueResult = await result.current.continueRoom()
+      })
+
+      expect(fetchSpy).toHaveBeenLastCalledWith('/api/versus/room/ABCD/continue', {
+        method: 'POST',
+      })
+      expect(continueResult).toEqual({
+        ok: false,
+        error: 'Only the host can continue this room.',
+      })
+      expect(result.current.phase).toBe('active')
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
+      expect(result.current.room?.match_number).toBe(1)
+    })
+
+    it('returns a network error when continue fails before a response arrives', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          return Promise.resolve(
+            makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+          )
+        }
+
+        if (url === '/api/versus/room/ABCD/continue') {
+          return Promise.reject(new Error('Network failure'))
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      let continueResult!: Awaited<ReturnType<typeof result.current.continueRoom>>
+      await act(async () => {
+        continueResult = await result.current.continueRoom()
+      })
+
+      expect(fetchSpy).toHaveBeenLastCalledWith('/api/versus/room/ABCD/continue', {
+        method: 'POST',
+      })
+      expect(continueResult).toEqual({
+        ok: false,
+        error: 'Network error.',
+      })
+      expect(result.current.phase).toBe('active')
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
+      expect(result.current.room?.match_number).toBe(1)
     })
 
     it('refreshes the guest role when a rematch advances to a new match', async () => {
@@ -574,6 +976,138 @@ describe('useOnlineVersusRoom', () => {
 
       expect(result.current.isHost).toBe(false)
       expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"x"')
+    })
+
+    it('refreshes the host role while keeping host ownership when a rematch advances', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          if (
+            fetchSpy.mock.calls.filter((call) => String(call[0]) === '/api/versus/room/ABCD/join')
+              .length === 1
+          ) {
+            return Promise.resolve(
+              makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+            )
+          }
+
+          return Promise.resolve(
+            makeJsonResponse({
+              room: makeActiveRoom({
+                match_number: 2,
+                state_data: {
+                  roleAssignments: {
+                    xSessionId: 'session-2',
+                    oSessionId: 'session-1',
+                  },
+                },
+              }),
+              role: 'o',
+              isHost: true,
+            })
+          )
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
+
+      act(() => {
+        capturedRoomUpdateHandler?.({
+          new: makeActiveRoom({
+            match_number: 2,
+            state_data: {
+              roleAssignments: {
+                xSessionId: 'session-2',
+                oSessionId: 'session-1',
+              },
+            },
+          }),
+        })
+      })
+
+      await waitFor(() => {
+        expect(result.current.room?.match_number).toBe(2)
+        expect(result.current.myRole).toBe('o')
+      })
+
+      expect(result.current.isHost).toBe(true)
+      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
+    })
+
+    it('applies an explicit false isHost from membership refresh', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input) => {
+        const url = String(input)
+
+        if (url === '/api/versus/room/ABCD/join') {
+          if (
+            fetchSpy.mock.calls.filter((call) => String(call[0]) === '/api/versus/room/ABCD/join')
+              .length === 1
+          ) {
+            return Promise.resolve(
+              makeJsonResponse({ room: makeActiveRoom(), role: 'x', isHost: true })
+            )
+          }
+
+          return Promise.resolve(
+            makeJsonResponse({
+              room: makeActiveRoom({
+                match_number: 2,
+                state_data: {
+                  roleAssignments: {
+                    xSessionId: 'session-2',
+                    oSessionId: 'session-1',
+                  },
+                },
+              }),
+              role: 'o',
+              isHost: false,
+            })
+          )
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`)
+      })
+
+      const { result } = renderHook(() => useOnlineVersusRoom())
+
+      await act(async () => {
+        await result.current.joinRoom('ABCD')
+      })
+
+      expect(result.current.myRole).toBe('x')
+      expect(result.current.isHost).toBe(true)
+
+      act(() => {
+        capturedRoomUpdateHandler?.({
+          new: makeActiveRoom({
+            match_number: 2,
+            state_data: {
+              roleAssignments: {
+                xSessionId: 'session-2',
+                oSessionId: 'session-1',
+              },
+            },
+          }),
+        })
+      })
+
+      await waitFor(() => {
+        expect(result.current.room?.match_number).toBe(2)
+        expect(result.current.myRole).toBe('o')
+      })
+
+      expect(result.current.isHost).toBe(false)
+      expect(localStorage.getItem('gg_online_versus_room')).toContain('"role":"o"')
     })
   })
 

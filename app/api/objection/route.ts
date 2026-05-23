@@ -24,7 +24,7 @@ const GEMINI_MODEL = (process.env.GEMINI_MODEL ?? 'gemini-flash-lite-latest')
 const GEMINI_FALLBACK_MODEL = (process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash-lite')
   .replace(/^models\//, '')
   .trim()
-const GEMINI_TIMEOUT_MS = 10_000
+const GEMINI_TIMEOUT_MS = Number.parseInt(process.env.GEMINI_TIMEOUT_MS ?? '30000', 10)
 const GEMINI_PRIMARY_FAILURE_COOLDOWN_MS = Number.parseInt(
   process.env.GEMINI_PRIMARY_FAILURE_COOLDOWN_MS ?? `${20 * 60 * 1000}`,
   10

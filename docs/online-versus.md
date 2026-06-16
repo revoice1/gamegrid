@@ -9,6 +9,7 @@ to keep in mind while the feature is still being hardened.
 - [Supabase Setup](#supabase-setup)
 - [How Sync Works](#how-sync-works)
 - [Snapshot Save Discipline](#snapshot-save-discipline)
+- [Debugging](#debugging)
 - [Current Limits](#current-limits)
 - [Future Same-Room Rematch](#future-same-room-rematch)
 
@@ -133,6 +134,12 @@ When a client rejoins and `state_data` is present, it hydrates from the snapshot
 
 Both `saveSnapshot` and `markFinished` in `use-online-versus-room.ts` carry an 8-second
 `AbortController` timeout and return `{ ok: false, error: 'Request timed out.' }` on abort.
+
+## Debugging
+
+For the fast symptom-to-log checklist, see:
+
+- [Online Versus Runbook](./online-versus-runbook.md)
 
 ## Objection Authority
 

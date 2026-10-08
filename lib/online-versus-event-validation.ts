@@ -173,19 +173,19 @@ export type StealPayload = z.infer<typeof StealPayloadSchema>
 type ParsedIncomingEvent =
   | {
       type: 'claim'
-      parsed: z.SafeParseReturnType<unknown, ClaimPayload>
+      parsed: z.ZodSafeParseResult<ClaimPayload>
     }
   | {
       type: 'miss'
-      parsed: z.SafeParseReturnType<unknown, MissPayload>
+      parsed: z.ZodSafeParseResult<MissPayload>
     }
   | {
       type: 'objection'
-      parsed: z.SafeParseReturnType<unknown, ObjectionPayload>
+      parsed: z.ZodSafeParseResult<ObjectionPayload>
     }
   | {
       type: 'steal'
-      parsed: z.SafeParseReturnType<unknown, StealPayload>
+      parsed: z.ZodSafeParseResult<StealPayload>
     }
 
 function reject(failure: ValidationFailure): ValidationError {

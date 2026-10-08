@@ -16,15 +16,7 @@ export const ROUTE_PENDING_TOAST_KEY = decodeShiftedChars(
 )
 
 export type IndexBadgeSlot =
-  | 'col-0'
-  | 'col-1'
-  | 'col-2'
-  | 'row-0'
-  | 'row-1'
-  | 'row-2'
-  | 'settings'
-  | 'setup'
-  | 'achievements'
+  'col-0' | 'col-1' | 'col-2' | 'row-0' | 'row-1' | 'row-2' | 'settings' | 'setup' | 'achievements'
 
 export interface IndexBadge {
   index: number

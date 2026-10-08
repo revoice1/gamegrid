@@ -54,6 +54,16 @@ jobs:
         id: unit
         run: npm run test:unit
 
+      - name: Production build
+        id: build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
+          TWITCH_IGDB_CLIENT_ID: test-client-id
+          TWITCH_IGDB_CLIENT_SECRET: test-client-secret
+
       - name: End-to-end tests
         id: e2e
         run: npm run test:e2e
@@ -76,5 +86,6 @@ jobs:
           echo "- Lint: ${{ steps.lint.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- Typecheck: ${{ steps.typecheck.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- Unit tests: ${{ steps.unit.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Production build: ${{ steps.build.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- E2E tests: ${{ steps.e2e.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- Playwright artifacts uploaded when available" >> $GITHUB_STEP_SUMMARY

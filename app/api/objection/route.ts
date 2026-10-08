@@ -236,6 +236,8 @@ export async function POST(request: NextRequest) {
       lastModelUsed = model
       let modelProducedValidJudgment = false
       const baseThinkingConfig = getGeminiThinkingConfig(model, THINKING_LEVEL)
+      // Gemini 3.6+ ignores sampling params and upcoming models reject them.
+      const samplingConfig = isGemini25Model(model) ? { temperature: 0.1 } : {}
       const systemPrompt = getObjectionSystemPrompt(model)
       const requestBodyBase = {
         systemInstruction: {
@@ -260,7 +262,7 @@ export async function POST(request: NextRequest) {
                 ...requestBodyBase,
                 tools,
                 generationConfig: {
-                  temperature: 0.1,
+                  ...samplingConfig,
                   ...(isGemini25Model(model) ? {} : { responseMimeType: 'application/json' }),
                   thinkingConfig: baseThinkingConfig,
                 },
@@ -271,7 +273,7 @@ export async function POST(request: NextRequest) {
               body: {
                 ...requestBodyBase,
                 generationConfig: {
-                  temperature: 0.1,
+                  ...samplingConfig,
                   responseMimeType: 'application/json',
                   thinkingConfig: baseThinkingConfig,
                 },

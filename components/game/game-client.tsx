@@ -1523,6 +1523,9 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
   useEffect(() => {
     return () => {
       activePuzzleLoadControllerRef.current?.abort()
+      // Release the in-flight guard so a remount (e.g. React StrictMode) can start a fresh load.
+      activePuzzleLoadControllerRef.current = null
+      isPuzzleLoadInFlightRef.current = false
     }
   }, [])
 
@@ -2761,11 +2764,12 @@ export function GameClient({ minimumValidOptionsDefault }: { minimumValidOptions
           })
         }
       } finally {
+        // A superseded load (released on unmount) must not clear the state of the load that replaced it.
         if (activePuzzleLoadControllerRef.current === controller) {
           activePuzzleLoadControllerRef.current = null
+          isPuzzleLoadInFlightRef.current = false
+          setIsLoading(false)
         }
-        isPuzzleLoadInFlightRef.current = false
-        setIsLoading(false)
       }
     },
     [

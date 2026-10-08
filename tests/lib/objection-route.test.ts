@@ -135,7 +135,7 @@ function buildGeminiResponse() {
 
 interface ParsedObjectionGeminiRequest {
   systemInstruction?: { parts?: Array<{ text?: string }> }
-  generationConfig?: { thinkingConfig?: Record<string, unknown> }
+  generationConfig?: { temperature?: number; thinkingConfig?: Record<string, unknown> }
   tools?: unknown[]
 }
 
@@ -194,6 +194,9 @@ describe('/api/objection route', () => {
       },
     })
     expect(requestBody).not.toHaveProperty('tools')
+    expect(requestBody).not.toMatchObject({
+      generationConfig: { temperature: expect.anything() },
+    })
   })
 
   it('supports opt-in Google search grounding and thinking overrides for Gemini 3.1 Flash-Lite', async () => {
@@ -289,6 +292,7 @@ describe('/api/objection route', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(requestBody).toMatchObject({
       generationConfig: {
+        temperature: 0.1,
         thinkingConfig: {
           thinkingBudget: 0,
         },

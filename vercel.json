@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "renovate/**": false
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/generate-daily-puzzle",

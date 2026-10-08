@@ -14,13 +14,7 @@ import type {
 import type { Puzzle } from '@/lib/types'
 
 export type OnlineVersusPhase =
-  | 'idle'
-  | 'creating'
-  | 'joining'
-  | 'lobby'
-  | 'active'
-  | 'finished'
-  | 'error'
+  'idle' | 'creating' | 'joining' | 'lobby' | 'active' | 'finished' | 'error'
 
 export interface SendEventResult {
   ok: boolean

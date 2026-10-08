@@ -37,7 +37,7 @@ export const fakeSearchResult = {
 export async function mockGuessApi(target: Page | BrowserContext) {
   await target.route('**/api/guess', async (route) => {
     const method = route.request().method()
-    let requestBody: Record<string, unknown> = {}
+    let requestBody: Record<string, unknown>
 
     try {
       requestBody = route.request().postDataJSON() as Record<string, unknown>

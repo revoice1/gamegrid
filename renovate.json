@@ -6,6 +6,7 @@
   "automergeType": "pr",
   "platformAutomerge": true,
   "lockFileMaintenance": { "enabled": true, "automerge": true },
+  "npmrc": "allow-remote=all",
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],

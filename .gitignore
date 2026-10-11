@@ -24,3 +24,4 @@ test-results/
 .DS_Store
 .vercel
 tmp-*-report.json
+scripts/generated/objection-eval-*.json

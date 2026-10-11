@@ -501,4 +501,126 @@ describe('/api/objection route', () => {
       reason: 'This operation was aborted',
     })
   })
+
+  it('defaults to a pinned primary with the latest Flash-Lite alias as fallback', async () => {
+    delete process.env.GEMINI_MODEL
+    delete process.env.GEMINI_FALLBACK_MODEL
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: 'overloaded' } }), { status: 503 })
+      )
+      .mockResolvedValueOnce(buildGeminiResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+
+    expect(response.status).toBe(200)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-3.1-flash-lite:')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/models/gemini-flash-lite-latest:')
+  })
+
+  it('retries the same model without thinking config when the model rejects it', async () => {
+    process.env.GEMINI_MODEL = 'gemini-flash-latest'
+    process.env.GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash-lite'
+    process.env.GEMINI_OBJECTION_THINKING_LEVEL = 'minimal'
+
+    const requestBodies: ParsedObjectionGeminiRequest[] = []
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)))
+      if (requestBodies.length === 1) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              message:
+                'Thinking level MINIMAL is not supported for this model. Please retry with other thinking level.',
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      return buildGeminiResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/models/gemini-flash-latest:')
+    expect(requestBodies[0].generationConfig?.thinkingConfig).toEqual({ thinkingLevel: 'minimal' })
+    expect(requestBodies[1].generationConfig).not.toHaveProperty('thinkingConfig')
+    expect(activateGeminiPrimaryFallbackMock).not.toHaveBeenCalled()
+  })
+
+  it('gives the primary a shorter timeout so a stalled model falls back quickly', async () => {
+    process.env.GEMINI_MODEL = 'gemini-3.1-flash-lite'
+    process.env.GEMINI_FALLBACK_MODEL = 'gemini-flash-lite-latest'
+    process.env.GEMINI_PRIMARY_TIMEOUT_MS = '20'
+    process.env.GEMINI_TIMEOUT_MS = '30000'
+
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          if (fetchMock.mock.calls.length > 1) {
+            resolve(buildGeminiResponse())
+            return
+          }
+          init?.signal?.addEventListener('abort', () =>
+            reject(new Error('This operation was aborted'))
+          )
+        })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(activateGeminiPrimaryFallbackMock).toHaveBeenCalledWith({
+      primaryModel: 'gemini-3.1-flash-lite',
+      cooldownMs: 1_200_000,
+      reason: 'This operation was aborted',
+    })
+  })
+
+  it('activates fallback cooldown when the primary returns no candidates', async () => {
+    process.env.GEMINI_MODEL = 'gemini-flash-lite-latest'
+    process.env.GEMINI_FALLBACK_MODEL = 'gemini-3.1-flash-lite'
+    process.env.GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING = '1'
+    process.env.GEMINI_OBJECTION_THINKING_LEVEL = 'minimal'
+
+    const buildNoCandidatesResponse = () =>
+      new Response(
+        JSON.stringify({
+          usageMetadata: { promptTokenCount: 967, totalTokenCount: 967 },
+          modelVersion: 'gemini-3.5-flash-lite',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(buildNoCandidatesResponse())
+      .mockResolvedValueOnce(buildNoCandidatesResponse())
+      .mockResolvedValueOnce(buildGeminiResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { POST } = await import('@/app/api/objection/route')
+    const response = await POST(buildRequest())
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/models/gemini-3.1-flash-lite:')
+    expect(activateGeminiPrimaryFallbackMock).toHaveBeenCalledWith({
+      primaryModel: 'gemini-flash-lite-latest',
+      cooldownMs: 1_200_000,
+      reason: 'empty_content',
+    })
+  })
 })

@@ -261,9 +261,11 @@ export async function POST(request: NextRequest) {
               body: {
                 ...requestBodyBase,
                 tools,
+                // No JSON mode with search: gemini-3.5-flash-lite stalls ~30s and returns no
+                // candidates when googleSearch and responseMimeType are combined. The prompt
+                // asks for JSON and normalizeObjectionResponse tolerates plain text.
                 generationConfig: {
                   ...samplingConfig,
-                  ...(isGemini25Model(model) ? {} : { responseMimeType: 'application/json' }),
                   thinkingConfig: baseThinkingConfig,
                 },
               },

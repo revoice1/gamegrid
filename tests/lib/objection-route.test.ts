@@ -223,6 +223,10 @@ describe('/api/objection route', () => {
       },
       tools: [{ googleSearch: {} }],
     })
+    // gemini-3.5-flash-lite returns no candidates when JSON mode is combined with search.
+    expect(requestBody).not.toMatchObject({
+      generationConfig: { responseMimeType: expect.anything() },
+    })
     const systemPrompt = getSystemPrompt(requestBody)
     expect(systemPrompt).toContain('EVIDENCE HIERARCHY (MANDATORY)')
   })

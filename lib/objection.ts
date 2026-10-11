@@ -225,8 +225,15 @@ export function hasGeminiEmptyContent(payload: unknown): boolean {
     return false
   }
 
-  const candidate = (payload as GeminiPayload).candidates?.[0]
-  if (!candidate || !candidate.content) {
+  const candidates = (payload as GeminiPayload).candidates
+  // A 200 with no candidates at all (seen from gemini-3.5-flash-lite after a ~30s stall)
+  // means the model produced nothing, same as an empty candidate.
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return !('error' in payload)
+  }
+
+  const candidate = candidates[0]
+  if (!candidate.content) {
     return false
   }
 

@@ -15,25 +15,37 @@ import {
   normalizeObjectionResponse,
 } from '@/lib/objection'
 import { createObjectionProof } from '@/lib/objection-proof'
+import {
+  buildGeminiGenerateContentBody,
+  GEMINI_THINKING_LEVELS,
+  getGeminiThinkingConfig,
+  isThinkingConfigRejection,
+  normalizeGeminiModelName,
+  type GeminiThinkingLevel,
+} from '@/lib/gemini-models'
 import type { Category, CellGuess } from '@/lib/types'
 
 const GEMINI_KEY = process.env.GEMINI_KEY
-const GEMINI_MODEL = (process.env.GEMINI_MODEL ?? 'gemini-flash-lite-latest')
-  .replace(/^models\//, '')
-  .trim()
-const GEMINI_FALLBACK_MODEL = (process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash-lite')
-  .replace(/^models\//, '')
-  .trim()
+// Pinned primary plus a self-updating alias as fallback: the fallback tracks Google's newest
+// Flash-Lite without deploys, and the primary only changes after an eval.
+const GEMINI_MODEL = normalizeGeminiModelName(process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite')
+const GEMINI_FALLBACK_MODEL = normalizeGeminiModelName(
+  process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-flash-lite-latest'
+)
 const GEMINI_TIMEOUT_MS = Number.parseInt(process.env.GEMINI_TIMEOUT_MS ?? '30000', 10)
+// The first model gets less time when another model is waiting, so a stalled model costs
+// seconds instead of the full timeout.
+const GEMINI_PRIMARY_TIMEOUT_MS = Number.parseInt(
+  process.env.GEMINI_PRIMARY_TIMEOUT_MS ?? '15000',
+  10
+)
 const GEMINI_PRIMARY_FAILURE_COOLDOWN_MS = Number.parseInt(
   process.env.GEMINI_PRIMARY_FAILURE_COOLDOWN_MS ?? `${20 * 60 * 1000}`,
   10
 )
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const GROUNDED_MAX_ATTEMPTS = 2
-const DEFAULT_THINKING_LEVEL = 'HIGH'
-const SUPPORTED_THINKING_LEVELS = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
-const GEMINI_3_LATEST_ALIASES = new Set(['gemini-flash-lite-latest'])
+const DEFAULT_THINKING_LEVEL: GeminiThinkingLevel = 'HIGH'
 
 function isSearchGroundingEnabled(value: string | undefined): boolean {
   if (!value) {
@@ -44,79 +56,15 @@ function isSearchGroundingEnabled(value: string | undefined): boolean {
   return normalized === '1' || normalized === 'true'
 }
 
-function getThinkingLevel(value: string | undefined): string {
+function getThinkingLevel(value: string | undefined): GeminiThinkingLevel {
   const normalized = value?.trim().toUpperCase()
-  if (normalized && SUPPORTED_THINKING_LEVELS.has(normalized)) {
-    return normalized
-  }
-
-  return DEFAULT_THINKING_LEVEL
+  return GEMINI_THINKING_LEVELS.find((level) => level === normalized) ?? DEFAULT_THINKING_LEVEL
 }
 
 const ENABLE_SEARCH_GROUNDING = isSearchGroundingEnabled(
   process.env.GEMINI_OBJECTION_ENABLE_SEARCH_GROUNDING
 )
 const THINKING_LEVEL = getThinkingLevel(process.env.GEMINI_OBJECTION_THINKING_LEVEL)
-
-function isGemini3Model(model: string): boolean {
-  return /^gemini-3(?:[.-]|$)/.test(model) || GEMINI_3_LATEST_ALIASES.has(model)
-}
-
-function isGemini25Model(model: string): boolean {
-  return /^gemini-2\.5(?:[.-]|$)/.test(model)
-}
-
-function getGemini25ThinkingBudget(model: string, level: string): number {
-  if (model.includes('flash-lite')) {
-    switch (level) {
-      case 'MINIMAL':
-        return 0
-      case 'LOW':
-        return 512
-      case 'MEDIUM':
-        return 4096
-      case 'HIGH':
-      default:
-        return 24576
-    }
-  }
-
-  switch (level) {
-    case 'MINIMAL':
-      return 0
-    case 'LOW':
-      return 1024
-    case 'MEDIUM':
-      return 8192
-    case 'HIGH':
-    default:
-      return 24576
-  }
-}
-
-function getGeminiThinkingConfig(
-  model: string,
-  level: string
-): {
-  thinkingLevel?: string
-  thinkingBudget?: number
-} {
-  if (isGemini25Model(model)) {
-    return {
-      thinkingBudget: getGemini25ThinkingBudget(model, level),
-    }
-  }
-
-  if (isGemini3Model(model)) {
-    return {
-      thinkingLevel: level.toLowerCase(),
-    }
-  }
-
-  return {
-    thinkingLevel: level.toLowerCase(),
-  }
-}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -236,51 +184,28 @@ export async function POST(request: NextRequest) {
       lastModelUsed = model
       let modelProducedValidJudgment = false
       const baseThinkingConfig = getGeminiThinkingConfig(model, THINKING_LEVEL)
-      // Gemini 3.6+ ignores sampling params and upcoming models reject them.
-      const samplingConfig = isGemini25Model(model) ? { temperature: 0.1 } : {}
       const systemPrompt = getObjectionSystemPrompt(model)
-      const requestBodyBase = {
-        systemInstruction: {
-          parts: [{ text: systemPrompt }],
-        },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: datasetForPrompt }],
-          },
-        ],
-      }
-      const tools = [{ googleSearch: {} }]
+      const requestTimeoutMs =
+        geminiModels.length > 1 && model === geminiModels[0]
+          ? Math.min(GEMINI_PRIMARY_TIMEOUT_MS, GEMINI_TIMEOUT_MS)
+          : GEMINI_TIMEOUT_MS
+      const buildRequestBody = (omitThinkingConfig = false) =>
+        buildGeminiGenerateContentBody({
+          model,
+          systemPrompt,
+          userText: datasetForPrompt,
+          thinkingLevel: THINKING_LEVEL,
+          grounded: ENABLE_SEARCH_GROUNDING,
+          omitThinkingConfig,
+        })
       const requestVariants: Array<{
         label: 'grounded' | 'standard'
         body: Record<string, unknown>
       }> = [
-        ENABLE_SEARCH_GROUNDING
-          ? {
-              label: 'grounded',
-              body: {
-                ...requestBodyBase,
-                tools,
-                // No JSON mode with search: gemini-3.5-flash-lite stalls ~30s and returns no
-                // candidates when googleSearch and responseMimeType are combined. The prompt
-                // asks for JSON and normalizeObjectionResponse tolerates plain text.
-                generationConfig: {
-                  ...samplingConfig,
-                  thinkingConfig: baseThinkingConfig,
-                },
-              },
-            }
-          : {
-              label: 'standard',
-              body: {
-                ...requestBodyBase,
-                generationConfig: {
-                  ...samplingConfig,
-                  responseMimeType: 'application/json',
-                  thinkingConfig: baseThinkingConfig,
-                },
-              },
-            },
+        {
+          label: ENABLE_SEARCH_GROUNDING ? 'grounded' : 'standard',
+          body: buildRequestBody(),
+        },
       ]
 
       for (const requestVariant of requestVariants) {
@@ -324,9 +249,10 @@ export async function POST(request: NextRequest) {
           explanation: string
           suspectedMissingMetadata: string | null
         } | null = null
+        let thinkingConfigOmitted = false
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
           const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
+          const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs)
           try {
             response = await fetch(requestUrl, {
               method: 'POST',
@@ -384,6 +310,32 @@ export async function POST(request: NextRequest) {
           }
 
           if (!response.ok) {
+            if (!thinkingConfigOmitted && response.status === 400) {
+              const rejectionText = await response.clone().text()
+              let rejectionMessage: string | null = rejectionText
+              try {
+                rejectionMessage =
+                  (JSON.parse(rejectionText) as { error?: { message?: string } }).error?.message ??
+                  rejectionText
+              } catch {
+                // keep the raw text
+              }
+
+              if (isThinkingConfigRejection(response.status, rejectionMessage)) {
+                logger.warn('Gemini model rejected thinking config; retrying without it', {
+                  model,
+                  variant: requestVariant.label,
+                  thinkingConfig: baseThinkingConfig,
+                  message: rejectionMessage,
+                })
+                thinkingConfigOmitted = true
+                requestVariant.body = buildRequestBody(true)
+                // A config retry, not a model retry, so it doesn't use up an attempt.
+                attempt -= 1
+                continue
+              }
+            }
+
             break
           }
 

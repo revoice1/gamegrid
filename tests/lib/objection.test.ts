@@ -179,6 +179,17 @@ describe('hasGeminiEmptyContent', () => {
     ).toBe(true)
   })
 
+  it('detects responses with no candidates at all', () => {
+    expect(
+      hasGeminiEmptyContent({
+        usageMetadata: { promptTokenCount: 967, totalTokenCount: 967 },
+        modelVersion: 'gemini-3.5-flash-lite',
+      })
+    ).toBe(true)
+    expect(hasGeminiEmptyContent({ candidates: [] })).toBe(true)
+    expect(hasGeminiEmptyContent({ error: { message: 'bad request' } })).toBe(false)
+  })
+
   it('returns false for normal text responses', () => {
     expect(
       hasGeminiEmptyContent({
